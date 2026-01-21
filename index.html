@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farrier Pro - Multi-User Platform</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  
+  <!-- Google API for Calendar -->
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #2D5016;
+      --primary-light: #4A7C2A;
+      --secondary: #D4A574;
+      --accent: #E8773D;
+      --bg: #F5F1E8;
+      --surface: #FFFFFF;
+      --text: #1A1A1A;
+      --text-muted: #666666;
+      --success: #4A7C2A;
+      --warning: #E8773D;
+      --error: #C53030;
+      --border: #E0D8C8;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app-container {
+      max-width: 100%;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .app-header {
+      background: var(--primary);
+      color: white;
+      padding: 1rem 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .logo-icon {
+      font-size: 2rem;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .user-info {
+      font-size: 0.875rem;
+    }
+
+    /* Main Content */
+    .main-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    /* Auth Forms */
+    .auth-container {
+      max-width: 450px;
+      margin: 3rem auto;
+    }
+
+    .auth-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 2.5rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      border: 2px solid var(--border);
+    }
+
+    .auth-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .auth-header h1 {
+      font-size: 2rem;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .auth-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      background: var(--bg);
+      padding: 0.25rem;
+      border-radius: 8px;
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 0.75rem;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .auth-tab.active {
+      background: white;
+      color: var(--primary);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      margin-bottom: 1.5rem;
+      border: 2px solid var(--border);
+    }
+
+    .card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: var(--primary);
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+      text-align: left;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .btn {
+      padding: 0.875rem 2rem;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-light);
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: var(--secondary);
+      color: var(--text);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-warning {
+      background: var(--warning);
+      color: white;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 2px solid var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-sm {
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+    }
+
+    .btn-google {
+      background: white;
+      color: #444;
+      border: 2px solid var(--border);
+    }
+
+    .btn-google:hover {
+      background: #f8f9fa;
+    }
+
+    /* QR Code Display */
+    .qr-section {
+      text-align: center;
+      padding: 2rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 16px;
+      color: white;
+      margin-bottom: 2rem;
+    }
+
+    .qr-code-container {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      display: inline-block;
+      margin: 1.5rem 0;
+    }
+
+    .qr-code-container canvas {
+      display: block;
+    }
+
+    .booking-link {
+      background: rgba(255,255,255,0.2);
+      padding: 1rem;
+      border-radius: 8px;
+      word-break: break-all;
+      margin-top: 1rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.875rem;
+    }
+
+    /* Dashboard Grid */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    .stat-change {
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+    }
+
+    .stat-change.positive {
+      color: var(--success);
+    }
+
+    /* Calendar */
+    .calendar {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 2px solid var(--border);
+    }
+
+    .calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .calendar-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .calendar-nav {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 0.5rem;
+    }
+
+    .calendar-day {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .calendar-day.header {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      cursor: default;
+    }
+
+    .calendar-day:not(.header):hover {
+      background: var(--border);
+    }
+
+    .calendar-day.today {
+      background: var(--primary);
+      color: white;
+    }
+
+    .calendar-day.has-appointment {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* Appointments List */
+    .appointments-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .appointment-item {
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      transition: all 0.2s;
+    }
+
+    .appointment-item:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .appointment-info {
+      flex: 1;
+    }
+
+    .appointment-customer {
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 0.25rem;
+      color: var(--primary);
+    }
+
+    .appointment-details {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .appointment-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-success {
+      background: #E6F4EA;
+      color: var(--success);
+    }
+
+    .badge-warning {
+      background: #FEF3E2;
+      color: var(--warning);
+    }
+
+    .badge-pending {
+      background: #E8EAF6;
+      color: #5E35B1;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    }
+
+    .modal {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .modal-header h2 {
+      font-size: 1.5rem;
+      color: var(--primary);
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+
+    .success-message {
+      background: #E6F4EA;
+      border: 2px solid var(--success);
+      color: var(--success);
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .error-message {
+      background: #FEE;
+      border: 2px solid var(--error);
+      color: var(--error);
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 2px solid var(--border);
+      overflow-x: auto;
+    }
+
+    .tab {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* Time Slots */
+    .time-slots {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .time-slot {
+      padding: 1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+      font-weight: 600;
+    }
+
+    .time-slot:hover {
+      border-color: var(--primary);
+    }
+
+    .time-slot.selected {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .time-slot.booked {
+      opacity: 0.4;
+      cursor: not-allowed;
+      background: var(--border);
+    }
+
+    /* Google Calendar Status */
+    .calendar-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 1rem;
+      background: var(--bg);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .status-indicator.connected {
+      background: var(--success);
+    }
+
+    .status-indicator.disconnected {
+      background: var(--error);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .appointment-item {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .appointment-actions {
+        width: 100%;
+      }
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      border: 3px solid var(--border);
+      border-top: 3px solid var(--primary);
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+      color: var(--primary);
+    }
+
+    .hero p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Firebase Configuration - REPLACE WITH YOUR FIREBASE CONFIG
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    // Initialize Firebase
+    let app, auth, db;
+    try {
+      app = firebase.initializeApp(firebaseConfig);
+      auth = firebase.auth();
+      db = firebase.firestore();
+    } catch (error) {
+      console.log("Firebase not configured yet - using demo mode");
+    }
+
+    // Google Calendar API Configuration
+    const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
+    const CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar";
+
+    function App() {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [userProfile, setUserProfile] = useState(null);
+
+      useEffect(() => {
+        // Check authentication state
+        if (auth) {
+          const unsubscribe = auth.onAuthStateChanged(async (user) => {
+            if (user) {
+              setUser(user);
+              // Load user profile from Firestore
+              const profileDoc = await db.collection('farriers').doc(user.uid).get();
+              if (profileDoc.exists) {
+                setUserProfile(profileDoc.data());
+              }
+            } else {
+              setUser(null);
+              setUserProfile(null);
+            }
+            setLoading(false);
+          });
+          return () => unsubscribe();
+        } else {
+          setLoading(false);
+        }
+      }, []);
+
+      // Check if URL is for customer booking
+      const urlParams = new URLSearchParams(window.location.search);
+      const farrierId = urlParams.get('farrier');
+
+      if (loading) {
+        return (
+          <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
+            <div className="spinner"></div>
+          </div>
+        );
+      }
+
+      // Customer booking view
+      if (farrierId) {
+        return <CustomerBookingView farrierId={farrierId} />;
+      }
+
+      // Authentication view
+      if (!user) {
+        return <AuthView />;
+      }
+
+      // Farrier dashboard
+      return <FarrierDashboard user={user} userProfile={userProfile} setUserProfile={setUserProfile} />;
+    }
+
+    function AuthView() {
+      const [mode, setMode] = useState('login'); // 'login' or 'signup'
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [businessName, setBusinessName] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        
+        try {
+          if (!auth) {
+            setError('Firebase not configured. Please add your Firebase credentials.');
+            setLoading(false);
+            return;
+          }
+          await auth.signInWithEmailAndPassword(email, password);
+        } catch (err) {
+          setError(err.message);
+        }
+        setLoading(false);
+      };
+
+      const handleSignup = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        
+        try {
+          if (!auth) {
+            setError('Firebase not configured. Please add your Firebase credentials.');
+            setLoading(false);
+            return;
+          }
+
+          // Create user account
+          const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+          const user = userCredential.user;
+          
+          // Create farrier profile in Firestore
+          await db.collection('farriers').doc(user.uid).set({
+            businessName: businessName,
+            email: email,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            googleCalendarConnected: false,
+            bookingUrl: window.location.origin + '?farrier=' + user.uid
+          });
+
+        } catch (err) {
+          setError(err.message);
+        }
+        setLoading(false);
+      };
+
+      return (
+        <div className="app-container">
+          <header className="app-header">
+            <div className="header-content">
+              <div className="logo">
+                <span className="logo-icon">🐴</span>
+                <span>Farrier Pro</span>
+              </div>
+            </div>
+          </header>
+
+          <div className="auth-container">
+            <div className="auth-card">
+              <div className="auth-header">
+                <h1>Welcome Back</h1>
+                <p>Manage your farrier business with ease</p>
+              </div>
+
+              <div className="auth-tabs">
+                <button 
+                  className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
+                  onClick={() => setMode('login')}
+                >
+                  Login
+                </button>
+                <button 
+                  className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
+                  onClick={() => setMode('signup')}
+                >
+                  Sign Up
+                </button>
+              </div>
+
+              {error && <div className="error-message">{error}</div>}
+
+              <form onSubmit={mode === 'login' ? handleLogin : handleSignup}>
+                {mode === 'signup' && (
+                  <div className="form-group">
+                    <label>Business Name</label>
+                    <input 
+                      type="text"
+                      required
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="John's Farrier Services"
+                    />
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label>Email</label>
+                  <input 
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Password</label>
+                  <input 
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    minLength={6}
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{width: '100%'}}
+                  disabled={loading}
+                >
+                  {loading ? <span className="spinner"></span> : (mode === 'login' ? 'Login' : 'Create Account')}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function FarrierDashboard({ user, userProfile, setUserProfile }) {
+      const [tab, setTab] = useState('qrcode');
+      const [showQRModal, setShowQRModal] = useState(false);
+
+      const handleLogout = async () => {
+        if (auth) {
+          await auth.signOut();
+        }
+      };
+
+      const connectGoogleCalendar = async () => {
+        try {
+          const tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: CALENDAR_SCOPES,
+            callback: async (response) => {
+              if (response.access_token) {
+                // Save token to Firestore
+                if (db) {
+                  await db.collection('farriers').doc(user.uid).update({
+                    googleCalendarConnected: true,
+                    googleAccessToken: response.access_token
+                  });
+                  setUserProfile({...userProfile, googleCalendarConnected: true});
+                  alert('Google Calendar connected successfully!');
+                }
+              }
+            },
+          });
+          tokenClient.requestAccessToken();
+        } catch (error) {
+          console.error('Error connecting Google Calendar:', error);
+          alert('Please configure Google Calendar API credentials');
+        }
+      };
+
+      const tabs = [
+        { id: 'qrcode', label: 'My QR Code', icon: '📱' },
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'calendar', label: 'Calendar', icon: '📅' },
+        { id: 'appointments', label: 'Appointments', icon: '📋' },
+        { id: 'invoices', label: 'Invoices', icon: '💰' }
+      ];
+
+      return (
+        <div className="app-container">
+          <header className="app-header">
+            <div className="header-content">
+              <div className="logo">
+                <span className="logo-icon">🐴</span>
+                <span>Farrier Pro</span>
+              </div>
+              <div className="header-actions">
+                <div className="user-info">
+                  {userProfile?.businessName || user.email}
+                </div>
+                <button className="btn btn-sm btn-outline" onClick={handleLogout}>
+                  Logout
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="main-content">
+            <div className="tabs">
+              {tabs.map(t => (
+                <button 
+                  key={t.id}
+                  className={`tab ${tab === t.id ? 'active' : ''}`}
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.icon} {t.label}
+                </button>
+              ))}
+            </div>
+
+            {tab === 'qrcode' && (
+              <QRCodeView 
+                user={user} 
+                userProfile={userProfile}
+                connectGoogleCalendar={connectGoogleCalendar}
+              />
+            )}
+            {tab === 'dashboard' && <DashboardView userId={user.uid} />}
+            {tab === 'calendar' && <CalendarView userId={user.uid} />}
+            {tab === 'appointments' && <AppointmentsView userId={user.uid} />}
+            {tab === 'invoices' && <InvoicesView userId={user.uid} />}
+          </main>
+        </div>
+      );
+    }
+
+    function QRCodeView({ user, userProfile, connectGoogleCalendar }) {
+      const [qrGenerated, setQrGenerated] = useState(false);
+      const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + user.uid;
+
+      useEffect(() => {
+        if (!qrGenerated) {
+          generateQR();
+          setQrGenerated(true);
+        }
+      }, []);
+
+      const generateQR = () => {
+        const canvas = document.getElementById('qr-canvas');
+        if (canvas) {
+          QRCode.toCanvas(canvas, bookingUrl, {
+            width: 300,
+            margin: 2,
+            color: {
+              dark: '#2D5016',
+              light: '#FFFFFF'
+            }
+          });
+        }
+      };
+
+      const downloadQR = () => {
+        const canvas = document.getElementById('qr-canvas');
+        const url = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = 'farrier-booking-qr.png';
+        link.href = url;
+        link.click();
+      };
+
+      const copyLink = () => {
+        navigator.clipboard.writeText(bookingUrl);
+        alert('Booking link copied to clipboard!');
+      };
+
+      return (
+        <div>
+          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>
+            Your Personal QR Code & Booking Link
+          </h1>
+
+          {/* Google Calendar Status */}
+          <div className="calendar-status">
+            <div className={`status-indicator ${userProfile?.googleCalendarConnected ? 'connected' : 'disconnected'}`}></div>
+            <span>
+              Google Calendar: {userProfile?.googleCalendarConnected ? 'Connected ✓' : 'Not Connected'}
+            </span>
+            {!userProfile?.googleCalendarConnected && (
+              <button 
+                className="btn btn-sm btn-google" 
+                onClick={connectGoogleCalendar}
+                style={{marginLeft: 'auto'}}
+              >
+                Connect Google Calendar
+              </button>
+            )}
+          </div>
+
+          <div className="qr-section">
+            <h2 style={{fontSize: '1.75rem', marginBottom: '1rem'}}>
+              🚗 Put This QR Code on Your Vehicle
+            </h2>
+            <p style={{opacity: 0.9, marginBottom: '1rem'}}>
+              Customers can scan this code to book appointments instantly
+            </p>
+
+            <div className="qr-code-container">
+              <canvas id="qr-canvas"></canvas>
+            </div>
+
+            <div style={{display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap'}}>
+              <button className="btn btn-success" onClick={downloadQR}>
+                📥 Download QR Code
+              </button>
+              <button className="btn btn-secondary" onClick={copyLink}>
+                📋 Copy Booking Link
+              </button>
+            </div>
+
+            <div className="booking-link">
+              {bookingUrl}
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>How to Use Your QR Code</h2>
+            <ol style={{paddingLeft: '1.5rem', lineHeight: '2'}}>
+              <li><strong>Download</strong> the QR code image above</li>
+              <li><strong>Print</strong> it on a sticker or magnetic sign</li>
+              <li><strong>Place</strong> it on your vehicle, business cards, or flyers</li>
+              <li><strong>Customers scan</strong> with their phone camera</li>
+              <li><strong>They book</strong> appointments directly!</li>
+            </ol>
+            <p style={{marginTop: '1rem', color: 'var(--text-muted)'}}>
+              💡 Tip: Print multiple copies for your truck, trailer, and business cards. The more visible, the more bookings!
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    function CustomerBookingView({ farrierId }) {
+      const [step, setStep] = useState('landing');
+      const [farrierInfo, setFarrierInfo] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [formData, setFormData] = useState({
+        name: '',
+        phone: '',
+        email: '',
+        message: '',
+        service: '',
+        date: '',
+        time: ''
+      });
+
+      useEffect(() => {
+        loadFarrierInfo();
+      }, []);
+
+      const loadFarrierInfo = async () => {
+        try {
+          if (db) {
+            const doc = await db.collection('farriers').doc(farrierId).get();
+            if (doc.exists) {
+              setFarrierInfo(doc.data());
+            }
+          } else {
+            // Demo mode
+            setFarrierInfo({
+              businessName: "Demo Farrier Services",
+              email: "demo@farrier.com"
+            });
+          }
+        } catch (error) {
+          console.error('Error loading farrier info:', error);
+        }
+        setLoading(false);
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        try {
+          if (db) {
+            // Save appointment request to Firestore
+            await db.collection('appointments').add({
+              farrierId: farrierId,
+              customerName: formData.name,
+              phone: formData.phone,
+              email: formData.email,
+              service: formData.service,
+              requestedDate: formData.date,
+              requestedTime: formData.time,
+              status: 'pending',
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            // If Google Calendar is connected, create event
+            // (This would be done server-side in production)
+          }
+          
+          setStep('success');
+        } catch (error) {
+          console.error('Error submitting booking:', error);
+          alert('Error submitting booking. Please try again.');
+        }
+      };
+
+      const services = [
+        'Routine Trim',
+        'Shoeing (All 4)',
+        'Shoeing (Front Only)',
+        'Corrective Shoeing',
+        'Hoof Care Consultation'
+      ];
+
+      const availableSlots = ['09:00', '11:00', '13:00', '15:00'];
+
+      if (loading) {
+        return (
+          <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
+            <div className="spinner"></div>
+          </div>
+        );
+      }
+
+      if (!farrierInfo) {
+        return (
+          <div className="app-container">
+            <div className="main-content">
+              <div className="error-message">
+                Farrier not found. Please check your QR code or booking link.
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="app-container">
+          <header className="app-header">
+            <div className="header-content">
+              <div className="logo">
+                <span className="logo-icon">🐴</span>
+                <span>{farrierInfo.businessName}</span>
+              </div>
+            </div>
+          </header>
+
+          <main className="main-content">
+            {step === 'success' ? (
+              <div style={{textAlign: 'center', padding: '2rem'}}>
+                <div className="success-message">
+                  ✓ Appointment Request Sent Successfully!
+                </div>
+                <div className="card">
+                  <h2>What's Next?</h2>
+                  <p style={{marginBottom: '1rem'}}>
+                    Your appointment request has been sent. You'll receive an SMS confirmation once it's approved.
+                  </p>
+                  <p style={{marginBottom: '1rem', color: 'var(--text-muted)'}}>
+                    <strong>Details:</strong><br/>
+                    {formData.service} on {formData.date} at {formData.time}
+                  </p>
+                  <button className="btn btn-primary" onClick={() => {
+                    setStep('landing');
+                    setFormData({
+                      name: '',
+                      phone: '',
+                      email: '',
+                      message: '',
+                      service: '',
+                      date: '',
+                      time: ''
+                    });
+                  }}>
+                    Book Another Appointment
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{textAlign: 'center'}}>
+                <div className="hero">
+                  <h1>🐴 {farrierInfo.businessName}</h1>
+                  <p>Professional hoof care for your horses. Book your appointment below.</p>
+                </div>
+
+                <div className="card" style={{textAlign: 'left', maxWidth: '600px', margin: '0 auto'}}>
+                  <h2>Book Your Appointment</h2>
+                  <form onSubmit={handleSubmit}>
+                    <div className="form-group">
+                      <label>Name *</label>
+                      <input 
+                        type="text" 
+                        required 
+                        value={formData.name}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Phone Number *</label>
+                      <input 
+                        type="tel" 
+                        required 
+                        value={formData.phone}
+                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Email</label>
+                      <input 
+                        type="email" 
+                        value={formData.email}
+                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Service *</label>
+                      <select 
+                        required
+                        value={formData.service}
+                        onChange={(e) => setFormData({...formData, service: e.target.value})}
+                      >
+                        <option value="">Select a service...</option>
+                        {services.map(service => (
+                          <option key={service} value={service}>{service}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Preferred Date *</label>
+                      <input 
+                        type="date" 
+                        required 
+                        value={formData.date}
+                        onChange={(e) => setFormData({...formData, date: e.target.value})}
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Available Time Slots *</label>
+                      <div className="time-slots">
+                        {availableSlots.map(slot => (
+                          <div 
+                            key={slot}
+                            className={`time-slot ${formData.time === slot ? 'selected' : ''}`}
+                            onClick={() => setFormData({...formData, time: slot})}
+                          >
+                            {slot}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button 
+                      type="submit" 
+                      className="btn btn-success" 
+                      style={{width: '100%', marginTop: '1rem'}} 
+                      disabled={!formData.time}
+                    >
+                      Request Appointment
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      );
+    }
+
+    function DashboardView({ userId }) {
+      const kpis = [
+        { label: 'Appointments This Month', value: '24', change: '+12%', positive: true },
+        { label: 'Total Revenue', value: '$4,800', change: '+18%', positive: true },
+        { label: 'Outstanding Invoices', value: '$650', change: '-5%', positive: true },
+        { label: 'This Week', value: '6', change: 'Upcoming', positive: true }
+      ];
+
+      return (
+        <div>
+          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Dashboard Overview</h1>
+          
+          <div className="dashboard-grid">
+            {kpis.map((kpi, idx) => (
+              <div key={idx} className="stat-card">
+                <div className="stat-label">{kpi.label}</div>
+                <div className="stat-value">{kpi.value}</div>
+                <div className={`stat-change ${kpi.positive ? 'positive' : ''}`}>
+                  {kpi.change}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="card">
+            <h2>Recent Activity</h2>
+            <p style={{color: 'var(--text-muted)'}}>
+              Your appointments and bookings will appear here once customers start booking through your QR code!
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    function CalendarView({ userId }) {
+      const [currentDate, setCurrentDate] = useState(new Date());
+      
+      const daysInMonth = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0
+      ).getDate();
+
+      const firstDay = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1
+      ).getDay();
+
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+
+      const days = [];
+      for (let i = 0; i < firstDay; i++) {
+        days.push(<div key={`empty-${i}`} className="calendar-day"></div>);
+      }
+      for (let i = 1; i <= daysInMonth; i++) {
+        const isToday = i === new Date().getDate() && 
+                        currentDate.getMonth() === new Date().getMonth();
+        days.push(
+          <div 
+            key={i} 
+            className={`calendar-day ${isToday ? 'today' : ''}`}
+          >
+            {i}
+          </div>
+        );
+      }
+
+      return (
+        <div>
+          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Calendar</h1>
+          
+          <div className="calendar">
+            <div className="calendar-header">
+              <h2 className="calendar-title">
+                {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+              </h2>
+              <div className="calendar-nav">
+                <button className="btn btn-sm btn-outline" onClick={() => {
+                  const newDate = new Date(currentDate);
+                  newDate.setMonth(newDate.getMonth() - 1);
+                  setCurrentDate(newDate);
+                }}>
+                  ←
+                </button>
+                <button className="btn btn-sm btn-outline" onClick={() => {
+                  const newDate = new Date(currentDate);
+                  newDate.setMonth(newDate.getMonth() + 1);
+                  setCurrentDate(newDate);
+                }}>
+                  →
+                </button>
+              </div>
+            </div>
+
+            <div className="calendar-grid">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} className="calendar-day header">{day}</div>
+              ))}
+              {days}
+            </div>
+          </div>
+
+          <div className="card" style={{marginTop: '1.5rem'}}>
+            <h2>Synced with Google Calendar</h2>
+            <p style={{color: 'var(--text-muted)'}}>
+              All appointments automatically sync to your Google Calendar. Updates made here or in Google Calendar will sync both ways.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    function AppointmentsView({ userId }) {
+      return (
+        <div>
+          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Appointments</h1>
+          
+          <div className="card">
+            <h2>Your Appointments</h2>
+            <p style={{color: 'var(--text-muted)'}}>
+              Appointments booked through your QR code will appear here. You can manage them, send reminders, and create invoices.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    function InvoicesView({ userId }) {
+      return (
+        <div>
+          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Invoices & Payments</h1>
+          
+          <div className="dashboard-grid">
+            <div className="stat-card">
+              <div className="stat-label">Total Collected</div>
+              <div className="stat-value" style={{color: 'var(--success)'}}>$0</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Outstanding</div>
+              <div className="stat-value" style={{color: 'var(--warning)'}}>$0</div>
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>Your Invoices</h2>
+            <p style={{color: 'var(--text-muted)'}}>
+              Create invoices from completed appointments with embedded Stripe payment links. Track payments and send reminders.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
