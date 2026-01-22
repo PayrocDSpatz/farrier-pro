@@ -768,6 +768,31 @@
       const [businessName, setBusinessName] = useState('');
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
+      const [successMessage, setSuccessMessage] = useState('');
+
+      const handleForgotPassword = async () => {
+        if (!email) {
+          setError('Please enter your email address first');
+          return;
+        }
+        
+        setError('');
+        setLoading(true);
+        
+        try {
+          if (!auth) {
+            setError('Firebase not configured. Please add your Firebase credentials.');
+            setLoading(false);
+            return;
+          }
+          await auth.sendPasswordResetEmail(email);
+          setSuccessMessage('Password reset email sent! Check your inbox.');
+          setError('');
+        } catch (err) {
+          setError(err.message);
+        }
+        setLoading(false);
+      };
 
       const handleLogin = async (e) => {
         e.preventDefault();
@@ -803,6 +828,9 @@
           const userCredential = await auth.createUserWithEmailAndPassword(email, password);
           const user = userCredential.user;
           
+          // Send welcome/verification email
+          await user.sendEmailVerification();
+          
           // Create farrier profile in Firestore
           await db.collection('farriers').doc(user.uid).set({
             businessName: businessName,
@@ -811,6 +839,8 @@
             googleCalendarConnected: false,
             bookingUrl: window.location.origin + '?farrier=' + user.uid
           });
+          
+          alert('Welcome! Please check your email to verify your account.');
 
         } catch (err) {
           setError(err.message);
@@ -852,6 +882,7 @@
               </div>
 
               {error && <div className="error-message">{error}</div>}
+              {successMessage && <div className="success-message">{successMessage}</div>}
 
               <form onSubmit={mode === 'login' ? handleLogin : handleSignup}>
                 {mode === 'signup' && (
@@ -898,6 +929,25 @@
                 >
                   {loading ? <span className="spinner"></span> : (mode === 'login' ? 'Login' : 'Create Account')}
                 </button>
+                
+                {mode === 'login' && (
+                  <div style={{textAlign: 'center', marginTop: '1rem'}}>
+                    <button 
+                      type="button"
+                      onClick={handleForgotPassword}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--primary)',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
               </form>
             </div>
           </div>
@@ -961,8 +1011,12 @@
                 <div className="user-info">
                   {userProfile?.businessName || user.email}
                 </div>
-                <button className="btn btn-sm btn-outline" onClick={handleLogout}>
-                  Logout
+                <button 
+                  className="btn btn-sm" 
+                  onClick={handleLogout}
+                  style={{background: 'white', color: 'var(--primary)', fontWeight: '600'}}
+                >
+                  🚪 Logout
                 </button>
               </div>
             </div>
@@ -1469,3 +1523,4 @@
   </script>
 </body>
 </html>
+
