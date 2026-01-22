@@ -1010,15 +1010,6 @@
         link.click();
       };
 
-      const downloadQR = () => {
-        const canvas = document.getElementById('qr-canvas');
-        const url = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.download = 'farrier-booking-qr.png';
-        link.href = url;
-        link.click();
-      };
-
       const copyLink = () => {
         navigator.clipboard.writeText(bookingUrl);
         alert('Booking link copied to clipboard!');
