@@ -1010,8 +1010,8 @@
 
       const generateQR = () => {
         const canvas = document.getElementById('qr-canvas');
-        if (canvas) {
-          QRCode.toCanvas(canvas, bookingUrl, {
+        if (canvas && window.QRCode) {
+          window.QRCode.toCanvas(canvas, bookingUrl, {
             width: 300,
             margin: 2,
             color: {
@@ -1019,6 +1019,9 @@
               light: '#FFFFFF'
             }
           });
+        } else if (!window.QRCode) {
+          // Retry after a short delay if QRCode library isn't loaded yet
+          setTimeout(generateQR, 100);
         }
       };
 
