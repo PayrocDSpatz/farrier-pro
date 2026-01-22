@@ -7,7 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
-  <script src="https://js.stripe.com/v3/"></script>
+  <!-- Authorize.Net integration via backend functions -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   
   <!-- Firebase SDK -->
@@ -1143,8 +1143,13 @@
         name: '',
         phone: '',
         email: '',
-        message: '',
-        service: '',
+        services: [], // Multiple services
+        numberOfHorses: '',
+        address: '',
+        city: '',
+        state: '',
+        zip: '',
+        comments: '',
         date: '',
         time: ''
       });
@@ -1184,7 +1189,13 @@
               customerName: formData.name,
               phone: formData.phone,
               email: formData.email,
-              service: formData.service,
+              services: formData.services,
+              numberOfHorses: formData.numberOfHorses,
+              address: formData.address,
+              city: formData.city,
+              state: formData.state,
+              zip: formData.zip,
+              comments: formData.comments,
               requestedDate: formData.date,
               requestedTime: formData.time,
               status: 'pending',
@@ -1254,18 +1265,38 @@
                   <p style={{marginBottom: '1rem'}}>
                     Your appointment request has been sent. You'll receive an SMS confirmation once it's approved.
                   </p>
-                  <p style={{marginBottom: '1rem', color: 'var(--text-muted)'}}>
-                    <strong>Details:</strong><br/>
-                    {formData.service} on {formData.date} at {formData.time}
-                  </p>
+                  <div style={{marginBottom: '1rem', color: 'var(--text-muted)', textAlign: 'left'}}>
+                    <strong>Booking Details:</strong><br/>
+                    {formData.services.length > 0 && (
+                      <>Services: {formData.services.join(', ')}<br/></>
+                    )}
+                    {formData.numberOfHorses && (
+                      <>Number of Horses: {formData.numberOfHorses}<br/></>
+                    )}
+                    Date: {formData.date} at {formData.time}<br/>
+                    {formData.address && (
+                      <>
+                        Location: {formData.address}
+                        {formData.city && `, ${formData.city}`}
+                        {formData.state && `, ${formData.state}`}
+                        {formData.zip && ` ${formData.zip}`}
+                        <br/>
+                      </>
+                    )}
+                  </div>
                   <button className="btn btn-primary" onClick={() => {
                     setStep('landing');
                     setFormData({
                       name: '',
                       phone: '',
                       email: '',
-                      message: '',
-                      service: '',
+                      services: [],
+                      numberOfHorses: '',
+                      address: '',
+                      city: '',
+                      state: '',
+                      zip: '',
+                      comments: '',
                       date: '',
                       time: ''
                     });
@@ -1291,8 +1322,10 @@
                         required 
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        placeholder="Your name"
                       />
                     </div>
+                    
                     <div className="form-group">
                       <label>Phone Number *</label>
                       <input 
@@ -1300,29 +1333,109 @@
                         required 
                         value={formData.phone}
                         onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                        placeholder="(555) 555-5555"
                       />
                     </div>
+                    
                     <div className="form-group">
                       <label>Email</label>
                       <input 
                         type="email" 
                         value={formData.email}
                         onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        placeholder="your@email.com"
                       />
                     </div>
+                    
                     <div className="form-group">
-                      <label>Service *</label>
-                      <select 
-                        required
-                        value={formData.service}
-                        onChange={(e) => setFormData({...formData, service: e.target.value})}
-                      >
-                        <option value="">Select a service...</option>
+                      <label>Services Needed</label>
+                      <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
                         {services.map(service => (
-                          <option key={service} value={service}>{service}</option>
+                          <label key={service} style={{display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer'}}>
+                            <input 
+                              type="checkbox"
+                              checked={formData.services.includes(service)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFormData({...formData, services: [...formData.services, service]});
+                                } else {
+                                  setFormData({...formData, services: formData.services.filter(s => s !== service)});
+                                }
+                              }}
+                              style={{width: 'auto', margin: 0}}
+                            />
+                            <span style={{fontWeight: 'normal'}}>{service}</span>
+                          </label>
                         ))}
-                      </select>
+                      </div>
                     </div>
+                    
+                    <div className="form-group">
+                      <label>Number of Horses</label>
+                      <input 
+                        type="number" 
+                        value={formData.numberOfHorses}
+                        onChange={(e) => setFormData({...formData, numberOfHorses: e.target.value})}
+                        placeholder="1"
+                        min="1"
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Address</label>
+                      <input 
+                        type="text" 
+                        value={formData.address}
+                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                        placeholder="123 Main Street"
+                      />
+                    </div>
+                    
+                    <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem'}}>
+                      <div className="form-group">
+                        <label>City</label>
+                        <input 
+                          type="text" 
+                          value={formData.city}
+                          onChange={(e) => setFormData({...formData, city: e.target.value})}
+                          placeholder="City"
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>State</label>
+                        <input 
+                          type="text" 
+                          value={formData.state}
+                          onChange={(e) => setFormData({...formData, state: e.target.value})}
+                          placeholder="VA"
+                          maxLength="2"
+                          style={{textTransform: 'uppercase'}}
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>ZIP</label>
+                        <input 
+                          type="text" 
+                          value={formData.zip}
+                          onChange={(e) => setFormData({...formData, zip: e.target.value})}
+                          placeholder="12345"
+                          maxLength="5"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Comments or Special Requests</label>
+                      <textarea 
+                        value={formData.comments}
+                        onChange={(e) => setFormData({...formData, comments: e.target.value})}
+                        placeholder="Any special notes, concerns, or requests..."
+                        rows="4"
+                      />
+                    </div>
+                    
                     <div className="form-group">
                       <label>Preferred Date *</label>
                       <input 
@@ -1333,6 +1446,7 @@
                         min={new Date().toISOString().split('T')[0]}
                       />
                     </div>
+                    
                     <div className="form-group">
                       <label>Available Time Slots *</label>
                       <div className="time-slots">
@@ -1347,6 +1461,7 @@
                         ))}
                       </div>
                     </div>
+                    
                     <button 
                       type="submit" 
                       className="btn btn-success" 
@@ -1494,6 +1609,37 @@
     }
 
     function InvoicesView({ userId }) {
+      const [invoices, setInvoices] = useState([]);
+      const [showCreateModal, setShowCreateModal] = useState(false);
+      const [loading, setLoading] = useState(false);
+
+      useEffect(() => {
+        loadInvoices();
+      }, []);
+
+      const loadInvoices = async () => {
+        if (db) {
+          const snapshot = await db.collection('invoices')
+            .where('farrierId', '==', userId)
+            .orderBy('createdAt', 'desc')
+            .get();
+          
+          const invoiceData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setInvoices(invoiceData);
+        }
+      };
+
+      const totalCollected = invoices
+        .filter(inv => inv.status === 'paid')
+        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+
+      const totalOutstanding = invoices
+        .filter(inv => inv.status === 'outstanding')
+        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+
       return (
         <div>
           <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Invoices & Payments</h1>
@@ -1501,19 +1647,291 @@
           <div className="dashboard-grid">
             <div className="stat-card">
               <div className="stat-label">Total Collected</div>
-              <div className="stat-value" style={{color: 'var(--success)'}}>$0</div>
+              <div className="stat-value" style={{color: 'var(--success)'}}>${totalCollected.toFixed(2)}</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Outstanding</div>
-              <div className="stat-value" style={{color: 'var(--warning)'}}>$0</div>
+              <div className="stat-value" style={{color: 'var(--warning)'}}>${totalOutstanding.toFixed(2)}</div>
             </div>
           </div>
 
           <div className="card">
-            <h2>Your Invoices</h2>
-            <p style={{color: 'var(--text-muted)'}}>
-              Create invoices from completed appointments with embedded Stripe payment links. Track payments and send reminders.
-            </p>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem'}}>
+              <h2 style={{marginBottom: 0}}>Your Invoices</h2>
+              <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+                + Create Invoice
+              </button>
+            </div>
+            
+            {invoices.length === 0 ? (
+              <p style={{color: 'var(--text-muted)'}}>
+                No invoices yet. Create your first invoice with Authorize.Net payment links!
+              </p>
+            ) : (
+              <div className="appointments-list">
+                {invoices.map(invoice => (
+                  <div key={invoice.id} className="appointment-item">
+                    <div className="appointment-info">
+                      <div className="appointment-customer">
+                        Invoice #{invoice.invoiceNumber} - {invoice.customerName}
+                      </div>
+                      <div className="appointment-details">
+                        Amount: ${invoice.total?.toFixed(2)} • Created: {invoice.createdAt?.toDate().toLocaleDateString()}
+                        {invoice.paymentUrl && (
+                          <><br/>Payment Link: <a href={invoice.paymentUrl} target="_blank" style={{color: 'var(--primary)'}}>View</a></>
+                        )}
+                      </div>
+                    </div>
+                    <div className="appointment-actions">
+                      <span className={`badge badge-${invoice.status === 'paid' ? 'success' : 'warning'}`}>
+                        {invoice.status}
+                      </span>
+                      {invoice.status === 'outstanding' && invoice.paymentUrl && (
+                        <button 
+                          className="btn btn-sm btn-warning"
+                          onClick={() => {
+                            const message = `Hi ${invoice.customerName}! Your invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} is ready. Pay here: ${invoice.paymentUrl}`;
+                            alert(`SMS would be sent:\n\n${message}`);
+                          }}
+                        >
+                          📱 Send Reminder
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {showCreateModal && (
+            <InvoiceCreateModal 
+              userId={userId}
+              onClose={() => setShowCreateModal(false)}
+              onCreated={() => {
+                setShowCreateModal(false);
+                loadInvoices();
+              }}
+            />
+          )}
+        </div>
+      );
+    }
+
+    function InvoiceCreateModal({ userId, onClose, onCreated }) {
+      const [customerName, setCustomerName] = useState('');
+      const [customerEmail, setCustomerEmail] = useState('');
+      const [customerPhone, setCustomerPhone] = useState('');
+      const [items, setItems] = useState([{ description: 'Farrier Service', amount: 0 }]);
+      const [paymentUrl, setPaymentUrl] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState('');
+
+      const addItem = () => {
+        setItems([...items, { description: '', amount: 0 }]);
+      };
+
+      const updateItem = (index, field, value) => {
+        const newItems = [...items];
+        newItems[index][field] = value;
+        setItems(newItems);
+      };
+
+      const removeItem = (index) => {
+        setItems(items.filter((_, i) => i !== index));
+      };
+
+      const total = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+      const generatePaymentLink = async () => {
+        if (!customerName || !customerEmail) {
+          setError('Customer name and email are required');
+          return;
+        }
+
+        if (total <= 0) {
+          setError('Invoice total must be greater than $0');
+          return;
+        }
+
+        setError('');
+        setLoading(true);
+
+        try {
+          // Call Netlify function to create Authorize.Net payment
+          const response = await fetch('/.netlify/functions/create-authorize-payment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              customerName: customerName,
+              customerEmail: customerEmail,
+              amount: total,
+              invoiceNumber: `INV-${Date.now()}`,
+              description: items.map(i => i.description).join(', ')
+            })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            setPaymentUrl(data.paymentUrl);
+            
+            // Save invoice to Firestore
+            if (db) {
+              const invoiceNumber = `INV-${Date.now()}`;
+              await db.collection('invoices').add({
+                farrierId: userId,
+                customerName: customerName,
+                customerEmail: customerEmail,
+                customerPhone: customerPhone,
+                items: items,
+                total: total,
+                invoiceNumber: invoiceNumber,
+                paymentUrl: data.paymentUrl,
+                status: 'outstanding',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              });
+            }
+
+            alert('Invoice created successfully!');
+          } else {
+            setError(data.error || 'Failed to create payment link');
+          }
+        } catch (err) {
+          console.error('Error:', err);
+          setError('Error creating payment link. Make sure Authorize.Net is configured.');
+        }
+
+        setLoading(false);
+      };
+
+      const sendInvoice = () => {
+        const message = `Hi ${customerName}! Your invoice for $${total.toFixed(2)} is ready. Pay here: ${paymentUrl}`;
+        alert(`SMS would be sent to ${customerPhone}:\n\n${message}`);
+        onCreated();
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Create Invoice</h2>
+              <button className="close-btn" onClick={onClose}>×</button>
+            </div>
+
+            {error && <div className="error-message">{error}</div>}
+
+            <div className="form-group">
+              <label>Customer Name *</label>
+              <input 
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="John Smith"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Customer Email *</label>
+              <input 
+                type="email"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                placeholder="customer@email.com"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Customer Phone</label>
+              <input 
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                placeholder="+1234567890"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Invoice Items</label>
+              {items.map((item, idx) => (
+                <div key={idx} style={{display: 'flex', gap: '0.5rem', marginBottom: '0.75rem'}}>
+                  <input 
+                    type="text"
+                    placeholder="Description"
+                    value={item.description}
+                    onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                    style={{flex: 2}}
+                  />
+                  <input 
+                    type="number"
+                    placeholder="Amount"
+                    value={item.amount}
+                    onChange={(e) => updateItem(idx, 'amount', e.target.value)}
+                    style={{flex: 1}}
+                    step="0.01"
+                    min="0"
+                  />
+                  {items.length > 1 && (
+                    <button 
+                      className="btn btn-sm btn-outline"
+                      onClick={() => removeItem(idx)}
+                      type="button"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button className="btn btn-sm btn-outline" onClick={addItem} type="button">
+                + Add Item
+              </button>
+            </div>
+
+            <div style={{borderTop: '2px solid var(--border)', paddingTop: '1rem', marginTop: '1rem'}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '1.5rem', fontWeight: '800', color: 'var(--primary)'}}>
+                <span>Total</span>
+                <span>${total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {!paymentUrl ? (
+              <button 
+                className="btn btn-primary" 
+                style={{width: '100%', marginTop: '1rem'}}
+                onClick={generatePaymentLink}
+                disabled={loading}
+              >
+                {loading ? <span className="spinner"></span> : '🔗 Generate Authorize.Net Payment Link'}
+              </button>
+            ) : (
+              <div>
+                <div style={{background: '#E6F4EA', border: '2px solid var(--success)', borderRadius: '8px', padding: '1rem', marginTop: '1rem'}}>
+                  <strong>✓ Payment Link Created!</strong>
+                  <div style={{marginTop: '0.5rem', wordBreak: 'break-all', fontSize: '0.875rem'}}>
+                    {paymentUrl}
+                  </div>
+                </div>
+                <button 
+                  className="btn btn-outline" 
+                  style={{width: '100%', marginTop: '0.5rem'}}
+                  onClick={() => {
+                    navigator.clipboard.writeText(paymentUrl);
+                    alert('Payment link copied!');
+                  }}
+                >
+                  📋 Copy Link
+                </button>
+                <button 
+                  className="btn btn-success" 
+                  style={{width: '100%', marginTop: '0.5rem'}}
+                  onClick={sendInvoice}
+                >
+                  📱 Send Invoice via SMS
+                </button>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -1523,4 +1941,5 @@
   </script>
 </body>
 </html>
+
 
