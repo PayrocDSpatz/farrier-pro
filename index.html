@@ -998,31 +998,16 @@
     }
 
     function QRCodeView({ user, userProfile, connectGoogleCalendar }) {
-      const [qrGenerated, setQrGenerated] = useState(false);
       const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + user.uid;
+      
+      // Use Google Charts API for QR code as backup
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(bookingUrl)}&color=2D5016&bgcolor=FFFFFF`;
 
-      useEffect(() => {
-        if (!qrGenerated) {
-          generateQR();
-          setQrGenerated(true);
-        }
-      }, []);
-
-      const generateQR = () => {
-        const canvas = document.getElementById('qr-canvas');
-        if (canvas && window.QRCode) {
-          window.QRCode.toCanvas(canvas, bookingUrl, {
-            width: 300,
-            margin: 2,
-            color: {
-              dark: '#2D5016',
-              light: '#FFFFFF'
-            }
-          });
-        } else if (!window.QRCode) {
-          // Retry after a short delay if QRCode library isn't loaded yet
-          setTimeout(generateQR, 100);
-        }
+      const downloadQR = () => {
+        const link = document.createElement('a');
+        link.download = 'farrier-booking-qr.png';
+        link.href = qrImageUrl;
+        link.click();
       };
 
       const downloadQR = () => {
@@ -1071,7 +1056,7 @@
             </p>
 
             <div className="qr-code-container">
-              <canvas id="qr-canvas"></canvas>
+              <img src={qrImageUrl} alt="QR Code" style={{display: 'block', maxWidth: '100%'}} />
             </div>
 
             <div style={{display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap'}}>
