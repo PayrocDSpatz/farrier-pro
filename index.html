@@ -1681,16 +1681,25 @@
           try {
             const snapshot = await db.collection('appointments')
               .where('farrierId', '==', userId)
-              .orderBy('requestedDate', 'desc')
               .get();
             
             const appointmentData = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
+            
+            // Sort in JavaScript instead of Firestore
+            appointmentData.sort((a, b) => {
+              const dateA = new Date(a.requestedDate);
+              const dateB = new Date(b.requestedDate);
+              return dateB - dateA; // Newest first
+            });
+            
             setAppointments(appointmentData);
+            console.log('Loaded appointments:', appointmentData.length);
           } catch (error) {
             console.error('Error loading appointments:', error);
+            alert('Error loading appointments: ' + error.message);
           }
         }
         setLoading(false);
