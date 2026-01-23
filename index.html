@@ -1051,7 +1051,13 @@
                     googleCalendarConnected: true,
                     googleAccessToken: response.access_token
                   });
-                  setUserProfile({...userProfile, googleCalendarConnected: true});
+                  
+                  // Reload profile from Firestore
+                  const profileDoc = await db.collection('farriers').doc(user.uid).get();
+                  if (profileDoc.exists) {
+                    setUserProfile(profileDoc.data());
+                  }
+                  
                   alert('Google Calendar connected successfully!');
                 }
               }
@@ -1061,6 +1067,30 @@
         } catch (error) {
           console.error('Error connecting Google Calendar:', error);
           alert('Please configure Google Calendar API credentials');
+        }
+      };
+
+      const disconnectGoogleCalendar = async () => {
+        if (confirm('Are you sure you want to disconnect Google Calendar? Future appointments will not sync to your calendar.')) {
+          try {
+            if (db) {
+              await db.collection('farriers').doc(user.uid).update({
+                googleCalendarConnected: false,
+                googleAccessToken: firebase.firestore.FieldValue.delete()
+              });
+              
+              // Reload profile from Firestore
+              const profileDoc = await db.collection('farriers').doc(user.uid).get();
+              if (profileDoc.exists) {
+                setUserProfile(profileDoc.data());
+              }
+              
+              alert('Google Calendar disconnected successfully!');
+            }
+          } catch (error) {
+            console.error('Error disconnecting:', error);
+            alert('Error disconnecting Google Calendar');
+          }
         }
       };
 
@@ -1114,11 +1144,12 @@
                 user={user} 
                 userProfile={userProfile}
                 connectGoogleCalendar={connectGoogleCalendar}
+                disconnectGoogleCalendar={disconnectGoogleCalendar}
               />
             )}
             {tab === 'dashboard' && <DashboardView userId={user.uid} />}
             {tab === 'calendar' && <CalendarView userId={user.uid} />}
-            {tab === 'appointments' && <AppointmentsView userId={user.uid} />}
+            {tab === 'appointments' && <AppointmentsView userId={user.uid} userProfile={userProfile} />}
             {tab === 'invoices' && <InvoicesView userId={user.uid} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} />}
           </main>
@@ -1126,7 +1157,7 @@
       );
     }
 
-    function QRCodeView({ user, userProfile, connectGoogleCalendar }) {
+    function QRCodeView({ user, userProfile, connectGoogleCalendar, disconnectGoogleCalendar }) {
       const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + user.uid;
       
       // Use Google Charts API for QR code as backup
@@ -1156,13 +1187,21 @@
             <span>
               Google Calendar: {userProfile?.googleCalendarConnected ? 'Connected ✓' : 'Not Connected'}
             </span>
-            {!userProfile?.googleCalendarConnected && (
+            {!userProfile?.googleCalendarConnected ? (
               <button 
                 className="btn btn-sm btn-google" 
                 onClick={connectGoogleCalendar}
                 style={{marginLeft: 'auto'}}
               >
                 Connect Google Calendar
+              </button>
+            ) : (
+              <button 
+                className="btn btn-sm btn-outline" 
+                onClick={disconnectGoogleCalendar}
+                style={{marginLeft: 'auto'}}
+              >
+                🔌 Disconnect
               </button>
             )}
           </div>
@@ -1668,7 +1707,7 @@
       );
     }
 
-    function AppointmentsView({ userId }) {
+    function AppointmentsView({ userId, userProfile }) {
       const [appointments, setAppointments] = useState([]);
       const [loading, setLoading] = useState(true);
 
@@ -1681,27 +1720,141 @@
           try {
             const snapshot = await db.collection('appointments')
               .where('farrierId', '==', userId)
-              .orderBy('requestedDate', 'desc')
               .get();
             
             const appointmentData = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
+            
+            // Sort in JavaScript instead of Firestore
+            appointmentData.sort((a, b) => {
+              const dateA = new Date(a.requestedDate);
+              const dateB = new Date(b.requestedDate);
+              return dateB - dateA; // Newest first
+            });
+            
             setAppointments(appointmentData);
+            console.log('✅ Loaded appointments:', appointmentData.length);
           } catch (error) {
-            console.error('Error loading appointments:', error);
+            console.error('❌ Error loading appointments:', error);
           }
         }
         setLoading(false);
       };
 
+      const createCalendarEvent = async (appointment, userProfile) => {
+        console.log('=== CREATE CALENDAR EVENT START ===');
+        console.log('UserProfile:', userProfile);
+        console.log('Appointment:', appointment);
+        
+        if (!userProfile?.googleCalendarConnected || !userProfile?.googleAccessToken) {
+          console.error('❌ Calendar not connected or no token');
+          alert('Please connect Google Calendar first in the "My QR Code" tab');
+          return false;
+        }
+
+        console.log('✅ Calendar connected, token exists');
+
+        try {
+          // Create calendar event
+          const eventStartTime = new Date(`${appointment.requestedDate}T${appointment.requestedTime}:00`);
+          const eventEndTime = new Date(eventStartTime.getTime() + 2 * 60 * 60 * 1000); // 2 hours later
+
+          console.log('📅 Event times:', {
+            start: eventStartTime.toISOString(),
+            end: eventEndTime.toISOString()
+          });
+
+          const event = {
+            summary: `Farrier - ${appointment.customerName}`,
+            description: `
+Customer: ${appointment.customerName}
+Phone: ${appointment.phone}
+${appointment.email ? `Email: ${appointment.email}\n` : ''}
+${appointment.services?.length > 0 ? `Services: ${appointment.services.join(', ')}\n` : ''}
+${appointment.numberOfHorses ? `Number of Horses: ${appointment.numberOfHorses}\n` : ''}
+${appointment.comments ? `Notes: ${appointment.comments}` : ''}
+            `.trim(),
+            location: appointment.address ? `${appointment.address}, ${appointment.city}, ${appointment.state} ${appointment.zip}` : '',
+            start: {
+              dateTime: eventStartTime.toISOString(),
+              timeZone: 'America/New_York'
+            },
+            end: {
+              dateTime: eventEndTime.toISOString(),
+              timeZone: 'America/New_York'
+            }
+          };
+
+          console.log('📤 Sending event to Google Calendar:', event);
+
+          const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${userProfile.googleAccessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(event)
+          });
+
+          console.log('📥 Response status:', response.status);
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('❌ Calendar API error:', errorData);
+            throw new Error(`Failed to create calendar event: ${errorData.error?.message || 'Unknown error'}`);
+          }
+
+          const data = await response.json();
+          console.log('✅ Calendar event created successfully!', data);
+          
+          // Save event ID to appointment
+          if (db) {
+            await db.collection('appointments').doc(appointment.id).update({
+              googleEventId: data.id
+            });
+            console.log('✅ Saved event ID to appointment');
+          }
+
+          return true;
+        } catch (error) {
+          console.error('❌ Calendar error:', error);
+          alert('Could not add to calendar. Error: ' + error.message + '\n\nCheck console for details. Your connection may have expired - try reconnecting.');
+          return false;
+        }
+      };
+
       const updateStatus = async (appointmentId, newStatus) => {
+        console.log('🔵 updateStatus called:', { appointmentId, newStatus });
+        
         if (db) {
           await db.collection('appointments').doc(appointmentId).update({
             status: newStatus,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           });
+          
+          console.log('✅ Status updated in Firebase');
+          
+          // If confirming, add to Google Calendar
+          if (newStatus === 'confirmed') {
+            console.log('🟢 Status is confirmed, attempting calendar sync...');
+            const appointment = appointments.find(apt => apt.id === appointmentId);
+            console.log('📋 Found appointment:', appointment);
+            console.log('👤 UserProfile:', userProfile);
+            
+            if (appointment) {
+              const success = await createCalendarEvent(appointment, userProfile);
+              if (success) {
+                alert('✓ Appointment confirmed and added to your Google Calendar!');
+              } else {
+                alert('⚠️ Appointment confirmed, but failed to add to Google Calendar. Check console for details.');
+              }
+            } else {
+              console.error('❌ Appointment not found in local state');
+            }
+          }
+          
           loadAppointments();
         }
       };
