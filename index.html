@@ -1745,15 +1745,27 @@
       };
 
       const createCalendarEvent = async (appointment, userProfile) => {
+        console.log('=== CREATE CALENDAR EVENT START ===');
+        console.log('UserProfile:', userProfile);
+        console.log('Appointment:', appointment);
+        
         if (!userProfile?.googleCalendarConnected || !userProfile?.googleAccessToken) {
+          console.error('❌ Calendar not connected or no token');
           alert('Please connect Google Calendar first in the "My QR Code" tab');
           return false;
         }
+
+        console.log('✅ Calendar connected, token exists');
 
         try {
           // Create calendar event
           const eventStartTime = new Date(`${appointment.requestedDate}T${appointment.requestedTime}:00`);
           const eventEndTime = new Date(eventStartTime.getTime() + 2 * 60 * 60 * 1000); // 2 hours later
+
+          console.log('📅 Event times:', {
+            start: eventStartTime.toISOString(),
+            end: eventEndTime.toISOString()
+          });
 
           const event = {
             summary: `Farrier - ${appointment.customerName}`,
@@ -1776,6 +1788,8 @@ ${appointment.comments ? `Notes: ${appointment.comments}` : ''}
             }
           };
 
+          console.log('📤 Sending event to Google Calendar:', event);
+
           const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
             method: 'POST',
             headers: {
@@ -1785,42 +1799,60 @@ ${appointment.comments ? `Notes: ${appointment.comments}` : ''}
             body: JSON.stringify(event)
           });
 
+          console.log('📥 Response status:', response.status);
+
           if (!response.ok) {
-            throw new Error('Failed to create calendar event');
+            const errorData = await response.json();
+            console.error('❌ Calendar API error:', errorData);
+            throw new Error(`Failed to create calendar event: ${errorData.error?.message || 'Unknown error'}`);
           }
 
           const data = await response.json();
+          console.log('✅ Calendar event created successfully!', data);
           
           // Save event ID to appointment
           if (db) {
             await db.collection('appointments').doc(appointment.id).update({
               googleEventId: data.id
             });
+            console.log('✅ Saved event ID to appointment');
           }
 
           return true;
         } catch (error) {
-          console.error('Calendar error:', error);
-          alert('Could not add to calendar. Your Google Calendar connection may have expired. Try reconnecting.');
+          console.error('❌ Calendar error:', error);
+          alert('Could not add to calendar. Error: ' + error.message + '\n\nCheck console for details. Your connection may have expired - try reconnecting.');
           return false;
         }
       };
 
       const updateStatus = async (appointmentId, newStatus) => {
+        console.log('🔵 updateStatus called:', { appointmentId, newStatus });
+        
         if (db) {
           await db.collection('appointments').doc(appointmentId).update({
             status: newStatus,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           });
           
+          console.log('✅ Status updated in Firebase');
+          
           // If confirming, add to Google Calendar
           if (newStatus === 'confirmed') {
+            console.log('🟢 Status is confirmed, attempting calendar sync...');
             const appointment = appointments.find(apt => apt.id === appointmentId);
+            console.log('📋 Found appointment:', appointment);
+            console.log('👤 UserProfile:', userProfile);
+            
             if (appointment) {
               const success = await createCalendarEvent(appointment, userProfile);
               if (success) {
                 alert('✓ Appointment confirmed and added to your Google Calendar!');
+              } else {
+                alert('⚠️ Appointment confirmed, but failed to add to Google Calendar. Check console for details.');
               }
+            } else {
+              console.error('❌ Appointment not found in local state');
             }
           }
           
@@ -2420,4 +2452,5 @@ ${appointment.comments ? `Notes: ${appointment.comments}` : ''}
   </script>
 </body>
 </html>
+
 
