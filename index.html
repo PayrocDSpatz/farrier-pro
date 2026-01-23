@@ -1767,16 +1767,39 @@
           });
 
           const event = {
-            summary: `Farrier - ${appointment.customerName}`,
+            summary: `🐴 Farrier - ${appointment.customerName}`,
             description: `
-Customer: ${appointment.customerName}
-Phone: ${appointment.phone}
-${appointment.email ? `Email: ${appointment.email}\n` : ''}
-${appointment.services?.length > 0 ? `Services: ${appointment.services.join(', ')}\n` : ''}
-${appointment.numberOfHorses ? `Number of Horses: ${appointment.numberOfHorses}\n` : ''}
-${appointment.comments ? `Notes: ${appointment.comments}` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 APPOINTMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👤 CUSTOMER INFORMATION:
+   Name: ${appointment.customerName}
+   Phone: ${appointment.phone}${appointment.email ? `
+   Email: ${appointment.email}` : ''}
+
+🔧 SERVICES REQUESTED:${appointment.services && appointment.services.length > 0 ? `
+   ${appointment.services.map(s => `• ${s}`).join('\n   ')}` : '
+   (No services specified)'}
+
+🐴 HORSES:${appointment.numberOfHorses ? `
+   Number of Horses: ${appointment.numberOfHorses}` : '
+   (Not specified)'}
+
+📍 LOCATION:${appointment.address ? `
+   ${appointment.address}
+   ${appointment.city}${appointment.state ? `, ${appointment.state}` : ''}${appointment.zip ? ` ${appointment.zip}` : ''}` : '
+   (No address provided)'}
+
+💬 SPECIAL REQUESTS/NOTES:${appointment.comments ? `
+   ${appointment.comments}` : '
+   (None)'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏰ Scheduled: ${appointment.requestedDate} at ${appointment.requestedTime}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             `.trim(),
-            location: appointment.address ? `${appointment.address}, ${appointment.city}, ${appointment.state} ${appointment.zip}` : '',
+            location: appointment.address ? `${appointment.address}, ${appointment.city}${appointment.state ? `, ${appointment.state}` : ''}${appointment.zip ? ` ${appointment.zip}` : ''}` : '',
             start: {
               dateTime: eventStartTime.toISOString(),
               timeZone: 'America/New_York'
