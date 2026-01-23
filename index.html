@@ -2103,6 +2103,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [invoices, setInvoices] = useState([]);
       const [showCreateModal, setShowCreateModal] = useState(false);
       const [loading, setLoading] = useState(false);
+      const [sendingPaymentLink, setSendingPaymentLink] = useState(null);
 
       useEffect(() => {
         loadInvoices();
@@ -2120,6 +2121,54 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             ...doc.data()
           }));
           setInvoices(invoiceData);
+        }
+      };
+
+      const sendPayrocPaymentLink = async (invoice) => {
+        setSendingPaymentLink(invoice.id);
+        
+        try {
+          console.log('📤 Creating Payroc payment link for invoice:', invoice.invoiceNumber);
+          
+          const response = await fetch('/api/create-payroc-payment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              amount: invoice.total,
+              customerEmail: invoice.customerEmail,
+              customerName: invoice.customerName,
+              invoiceNumber: invoice.invoiceNumber,
+              description: `Farrier services - Invoice #${invoice.invoiceNumber}`
+            })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to create payment link');
+          }
+
+          const data = await response.json();
+          console.log('✅ Payment link created:', data);
+
+          // Update invoice with payment link
+          if (db) {
+            await db.collection('invoices').doc(invoice.id).update({
+              paymentUrl: data.paymentUrl,
+              paymentLinkId: data.paymentLinkId,
+              paymentLinkSent: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          }
+
+          alert(`✅ Payment link sent to ${invoice.customerEmail}!\n\nThe customer will receive an email with a secure payment link.`);
+          loadInvoices();
+          
+        } catch (error) {
+          console.error('❌ Payment link error:', error);
+          alert(`Failed to send payment link: ${error.message}\n\nMake sure Payroc is configured in Vercel environment variables.`);
+        } finally {
+          setSendingPaymentLink(null);
         }
       };
 
@@ -2177,16 +2226,33 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       <span className={`badge badge-${invoice.status === 'paid' ? 'success' : 'warning'}`}>
                         {invoice.status}
                       </span>
-                      {invoice.status === 'outstanding' && invoice.paymentUrl && (
+                      {invoice.status === 'outstanding' && !invoice.paymentUrl && (
                         <button 
-                          className="btn btn-sm btn-warning"
-                          onClick={() => {
-                            const message = `Hi ${invoice.customerName}! Your invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} is ready. Pay here: ${invoice.paymentUrl}`;
-                            alert(`SMS would be sent:\n\n${message}`);
-                          }}
+                          className="btn btn-sm btn-primary"
+                          onClick={() => sendPayrocPaymentLink(invoice)}
+                          disabled={sendingPaymentLink === invoice.id}
                         >
-                          📱 Send Reminder
+                          {sendingPaymentLink === invoice.id ? '⏳ Sending...' : '💳 Send Payment Link'}
                         </button>
+                      )}
+                      {invoice.status === 'outstanding' && invoice.paymentUrl && (
+                        <>
+                          <button 
+                            className="btn btn-sm btn-success"
+                            onClick={() => window.open(invoice.paymentUrl, '_blank')}
+                          >
+                            🔗 View Payment Link
+                          </button>
+                          <button 
+                            className="btn btn-sm btn-warning"
+                            onClick={() => {
+                              const message = `Hi ${invoice.customerName}! Your invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} is ready. Pay here: ${invoice.paymentUrl}`;
+                              alert(`SMS would be sent:\n\n${message}`);
+                            }}
+                          >
+                            📱 Send Reminder
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
