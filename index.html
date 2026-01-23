@@ -2103,7 +2103,6 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [invoices, setInvoices] = useState([]);
       const [showCreateModal, setShowCreateModal] = useState(false);
       const [loading, setLoading] = useState(false);
-      const [sendingPaymentLink, setSendingPaymentLink] = useState(null);
 
       useEffect(() => {
         loadInvoices();
@@ -2124,57 +2123,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         }
       };
 
-      const sendPayrocPaymentLink = async (invoice) => {
-        setSendingPaymentLink(invoice.id);
-        
-        try {
-          console.log('📤 Creating Payroc payment link for invoice:', invoice.invoiceNumber);
-          
-          const response = await fetch('/api/create-payroc-payment', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              amount: invoice.total,
-              customerEmail: invoice.customerEmail,
-              customerName: invoice.customerName,
-              invoiceNumber: invoice.invoiceNumber,
-              description: `Farrier services - Invoice #${invoice.invoiceNumber}`
-            })
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Failed to create payment link');
-          }
-
-          const data = await response.json();
-          console.log('✅ Payment link created:', data);
-
-          // Update invoice with payment link
-          if (db) {
-            await db.collection('invoices').doc(invoice.id).update({
-              paymentUrl: data.paymentUrl,
-              paymentLinkId: data.paymentLinkId,
-              paymentLinkSent: firebase.firestore.FieldValue.serverTimestamp()
-            });
-          }
-
-          alert(`✅ Payment link sent to ${invoice.customerEmail}!\n\nThe customer will receive an email with a secure payment link.`);
-          loadInvoices();
-          
-        } catch (error) {
-          console.error('❌ Payment link error:', error);
-          alert(`Failed to send payment link: ${error.message}\n\nMake sure Payroc is configured in Vercel environment variables.`);
-        } finally {
-          setSendingPaymentLink(null);
-        }
-      };
-
       const totalCollected = invoices
         .filter(inv => inv.status === 'paid')
-        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+        .reduce((sum, inv => sum + (inv.total || 0), 0);
 
       const totalOutstanding = invoices
         .filter(inv => inv.status === 'outstanding')
@@ -2226,33 +2177,16 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       <span className={`badge badge-${invoice.status === 'paid' ? 'success' : 'warning'}`}>
                         {invoice.status}
                       </span>
-                      {invoice.status === 'outstanding' && !invoice.paymentUrl && (
-                        <button 
-                          className="btn btn-sm btn-primary"
-                          onClick={() => sendPayrocPaymentLink(invoice)}
-                          disabled={sendingPaymentLink === invoice.id}
-                        >
-                          {sendingPaymentLink === invoice.id ? '⏳ Sending...' : '💳 Send Payment Link'}
-                        </button>
-                      )}
                       {invoice.status === 'outstanding' && invoice.paymentUrl && (
-                        <>
-                          <button 
-                            className="btn btn-sm btn-success"
-                            onClick={() => window.open(invoice.paymentUrl, '_blank')}
-                          >
-                            🔗 View Payment Link
-                          </button>
-                          <button 
-                            className="btn btn-sm btn-warning"
-                            onClick={() => {
-                              const message = `Hi ${invoice.customerName}! Your invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} is ready. Pay here: ${invoice.paymentUrl}`;
-                              alert(`SMS would be sent:\n\n${message}`);
-                            }}
-                          >
-                            📱 Send Reminder
-                          </button>
-                        </>
+                        <button 
+                          className="btn btn-sm btn-warning"
+                          onClick={() => {
+                            const message = `Hi ${invoice.customerName}! Your invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} is ready. Pay here: ${invoice.paymentUrl}`;
+                            alert(`SMS would be sent:\n\n${message}`);
+                          }}
+                        >
+                          📱 Send Reminder
+                        </button>
                       )}
                     </div>
                   </div>
@@ -2500,172 +2434,4 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [address, setAddress] = useState(userProfile?.address || '');
       const [city, setCity] = useState(userProfile?.city || '');
       const [state, setState] = useState(userProfile?.state || '');
-      const [zip, setZip] = useState(userProfile?.zip || '');
-      const [loading, setLoading] = useState(false);
-      const [successMessage, setSuccessMessage] = useState('');
-      const [error, setError] = useState('');
-
-      const handleSave = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
-        setSuccessMessage('');
-
-        try {
-          if (db) {
-            await db.collection('farriers').doc(user.uid).update({
-              businessName: businessName,
-              phone: phone,
-              address: address,
-              city: city,
-              state: state,
-              zip: zip,
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-
-            // Update local state
-            setUserProfile({
-              ...userProfile,
-              businessName,
-              phone,
-              address,
-              city,
-              state,
-              zip
-            });
-
-            setSuccessMessage('Profile updated successfully!');
-          }
-        } catch (err) {
-          console.error('Error updating profile:', err);
-          setError('Failed to update profile. Please try again.');
-        }
-
-        setLoading(false);
-      };
-
-      return (
-        <div>
-          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>
-            Account Settings
-          </h1>
-
-          {successMessage && <div className="success-message">{successMessage}</div>}
-          {error && <div className="error-message">{error}</div>}
-
-          <div className="card">
-            <h2>Business Profile</h2>
-            <form onSubmit={handleSave}>
-              <div className="form-group">
-                <label>Business Name *</label>
-                <input 
-                  type="text"
-                  required
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="John's Farrier Services"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Email (Cannot be changed)</label>
-                <input 
-                  type="email"
-                  value={userProfile?.email || user.email}
-                  disabled
-                  style={{background: '#f5f5f5', cursor: 'not-allowed'}}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Phone Number *</label>
-                <input 
-                  type="tel"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="(555) 555-5555"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Business Address *</label>
-                <input 
-                  type="text"
-                  required
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="123 Main Street"
-                />
-              </div>
-
-              <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem'}}>
-                <div className="form-group">
-                  <label>City *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="City"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>State *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={state}
-                    onChange={(e) => setState(e.target.value.toUpperCase())}
-                    placeholder="VA"
-                    maxLength="2"
-                    style={{textTransform: 'uppercase'}}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>ZIP *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={zip}
-                    onChange={(e) => setZip(e.target.value)}
-                    placeholder="12345"
-                    maxLength="5"
-                    pattern="[0-9]{5}"
-                  />
-                </div>
-              </div>
-
-              <button 
-                type="submit" 
-                className="btn btn-primary"
-                disabled={loading}
-                style={{marginTop: '1rem'}}
-              >
-                {loading ? <span className="spinner"></span> : 'Save Changes'}
-              </button>
-            </form>
-          </div>
-
-          <div className="card" style={{marginTop: '1.5rem'}}>
-            <h2>Account Information</h2>
-            <p style={{color: 'var(--text-muted)', marginBottom: '1rem'}}>
-              <strong>Account Created:</strong> {userProfile?.createdAt?.toDate().toLocaleDateString() || 'N/A'}
-            </p>
-            <p style={{color: 'var(--text-muted)'}}>
-              <strong>Booking URL:</strong><br/>
-              <code style={{background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.5rem'}}>
-                {userProfile?.bookingUrl || `${window.location.origin}?farrier=${user.uid}`}
-              </code>
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
-</body>
-</html>
+      const [zip, setZip] 
