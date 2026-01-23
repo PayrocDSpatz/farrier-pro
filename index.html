@@ -1766,39 +1766,40 @@
             end: eventEndTime.toISOString()
           });
 
+          // Build services list
+          let servicesList = '';
+          if (appointment.services && appointment.services.length > 0) {
+            servicesList = appointment.services.map(s => `   • ${s}`).join('\n');
+          } else {
+            servicesList = '   (No services specified)';
+          }
+
           const event = {
             summary: `🐴 Farrier - ${appointment.customerName}`,
-            description: `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            description: `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 APPOINTMENT DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 👤 CUSTOMER INFORMATION:
    Name: ${appointment.customerName}
-   Phone: ${appointment.phone}${appointment.email ? `
-   Email: ${appointment.email}` : ''}
+   Phone: ${appointment.phone}
+${appointment.email ? `   Email: ${appointment.email}` : ''}
 
-🔧 SERVICES REQUESTED:${appointment.services && appointment.services.length > 0 ? `
-   ${appointment.services.map(s => `• ${s}`).join('\n   ')}` : '
-   (No services specified)'}
+🔧 SERVICES REQUESTED:
+${servicesList}
 
-🐴 HORSES:${appointment.numberOfHorses ? `
-   Number of Horses: ${appointment.numberOfHorses}` : '
-   (Not specified)'}
+🐴 HORSES:
+${appointment.numberOfHorses ? `   Number of Horses: ${appointment.numberOfHorses}` : '   (Not specified)'}
 
-📍 LOCATION:${appointment.address ? `
-   ${appointment.address}
-   ${appointment.city}${appointment.state ? `, ${appointment.state}` : ''}${appointment.zip ? ` ${appointment.zip}` : ''}` : '
-   (No address provided)'}
+📍 LOCATION:
+${appointment.address ? `   ${appointment.address}\n   ${appointment.city}${appointment.state ? `, ${appointment.state}` : ''}${appointment.zip ? ` ${appointment.zip}` : ''}` : '   (No address provided)'}
 
-💬 SPECIAL REQUESTS/NOTES:${appointment.comments ? `
-   ${appointment.comments}` : '
-   (None)'}
+💬 SPECIAL REQUESTS/NOTES:
+${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⏰ Scheduled: ${appointment.requestedDate} at ${appointment.requestedTime}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            `.trim(),
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
             location: appointment.address ? `${appointment.address}, ${appointment.city}${appointment.state ? `, ${appointment.state}` : ''}${appointment.zip ? ` ${appointment.zip}` : ''}` : '',
             start: {
               dateTime: eventStartTime.toISOString(),
