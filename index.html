@@ -704,7 +704,7 @@
     }
 
     // Google Calendar API Configuration
-    const GOOGLE_CLIENT_ID = "458461432563-pkncm66du9pipuihdrbrhfrsuggo7loh.apps.googleusercontent.com" ;
+    const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID";
     const CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar";
 
     function App() {
@@ -1669,16 +1669,127 @@
     }
 
     function AppointmentsView({ userId }) {
+      const [appointments, setAppointments] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        loadAppointments();
+      }, []);
+
+      const loadAppointments = async () => {
+        if (db) {
+          try {
+            const snapshot = await db.collection('appointments')
+              .where('farrierId', '==', userId)
+              .orderBy('requestedDate', 'desc')
+              .get();
+            
+            const appointmentData = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            setAppointments(appointmentData);
+          } catch (error) {
+            console.error('Error loading appointments:', error);
+          }
+        }
+        setLoading(false);
+      };
+
+      const updateStatus = async (appointmentId, newStatus) => {
+        if (db) {
+          await db.collection('appointments').doc(appointmentId).update({
+            status: newStatus,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          loadAppointments();
+        }
+      };
+
+      const sendReminder = (appointment) => {
+        const message = `Hi ${appointment.customerName}! Reminder: Your farrier appointment is on ${appointment.requestedDate} at ${appointment.requestedTime}. ${appointment.address ? 'Location: ' + appointment.address : ''}`;
+        alert(`SMS would be sent to ${appointment.phone}:\n\n${message}`);
+      };
+
+      if (loading) {
+        return (
+          <div style={{display: 'flex', justifyContent: 'center', padding: '3rem'}}>
+            <div className="spinner"></div>
+          </div>
+        );
+      }
+
       return (
         <div>
           <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Appointments</h1>
           
-          <div className="card">
-            <h2>Your Appointments</h2>
-            <p style={{color: 'var(--text-muted)'}}>
-              Appointments booked through your QR code will appear here. You can manage them, send reminders, and create invoices.
-            </p>
-          </div>
+          {appointments.length === 0 ? (
+            <div className="card">
+              <h2>No Appointments Yet</h2>
+              <p style={{color: 'var(--text-muted)'}}>
+                Appointments booked through your QR code will appear here. Share your QR code to start receiving bookings!
+              </p>
+            </div>
+          ) : (
+            <div className="card">
+              <h2>Your Appointments ({appointments.length})</h2>
+              <div className="appointments-list">
+                {appointments.map(apt => (
+                  <div key={apt.id} className="appointment-item">
+                    <div className="appointment-info">
+                      <div className="appointment-customer">{apt.customerName}</div>
+                      <div className="appointment-details">
+                        📞 {apt.phone} {apt.email && `• ✉️ ${apt.email}`}<br/>
+                        📅 {apt.requestedDate} at {apt.requestedTime}<br/>
+                        {apt.services && apt.services.length > 0 && (
+                          <>🔧 Services: {apt.services.join(', ')}<br/></>
+                        )}
+                        {apt.numberOfHorses && (
+                          <>🐴 Horses: {apt.numberOfHorses}<br/></>
+                        )}
+                        {apt.address && (
+                          <>📍 {apt.address}, {apt.city}, {apt.state} {apt.zip}<br/></>
+                        )}
+                        {apt.comments && (
+                          <>💬 Notes: {apt.comments}<br/></>
+                        )}
+                        <small style={{color: 'var(--text-muted)'}}>
+                          Requested: {apt.createdAt?.toDate().toLocaleDateString()}
+                        </small>
+                      </div>
+                    </div>
+                    <div className="appointment-actions">
+                      <span className={`badge badge-${apt.status === 'confirmed' ? 'success' : apt.status === 'pending' ? 'warning' : 'pending'}`}>
+                        {apt.status || 'pending'}
+                      </span>
+                      {apt.status !== 'confirmed' && (
+                        <button 
+                          className="btn btn-sm btn-success"
+                          onClick={() => updateStatus(apt.id, 'confirmed')}
+                        >
+                          ✓ Confirm
+                        </button>
+                      )}
+                      <button 
+                        className="btn btn-sm btn-warning"
+                        onClick={() => sendReminder(apt)}
+                      >
+                        📱 Send Reminder
+                      </button>
+                      {apt.status !== 'cancelled' && (
+                        <button 
+                          className="btn btn-sm btn-outline"
+                          onClick={() => updateStatus(apt.id, 'cancelled')}
+                        >
+                          ✕ Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       );
     }
