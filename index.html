@@ -1849,6 +1849,42 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         }
       };
 
+      const deleteCalendarEvent = async (appointment, userProfile) => {
+        console.log('🗑️ DELETE CALENDAR EVENT START');
+        
+        if (!appointment.googleEventId) {
+          console.log('⚠️ No Google Event ID found - event may not be in calendar');
+          return true; // Not an error, just wasn't synced yet
+        }
+        
+        if (!userProfile?.googleCalendarConnected || !userProfile?.googleAccessToken) {
+          console.error('❌ Calendar not connected');
+          return false;
+        }
+
+        try {
+          console.log('🗑️ Deleting event from Google Calendar:', appointment.googleEventId);
+          
+          const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${appointment.googleEventId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${userProfile.googleAccessToken}`
+            }
+          });
+
+          if (response.ok || response.status === 404) {
+            console.log('✅ Calendar event deleted successfully!');
+            return true;
+          } else {
+            console.error('❌ Failed to delete calendar event:', response.status);
+            return false;
+          }
+        } catch (error) {
+          console.error('❌ Calendar deletion error:', error);
+          return false;
+        }
+      };
+
       const updateStatus = async (appointmentId, newStatus) => {
         console.log('🔵 updateStatus called:', { appointmentId, newStatus });
         
@@ -1860,10 +1896,11 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           
           console.log('✅ Status updated in Firebase');
           
+          const appointment = appointments.find(apt => apt.id === appointmentId);
+          
           // If confirming, add to Google Calendar
           if (newStatus === 'confirmed') {
             console.log('🟢 Status is confirmed, attempting calendar sync...');
-            const appointment = appointments.find(apt => apt.id === appointmentId);
             console.log('📋 Found appointment:', appointment);
             console.log('👤 UserProfile:', userProfile);
             
@@ -1876,6 +1913,20 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               }
             } else {
               console.error('❌ Appointment not found in local state');
+            }
+          }
+          
+          // If cancelling, remove from Google Calendar
+          if (newStatus === 'cancelled') {
+            console.log('🔴 Status is cancelled, removing from calendar...');
+            
+            if (appointment) {
+              const deleted = await deleteCalendarEvent(appointment, userProfile);
+              if (deleted) {
+                alert('✓ Appointment cancelled and removed from your Google Calendar!');
+              } else {
+                alert('⚠️ Appointment cancelled in app, but may still be in Google Calendar. You may need to remove it manually.');
+              }
             }
           }
           
