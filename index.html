@@ -1051,7 +1051,13 @@
                     googleCalendarConnected: true,
                     googleAccessToken: response.access_token
                   });
-                  setUserProfile({...userProfile, googleCalendarConnected: true, googleAccessToken: response.access_token});
+                  
+                  // Reload profile from Firestore
+                  const profileDoc = await db.collection('farriers').doc(user.uid).get();
+                  if (profileDoc.exists) {
+                    setUserProfile(profileDoc.data());
+                  }
+                  
                   alert('Google Calendar connected successfully!');
                 }
               }
@@ -1072,7 +1078,13 @@
                 googleCalendarConnected: false,
                 googleAccessToken: firebase.firestore.FieldValue.delete()
               });
-              setUserProfile({...userProfile, googleCalendarConnected: false, googleAccessToken: null});
+              
+              // Reload profile from Firestore
+              const profileDoc = await db.collection('farriers').doc(user.uid).get();
+              if (profileDoc.exists) {
+                setUserProfile(profileDoc.data());
+              }
+              
               alert('Google Calendar disconnected successfully!');
             }
           } catch (error) {
@@ -1132,6 +1144,7 @@
                 user={user} 
                 userProfile={userProfile}
                 connectGoogleCalendar={connectGoogleCalendar}
+                disconnectGoogleCalendar={disconnectGoogleCalendar}
               />
             )}
             {tab === 'dashboard' && <DashboardView userId={user.uid} />}
@@ -1144,7 +1157,7 @@
       );
     }
 
-    function QRCodeView({ user, userProfile, connectGoogleCalendar }) {
+    function QRCodeView({ user, userProfile, connectGoogleCalendar, disconnectGoogleCalendar }) {
       const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + user.uid;
       
       // Use Google Charts API for QR code as backup
@@ -2407,3 +2420,4 @@ ${appointment.comments ? `Notes: ${appointment.comments}` : ''}
   </script>
 </body>
 </html>
+
