@@ -1826,8 +1826,8 @@ ${appointment.comments ? `Notes: ${appointment.comments}` : ''}
         }
       };
 
-      const updateStatus = async (appointmentId, newStatus) => {
-        console.log('🔵 updateStatus called:', { appointmentId, newStatus });
+      const  = async (appointmentId, newStatus) => {
+        console.log('🔵  called:', { appointmentId, newStatus });
         
         if (db) {
           await db.collection('appointments').doc(appointmentId).update({
@@ -1919,7 +1919,7 @@ ${appointment.comments ? `Notes: ${appointment.comments}` : ''}
                       {apt.status !== 'confirmed' && (
                         <button 
                           className="btn btn-sm btn-success"
-                          onClick={() => updateStatus(apt.id, 'confirmed')}
+                          onClick={() => (apt.id, 'confirmed')}
                         >
                           ✓ Confirm
                         </button>
