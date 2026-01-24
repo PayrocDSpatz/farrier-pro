@@ -1414,13 +1414,26 @@
 
       // Generate time slots based on farrier's availability for selected date
       const getAvailableSlots = () => {
-        if (!formData.date || !farrierInfo?.availability) {
-          return ['09:00', '11:00', '13:00', '15:00']; // Default if no date selected or no availability set
+        if (!formData.date) {
+          return []; // No slots until date is selected
         }
 
         const selectedDate = new Date(formData.date);
         const dayName = selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-        const dayAvailability = farrierInfo.availability[dayName];
+        
+        // Default availability if farrier hasn't set it up yet (Mon-Fri 9-5)
+        const defaultAvailability = {
+          monday: { enabled: true, start: '09:00', end: '17:00' },
+          tuesday: { enabled: true, start: '09:00', end: '17:00' },
+          wednesday: { enabled: true, start: '09:00', end: '17:00' },
+          thursday: { enabled: true, start: '09:00', end: '17:00' },
+          friday: { enabled: true, start: '09:00', end: '17:00' },
+          saturday: { enabled: false, start: '09:00', end: '17:00' },
+          sunday: { enabled: false, start: '09:00', end: '17:00' }
+        };
+
+        const availability = farrierInfo?.availability || defaultAvailability;
+        const dayAvailability = availability[dayName];
 
         if (!dayAvailability || !dayAvailability.enabled) {
           return []; // No slots if farrier doesn't work this day
