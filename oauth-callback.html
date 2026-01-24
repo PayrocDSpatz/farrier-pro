@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Connecting Google Calendar...</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .container {
+      text-align: center;
+    }
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top: 4px solid white;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h2>Connecting Google Calendar...</h2>
+    <p>Please wait while we complete the connection.</p>
+  </div>
+
+  <script>
+    // Extract authorization code from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const error = urlParams.get('error');
+
+    if (error) {
+      // User denied access
+      if (window.opener) {
+        window.opener.postMessage({
+          type: 'oauth-error',
+          error: error
+        }, window.location.origin);
+      }
+      window.close();
+    } else if (code) {
+      // Success - send code back to parent window
+      if (window.opener) {
+        window.opener.postMessage({
+          type: 'oauth-success',
+          code: code
+        }, window.location.origin);
+      }
+      
+      // Close this window after a brief delay
+      setTimeout(() => {
+        window.close();
+      }, 1000);
+    } else {
+      // Something went wrong
+      document.querySelector('.container').innerHTML = `
+        <h2>❌ Error</h2>
+        <p>No authorization code received.</p>
+        <p>You can close this window.</p>
+      `;
+    }
+  </script>
+</body>
+</html>
