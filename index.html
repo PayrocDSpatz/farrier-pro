@@ -1412,7 +1412,42 @@
         'Hoof Care Consultation'
       ];
 
-      const availableSlots = ['09:00', '11:00', '13:00', '15:00'];
+      // Generate time slots based on farrier's availability for selected date
+      const getAvailableSlots = () => {
+        if (!formData.date || !farrierInfo?.availability) {
+          return ['09:00', '11:00', '13:00', '15:00']; // Default if no date selected or no availability set
+        }
+
+        const selectedDate = new Date(formData.date);
+        const dayName = selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        const dayAvailability = farrierInfo.availability[dayName];
+
+        if (!dayAvailability || !dayAvailability.enabled) {
+          return []; // No slots if farrier doesn't work this day
+        }
+
+        // Generate 2-hour slots from start to end time
+        const slots = [];
+        const [startHour, startMin] = dayAvailability.start.split(':').map(Number);
+        const [endHour, endMin] = dayAvailability.end.split(':').map(Number);
+        
+        let currentHour = startHour;
+        let currentMin = startMin;
+        
+        while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
+          const timeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMin).padStart(2, '0')}`;
+          slots.push(timeStr);
+          
+          // Add 2 hours for next slot
+          currentMin += 120;
+          currentHour += Math.floor(currentMin / 60);
+          currentMin = currentMin % 60;
+        }
+
+        return slots;
+      };
+
+      const availableSlots = getAvailableSlots();
 
       if (loading) {
         return (
@@ -1633,24 +1668,36 @@
                         type="date" 
                         required 
                         value={formData.date}
-                        onChange={(e) => setFormData({...formData, date: e.target.value})}
+                        onChange={(e) => setFormData({...formData, date: e.target.value, time: ''})}
                         min={new Date().toISOString().split('T')[0]}
                       />
                     </div>
                     
                     <div className="form-group">
                       <label>Available Time Slots *</label>
-                      <div className="time-slots">
-                        {availableSlots.map(slot => (
-                          <div 
-                            key={slot}
-                            className={`time-slot ${formData.time === slot ? 'selected' : ''}`}
-                            onClick={() => setFormData({...formData, time: slot})}
-                          >
-                            {slot}
+                      {formData.date ? (
+                        availableSlots.length > 0 ? (
+                          <div className="time-slots">
+                            {availableSlots.map(slot => (
+                              <div 
+                                key={slot}
+                                className={`time-slot ${formData.time === slot ? 'selected' : ''}`}
+                                onClick={() => setFormData({...formData, time: slot})}
+                              >
+                                {slot}
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        ) : (
+                          <p style={{color: '#999', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
+                            ⚠️ Farrier is not available on this day. Please select a different date.
+                          </p>
+                        )
+                      ) : (
+                        <p style={{color: '#999', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
+                          📅 Please select a date first to see available time slots.
+                        </p>
+                      )}
                     </div>
                     
                     <button 
@@ -2438,6 +2485,31 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [loading, setLoading] = useState(false);
       const [successMessage, setSuccessMessage] = useState('');
       const [error, setError] = useState('');
+      
+      // Availability settings with defaults
+      const defaultAvailability = {
+        monday: { enabled: true, start: '09:00', end: '17:00' },
+        tuesday: { enabled: true, start: '09:00', end: '17:00' },
+        wednesday: { enabled: true, start: '09:00', end: '17:00' },
+        thursday: { enabled: true, start: '09:00', end: '17:00' },
+        friday: { enabled: true, start: '09:00', end: '17:00' },
+        saturday: { enabled: false, start: '09:00', end: '17:00' },
+        sunday: { enabled: false, start: '09:00', end: '17:00' }
+      };
+      
+      const [availability, setAvailability] = useState(
+        userProfile?.availability || defaultAvailability
+      );
+
+      const updateDayAvailability = (day, field, value) => {
+        setAvailability({
+          ...availability,
+          [day]: {
+            ...availability[day],
+            [field]: value
+          }
+        });
+      };
 
       const handleSave = async (e) => {
         e.preventDefault();
@@ -2454,6 +2526,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               city: city,
               state: state,
               zip: zip,
+              availability: availability,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
@@ -2465,7 +2538,8 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               address,
               city,
               state,
-              zip
+              zip,
+              availability
             });
 
             setSuccessMessage('Profile updated successfully!');
@@ -2579,6 +2653,103 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 style={{marginTop: '1rem'}}
               >
                 {loading ? <span className="spinner"></span> : 'Save Changes'}
+              </button>
+            </form>
+          </div>
+
+          {/* Availability Settings */}
+          <div className="card" style={{marginTop: '1.5rem'}}>
+            <h2>📅 Availability Settings</h2>
+            <p style={{color: 'var(--text-muted)', marginBottom: '1.5rem'}}>
+              Set your working hours. Customers will only see available times when booking.
+            </p>
+
+            <form onSubmit={handleSave}>
+              {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+                <div 
+                  key={day}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '120px 1fr 1fr 1fr',
+                    gap: '0.75rem',
+                    alignItems: 'center',
+                    marginBottom: '1rem',
+                    padding: '0.75rem',
+                    background: availability[day].enabled ? '#f8f9fa' : '#fff',
+                    borderRadius: '4px',
+                    border: '1px solid #e0e0e0'
+                  }}
+                >
+                  <label style={{display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0}}>
+                    <input
+                      type="checkbox"
+                      checked={availability[day].enabled}
+                      onChange={(e) => updateDayAvailability(day, 'enabled', e.target.checked)}
+                      style={{width: '18px', height: '18px'}}
+                    />
+                    <span style={{fontWeight: '500', textTransform: 'capitalize'}}>
+                      {day}
+                    </span>
+                  </label>
+
+                  {availability[day].enabled && (
+                    <>
+                      <div>
+                        <label style={{fontSize: '0.875rem', color: '#666', display: 'block', marginBottom: '0.25rem'}}>
+                          Start Time
+                        </label>
+                        <input
+                          type="time"
+                          value={availability[day].start}
+                          onChange={(e) => updateDayAvailability(day, 'start', e.target.value)}
+                          required
+                          style={{width: '100%'}}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{fontSize: '0.875rem', color: '#666', display: 'block', marginBottom: '0.25rem'}}>
+                          End Time
+                        </label>
+                        <input
+                          type="time"
+                          value={availability[day].end}
+                          onChange={(e) => updateDayAvailability(day, 'end', e.target.value)}
+                          required
+                          style={{width: '100%'}}
+                        />
+                      </div>
+
+                      <div style={{fontSize: '0.875rem', color: '#666', textAlign: 'center'}}>
+                        {availability[day].start && availability[day].end && (
+                          <>
+                            {(() => {
+                              const start = new Date(`1970-01-01T${availability[day].start}`);
+                              const end = new Date(`1970-01-01T${availability[day].end}`);
+                              const hours = (end - start) / (1000 * 60 * 60);
+                              return `${hours.toFixed(1)} hours`;
+                            })()}
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {!availability[day].enabled && (
+                    <div style={{gridColumn: '2 / 5', color: '#999', fontStyle: 'italic'}}>
+                      Not available
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                disabled={loading}
+                style={{marginTop: '1rem'}}
+              >
+                {loading ? <span className="spinner"></span> : 'Save Availability'}
               </button>
             </form>
           </div>
