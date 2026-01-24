@@ -1418,8 +1418,15 @@
           return []; // No slots until date is selected
         }
 
-        const selectedDate = new Date(formData.date);
+        // Parse date correctly to avoid timezone issues
+        // formData.date is in format "YYYY-MM-DD"
+        const [year, month, day] = formData.date.split('-').map(Number);
+        const selectedDate = new Date(year, month - 1, day); // Create date in local timezone
         const dayName = selectedDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        
+        console.log('Selected date:', formData.date);
+        console.log('Parsed as:', selectedDate);
+        console.log('Day name:', dayName);
         
         // Default availability if farrier hasn't set it up yet (Mon-Fri 9-5)
         const defaultAvailability = {
@@ -1434,6 +1441,8 @@
 
         const availability = farrierInfo?.availability || defaultAvailability;
         const dayAvailability = availability[dayName];
+
+        console.log('Day availability:', dayAvailability);
 
         if (!dayAvailability || !dayAvailability.enabled) {
           return []; // No slots if farrier doesn't work this day
@@ -1457,6 +1466,7 @@
           currentMin = currentMin % 60;
         }
 
+        console.log('Generated slots:', slots);
         return slots;
       };
 
@@ -2772,12 +2782,47 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             <p style={{color: 'var(--text-muted)', marginBottom: '1rem'}}>
               <strong>Account Created:</strong> {userProfile?.createdAt?.toDate().toLocaleDateString() || 'N/A'}
             </p>
-            <p style={{color: 'var(--text-muted)'}}>
+            <div style={{marginBottom: '1rem'}}>
               <strong>Booking URL:</strong><br/>
-              <code style={{background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.5rem'}}>
-                {userProfile?.bookingUrl || `${window.location.origin}?farrier=${user.uid}`}
+              <code style={{background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.5rem', wordBreak: 'break-all'}}>
+                {`${window.location.origin}?farrier=${user.uid}`}
               </code>
-            </p>
+              <div style={{marginTop: '0.5rem'}}>
+                <button 
+                  className="btn btn-sm"
+                  onClick={() => {
+                    const url = `${window.location.origin}?farrier=${user.uid}`;
+                    navigator.clipboard.writeText(url);
+                    alert('Booking URL copied to clipboard!');
+                  }}
+                  style={{marginRight: '0.5rem'}}
+                >
+                  📋 Copy URL
+                </button>
+                <button 
+                  className="btn btn-sm"
+                  onClick={async () => {
+                    try {
+                      if (db) {
+                        await db.collection('farriers').doc(user.uid).update({
+                          bookingUrl: `${window.location.origin}?farrier=${user.uid}`
+                        });
+                        setUserProfile({
+                          ...userProfile,
+                          bookingUrl: `${window.location.origin}?farrier=${user.uid}`
+                        });
+                        alert('Booking URL updated successfully!');
+                      }
+                    } catch (error) {
+                      console.error('Error updating URL:', error);
+                      alert('Failed to update URL');
+                    }
+                  }}
+                >
+                  🔄 Update URL
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       );
