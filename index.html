@@ -1117,78 +1117,33 @@
 
       const connectGoogleCalendar = async () => {
         try {
-          // Use authorization code flow to get refresh tokens
-          const redirectUri = `${window.location.origin}/oauth-callback`;
-          const scope = 'https://www.googleapis.com/auth/calendar';
-          
-          const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-            `client_id=${GOOGLE_CLIENT_ID}` +
-            `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-            `&response_type=code` +
-            `&scope=${encodeURIComponent(scope)}` +
-            `&access_type=offline` + // Request refresh token
-            `&prompt=consent`; // Force consent to get refresh token
-          
-          // Open OAuth popup
-          const width = 500;
-          const height = 600;
-          const left = window.screenX + (window.outerWidth - width) / 2;
-          const top = window.screenY + (window.outerHeight - height) / 2;
-          
-          const popup = window.open(
-            authUrl,
-            'Google Calendar OAuth',
-            `width=${width},height=${height},left=${left},top=${top}`
-          );
-          
-          // Listen for OAuth callback
-          window.addEventListener('message', async (event) => {
-            if (event.data.type === 'oauth-success' && event.data.code) {
-              popup?.close();
-              
-              try {
-                // Exchange code for tokens via backend
-                const response = await fetch('/api/google-calendar-auth?action=exchange', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    code: event.data.code,
-                    redirect_uri: redirectUri
-                  })
-                });
-                
-                if (!response.ok) {
-                  throw new Error('Failed to exchange authorization code');
-                }
-                
-                const tokens = await response.json();
-                
-                // Save tokens to Firestore (encrypted in production)
+          // TEMPORARY: Use old token client method until API is working
+          // This gives 1-hour tokens but at least it works
+          const tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/calendar',
+            callback: async (response) => {
+              if (response.access_token) {
+                // Save token to Firestore
                 if (db) {
                   await db.collection('farriers').doc(user.uid).update({
                     googleCalendarConnected: true,
-                    googleAccessToken: tokens.access_token,
-                    googleRefreshToken: tokens.refresh_token,
-                    googleTokenExpiry: Date.now() + (tokens.expires_in * 1000)
+                    googleAccessToken: response.access_token,
+                    googleTokenExpiry: Date.now() + (3600 * 1000) // 1 hour
                   });
                   
-                  // Reload profile
+                  // Reload profile from Firestore
                   const profileDoc = await db.collection('farriers').doc(user.uid).get();
                   if (profileDoc.exists) {
                     setUserProfile(profileDoc.data());
                   }
                   
-                  alert('✅ Google Calendar connected successfully! You will stay connected automatically.');
+                  alert('✅ Google Calendar connected! (Note: You may need to reconnect in 1 hour until refresh tokens are set up)');
                 }
-              } catch (error) {
-                console.error('Error exchanging code:', error);
-                alert('Failed to connect Google Calendar. Please try again.');
               }
-            }
-          }, { once: true });
-          
+            },
+          });
+          tokenClient.requestAccessToken();
         } catch (error) {
           console.error('Error connecting Google Calendar:', error);
           alert('Error connecting Google Calendar');
@@ -1948,58 +1903,6 @@
         setLoading(false);
       };
 
-      const refreshAccessTokenIfNeeded = async (userId, currentProfile) => {
-        // Check if token is expired or about to expire (within 5 minutes)
-        const now = Date.now();
-        const expiryTime = currentProfile?.googleTokenExpiry || 0;
-        const fiveMinutes = 5 * 60 * 1000;
-        
-        if (!currentProfile?.googleRefreshToken) {
-          console.log('⚠️ No refresh token available');
-          return currentProfile?.googleAccessToken;
-        }
-        
-        if (expiryTime - now > fiveMinutes) {
-          console.log('✅ Token still valid');
-          return currentProfile?.googleAccessToken;
-        }
-        
-        console.log('🔄 Token expired or expiring soon, refreshing...');
-        
-        try {
-          const response = await fetch('/api/google-calendar-auth?action=refresh', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              refresh_token: currentProfile.googleRefreshToken
-            })
-          });
-          
-          if (!response.ok) {
-            throw new Error('Failed to refresh token');
-          }
-          
-          const tokens = await response.json();
-          
-          // Update Firestore with new token
-          if (db) {
-            await db.collection('farriers').doc(userId).update({
-              googleAccessToken: tokens.access_token,
-              googleTokenExpiry: Date.now() + (tokens.expires_in * 1000)
-            });
-          }
-          
-          console.log('✅ Token refreshed successfully');
-          return tokens.access_token;
-          
-        } catch (error) {
-          console.error('❌ Failed to refresh token:', error);
-          throw new Error('Please reconnect Google Calendar');
-        }
-      };
-
       const createCalendarEvent = async (appointment, userProfile) => {
         console.log('=== CREATE CALENDAR EVENT START ===');
         console.log('UserProfile:', userProfile);
@@ -2014,9 +1917,9 @@
         console.log('✅ Calendar connected, token exists');
 
         try {
-          // Refresh token if needed (auto-refresh before expiry)
-          const accessToken = await refreshAccessTokenIfNeeded(user.uid, userProfile);
-          console.log('🔑 Using access token:', accessToken ? 'Valid token obtained' : 'No token');
+          // Use existing access token (no refresh for now)
+          const accessToken = userProfile.googleAccessToken;
+          console.log('🔑 Using access token');
           
           // Create calendar event
           const eventStartTime = new Date(`${appointment.requestedDate}T${appointment.requestedTime}:00`);
@@ -2124,8 +2027,8 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         }
 
         try {
-          // Refresh token if needed
-          const accessToken = await refreshAccessTokenIfNeeded(user.uid, userProfile);
+          // Use existing access token (no refresh for now)
+          const accessToken = userProfile.googleAccessToken;
           
           console.log('🗑️ Deleting event from Google Calendar:', appointment.googleEventId);
           
