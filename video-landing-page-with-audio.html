@@ -517,47 +517,21 @@
     bgMusic.loop = true;
     bgMusic.volume = 0.3;
 
-    // Scene narrations (using Web Speech API for text-to-speech)
-    const narrations = [
-      "Farrier finds magic wand and changed his life forever",
-      "Drowning in chaos. Lost appointments, missed calls, constant double-bookings",
-      "Then he found it. One simple tool that changed everything",
-      "Farrier Pro. QR booking, auto-sync calendar, instant invoices",
-      "The results in just thirty days. Five hours saved per week. Eighty seven percent fewer no-shows. Twenty four hundred dollars extra revenue",
-      "Ready to find your magic wand? Get started free today"
-    ];
-
-    function speak(text) {
-      if ('speechSynthesis' in window && audioPlaying) {
-        // Cancel any ongoing speech
-        window.speechSynthesis.cancel();
-        
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.9;
-        utterance.pitch = 1;
-        utterance.volume = 0.8;
-        
-        window.speechSynthesis.speak(utterance);
-      }
-    }
-
     function toggleAudio() {
       audioPlaying = !audioPlaying;
       
       if (audioPlaying) {
         bgMusic.play().catch(e => console.log('Audio play failed:', e));
         audioBtn.textContent = '🔊';
-        speak(narrations[currentScene]);
       } else {
         bgMusic.pause();
         audioBtn.textContent = '🔇';
-        window.speechSynthesis.cancel();
       }
     }
 
     function changeVolume() {
       const volume = document.getElementById('volumeSlider').value / 100;
-      bgMusic.volume = volume * 0.5; // Keep music at 50% of selected volume
+      bgMusic.volume = volume * 0.5;
     }
 
     function showScene(index) {
@@ -570,13 +544,7 @@
         }
       });
       
-      // Update progress bar
       progressBar.style.width = ((index + 1) / totalScenes * 100) + '%';
-      
-      // Speak narration for new scene
-      if (audioPlaying) {
-        setTimeout(() => speak(narrations[index]), 500);
-      }
     }
 
     function nextScene() {
@@ -584,7 +552,6 @@
         currentScene++;
         showScene(currentScene);
       } else {
-        // Loop back to start
         currentScene = 0;
         showScene(currentScene);
       }
@@ -605,24 +572,21 @@
         startAutoPlay();
       } else {
         stopAutoPlay();
-        window.speechSynthesis.cancel();
       }
     }
 
     function startAutoPlay() {
       interval = setInterval(() => {
         nextScene();
-      }, 5000); // Change scene every 5 seconds
+      }, 5000);
     }
 
     function stopAutoPlay() {
       clearInterval(interval);
     }
 
-    // Start auto-play
     startAutoPlay();
 
-    // Keyboard controls
     document.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowRight') nextScene();
       if (e.key === 'ArrowLeft') previousScene();
@@ -635,7 +599,7 @@
       }
     });
 
-    // Auto-start audio on first user interaction (browser requirement)
+    // Auto-start audio on first user interaction
     document.addEventListener('click', function initAudio() {
       if (!audioPlaying) {
         toggleAudio();
@@ -643,7 +607,6 @@
       }
     }, { once: true });
 
-    // Initialize
     showScene(0);
   </script>
 </body>
