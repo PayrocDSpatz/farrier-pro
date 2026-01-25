@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farrier Finds Magic Wand - The Story</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Space Mono', monospace;
+      overflow-x: hidden;
+      background: #000;
+      color: #fff;
+    }
+
+    .video-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .scene {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: all 1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .scene.active {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .scene.exit {
+      opacity: 0;
+      transform: scale(1.2);
+    }
+
+    /* Scene 1: Title */
+    .scene-1 {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .magic-wand {
+      font-size: 15rem;
+      animation: float 3s ease-in-out infinite;
+      filter: drop-shadow(0 20px 40px rgba(0,0,0,0.3));
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-30px) rotate(10deg); }
+    }
+
+    .title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 6rem;
+      text-align: center;
+      line-height: 1;
+      margin-top: 2rem;
+      text-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      letter-spacing: 0.1em;
+    }
+
+    .subtitle {
+      font-size: 1.5rem;
+      margin-top: 1rem;
+      opacity: 0.9;
+      text-align: center;
+    }
+
+    /* Scene 2: The Problem */
+    .scene-2 {
+      background: #1a1a1a;
+    }
+
+    .chaos-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 4rem;
+      color: #ff4444;
+      margin-bottom: 3rem;
+      text-shadow: 0 0 20px rgba(255,68,68,0.5);
+    }
+
+    .problem-list {
+      list-style: none;
+      font-size: 1.5rem;
+      max-width: 800px;
+      text-align: left;
+    }
+
+    .problem-list li {
+      padding: 1rem 0;
+      padding-left: 3rem;
+      position: relative;
+      opacity: 0;
+      transform: translateX(-50px);
+      animation: slideIn 0.5s forwards;
+    }
+
+    .problem-list li:nth-child(1) { animation-delay: 0.2s; }
+    .problem-list li:nth-child(2) { animation-delay: 0.4s; }
+    .problem-list li:nth-child(3) { animation-delay: 0.6s; }
+    .problem-list li:nth-child(4) { animation-delay: 0.8s; }
+    .problem-list li:nth-child(5) { animation-delay: 1s; }
+
+    .problem-list li::before {
+      content: '❌';
+      position: absolute;
+      left: 0;
+      font-size: 2rem;
+    }
+
+    @keyframes slideIn {
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    /* Scene 3: The Discovery */
+    .scene-3 {
+      background: linear-gradient(45deg, #000 0%, #1a1a2e 50%, #000 100%);
+    }
+
+    .discover-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 5rem;
+      margin-bottom: 2rem;
+      background: linear-gradient(120deg, #ffd700, #ffed4e, #ffd700);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 3s infinite;
+      text-shadow: 0 0 40px rgba(255, 215, 0, 0.5);
+    }
+
+    @keyframes shimmer {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .reveal-box {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255, 215, 0, 0.3);
+      padding: 3rem;
+      border-radius: 20px;
+      font-size: 2rem;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
+      50% { box-shadow: 0 0 60px rgba(255, 215, 0, 0.6); }
+    }
+
+    /* Scene 4: The Solution */
+    .scene-4 {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+      max-width: 1200px;
+      padding: 2rem;
+    }
+
+    .feature-card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 2rem;
+      border-radius: 15px;
+      text-align: center;
+      opacity: 0;
+      transform: scale(0);
+      animation: popIn 0.5s forwards;
+    }
+
+    .feature-card:nth-child(1) { animation-delay: 0.2s; }
+    .feature-card:nth-child(2) { animation-delay: 0.4s; }
+    .feature-card:nth-child(3) { animation-delay: 0.6s; }
+    .feature-card:nth-child(4) { animation-delay: 0.8s; }
+    .feature-card:nth-child(5) { animation-delay: 1s; }
+    .feature-card:nth-child(6) { animation-delay: 1.2s; }
+
+    @keyframes popIn {
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .feature-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+
+    .feature-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-desc {
+      font-size: 0.9rem;
+      opacity: 0.9;
+    }
+
+    /* Scene 5: Results */
+    .scene-5 {
+      background: #000;
+    }
+
+    .results-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 4rem;
+      margin-bottom: 3rem;
+      color: #4ade80;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 3rem;
+      max-width: 1400px;
+    }
+
+    .stat-card {
+      text-align: center;
+      opacity: 0;
+      transform: translateY(50px);
+      animation: slideUp 0.8s forwards;
+    }
+
+    .stat-card:nth-child(1) { animation-delay: 0.2s; }
+    .stat-card:nth-child(2) { animation-delay: 0.5s; }
+    .stat-card:nth-child(3) { animation-delay: 0.8s; }
+    .stat-card:nth-child(4) { animation-delay: 1.1s; }
+
+    @keyframes slideUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .stat-number {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 6rem;
+      color: #4ade80;
+      line-height: 1;
+      text-shadow: 0 0 30px rgba(74, 222, 128, 0.5);
+    }
+
+    .stat-label {
+      font-size: 1.2rem;
+      margin-top: 0.5rem;
+      opacity: 0.8;
+    }
+
+    /* Scene 6: CTA */
+    .scene-6 {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .cta-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 5rem;
+      margin-bottom: 2rem;
+      line-height: 1.1;
+    }
+
+    .cta-button {
+      display: inline-block;
+      background: #fff;
+      color: #667eea;
+      padding: 2rem 4rem;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 3rem;
+      text-decoration: none;
+      border-radius: 60px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      transition: all 0.3s;
+      animation: bounce 2s infinite;
+      letter-spacing: 0.1em;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .cta-button:hover {
+      transform: scale(1.1) !important;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+    }
+
+    .cta-subtext {
+      margin-top: 2rem;
+      font-size: 1.2rem;
+      opacity: 0.9;
+    }
+
+    /* Controls */
+    .controls {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 1rem;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(10px);
+      padding: 1rem 2rem;
+      border-radius: 50px;
+    }
+
+    .control-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: #fff;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.5rem;
+      transition: all 0.3s;
+    }
+
+    .control-btn:hover {
+      background: rgba(255, 255, 255, 0.4);
+      transform: scale(1.1);
+    }
+
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      transition: width 0.5s;
+      z-index: 1001;
+    }
+
+    @media (max-width: 768px) {
+      .title { font-size: 3rem; }
+      .chaos-text { font-size: 2.5rem; }
+      .features-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .stat-number { font-size: 4rem; }
+      .cta-title { font-size: 3rem; }
+      .cta-button { font-size: 2rem; padding: 1.5rem 3rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress-bar" id="progressBar"></div>
+  
+  <!-- Audio Controls -->
+  <div style="position: fixed; top: 2rem; right: 2rem; z-index: 1000; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px); padding: 1rem; border-radius: 50px; display: flex; gap: 1rem; align-items: center;">
+    <button class="control-btn" onclick="toggleAudio()" id="audioBtn" title="Toggle Music">
+      🔊
+    </button>
+    <input type="range" min="0" max="100" value="30" id="volumeSlider" onchange="changeVolume()" style="width: 100px;">
+  </div>
+  
+  <div class="video-container">
+    <!-- Scene 1: Title -->
+    <div class="scene scene-1 active">
+      <div class="magic-wand">🪄✨</div>
+      <div class="title">
+        FARRIER FINDS<br/>
+        "MAGIC WAND"
+      </div>
+      <div class="subtitle">And Changed His Life Forever</div>
+    </div>
+
+    <!-- Scene 2: The Problem -->
+    <div class="scene scene-2">
+      <div class="chaos-text">DROWNING IN CHAOS</div>
+      <ul class="problem-list">
+        <li>Lost appointments on napkins</li>
+        <li>Missed calls = Lost income</li>
+        <li>Double-booked constantly</li>
+        <li>Hours wasted on paperwork</li>
+        <li>No-shows costing thousands</li>
+      </ul>
+    </div>
+
+    <!-- Scene 3: The Discovery -->
+    <div class="scene scene-3">
+      <div class="discover-text">THEN HE FOUND IT...</div>
+      <div class="reveal-box">
+        ONE SIMPLE TOOL
+      </div>
+    </div>
+
+    <!-- Scene 4: The Solution -->
+    <div class="scene scene-4">
+      <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 4rem; margin-bottom: 2rem;">FARRIER PRO</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📱</div>
+          <div class="feature-title">QR Booking</div>
+          <div class="feature-desc">Customers book themselves</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📅</div>
+          <div class="feature-title">Auto-Sync</div>
+          <div class="feature-desc">Calendar updates instantly</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💰</div>
+          <div class="feature-title">Invoices</div>
+          <div class="feature-desc">Created in 30 seconds</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⏰</div>
+          <div class="feature-title">Smart Schedule</div>
+          <div class="feature-desc">Never double-book</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📧</div>
+          <div class="feature-title">Reminders</div>
+          <div class="feature-desc">Auto-sent to customers</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <div class="feature-title">Dashboard</div>
+          <div class="feature-desc">See everything at once</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 5: Results -->
+    <div class="scene scene-5">
+      <div class="results-text">THE RESULTS IN 30 DAYS</div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number">5 HRS</div>
+          <div class="stat-label">Saved Per Week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">87%</div>
+          <div class="stat-label">Fewer No-Shows</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">$2.4K</div>
+          <div class="stat-label">Extra Revenue</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">100%</div>
+          <div class="stat-label">Less Stress</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 6: CTA -->
+    <div class="scene scene-6">
+      <div class="cta-title">
+        READY TO FIND<br/>
+        YOUR MAGIC WAND?
+      </div>
+      <a href="https://farrier-pro.vercel.app" class="cta-button">
+        GET STARTED FREE
+      </a>
+      <div class="cta-subtext">
+        No credit card • 5 minute setup • Cancel anytime<br/>
+        Questions? Call (954) 673-3041
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="control-btn" onclick="previousScene()">◀</button>
+    <button class="control-btn" id="playPause" onclick="togglePlay()">⏸</button>
+    <button class="control-btn" onclick="nextScene()">▶</button>
+  </div>
+
+  <script>
+    let currentScene = 0;
+    const totalScenes = 6;
+    let isPlaying = true;
+    let interval;
+    let audioPlaying = false;
+
+    const scenes = document.querySelectorAll('.scene');
+    const progressBar = document.getElementById('progressBar');
+    const playPauseBtn = document.getElementById('playPause');
+    const audioBtn = document.getElementById('audioBtn');
+
+    // Background music - Using royalty-free music from CDN
+    const bgMusic = new Audio('https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3');
+    bgMusic.loop = true;
+    bgMusic.volume = 0.3;
+
+    // Scene narrations (using Web Speech API for text-to-speech)
+    const narrations = [
+      "Farrier finds magic wand and changed his life forever",
+      "Drowning in chaos. Lost appointments, missed calls, constant double-bookings",
+      "Then he found it. One simple tool that changed everything",
+      "Farrier Pro. QR booking, auto-sync calendar, instant invoices",
+      "The results in just thirty days. Five hours saved per week. Eighty seven percent fewer no-shows. Twenty four hundred dollars extra revenue",
+      "Ready to find your magic wand? Get started free today"
+    ];
+
+    function speak(text) {
+      if ('speechSynthesis' in window && audioPlaying) {
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.9;
+        utterance.pitch = 1;
+        utterance.volume = 0.8;
+        
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    function toggleAudio() {
+      audioPlaying = !audioPlaying;
+      
+      if (audioPlaying) {
+        bgMusic.play().catch(e => console.log('Audio play failed:', e));
+        audioBtn.textContent = '🔊';
+        speak(narrations[currentScene]);
+      } else {
+        bgMusic.pause();
+        audioBtn.textContent = '🔇';
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    function changeVolume() {
+      const volume = document.getElementById('volumeSlider').value / 100;
+      bgMusic.volume = volume * 0.5; // Keep music at 50% of selected volume
+    }
+
+    function showScene(index) {
+      scenes.forEach((scene, i) => {
+        scene.classList.remove('active', 'exit');
+        if (i === index) {
+          scene.classList.add('active');
+        } else if (i < index) {
+          scene.classList.add('exit');
+        }
+      });
+      
+      // Update progress bar
+      progressBar.style.width = ((index + 1) / totalScenes * 100) + '%';
+      
+      // Speak narration for new scene
+      if (audioPlaying) {
+        setTimeout(() => speak(narrations[index]), 500);
+      }
+    }
+
+    function nextScene() {
+      if (currentScene < totalScenes - 1) {
+        currentScene++;
+        showScene(currentScene);
+      } else {
+        // Loop back to start
+        currentScene = 0;
+        showScene(currentScene);
+      }
+    }
+
+    function previousScene() {
+      if (currentScene > 0) {
+        currentScene--;
+        showScene(currentScene);
+      }
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
+      
+      if (isPlaying) {
+        startAutoPlay();
+      } else {
+        stopAutoPlay();
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    function startAutoPlay() {
+      interval = setInterval(() => {
+        nextScene();
+      }, 5000); // Change scene every 5 seconds
+    }
+
+    function stopAutoPlay() {
+      clearInterval(interval);
+    }
+
+    // Start auto-play
+    startAutoPlay();
+
+    // Keyboard controls
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') nextScene();
+      if (e.key === 'ArrowLeft') previousScene();
+      if (e.key === ' ') {
+        e.preventDefault();
+        togglePlay();
+      }
+      if (e.key === 'm' || e.key === 'M') {
+        toggleAudio();
+      }
+    });
+
+    // Auto-start audio on first user interaction (browser requirement)
+    document.addEventListener('click', function initAudio() {
+      if (!audioPlaying) {
+        toggleAudio();
+        document.removeEventListener('click', initAudio);
+      }
+    }, { once: true });
+
+    // Initialize
+    showScene(0);
+  </script>
+</body>
+</html>
