@@ -78,8 +78,8 @@ async function processPayment(req, res, paymentData, invoiceData) {
           lineItem: [
             {
               itemId: '1',
-              name: description || `Invoice #${invoiceNumber}`,
-              description: description || `Farrier Pro Invoice`,
+              name: `Invoice ${invoiceNumber.slice(-8)}`,
+              description: 'Farrier Services',
               quantity: '1',
               unitPrice: amount.toFixed(2)
             }
