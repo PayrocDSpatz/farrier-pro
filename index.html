@@ -1523,6 +1523,34 @@
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
+            // Auto-create customer account
+            try {
+              // Check if customer account already exists
+              const existingCustomer = await db.collection('customers')
+                .where('email', '==', formData.email)
+                .limit(1)
+                .get();
+
+              if (existingCustomer.empty) {
+                // Create new customer profile (without Firebase Auth for now)
+                // We'll let them sign up via portal or Google when they need to pay
+                await db.collection('customers').add({
+                  name: formData.name,
+                  email: formData.email,
+                  phone: formData.phone,
+                  address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zip}`.trim(),
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                  source: 'qr_booking'
+                });
+                console.log('✅ Customer profile created');
+              } else {
+                console.log('✅ Customer already exists');
+              }
+            } catch (error) {
+              console.error('Note: Could not create customer profile:', error);
+              // Don't fail the booking if customer creation fails
+            }
+
             // If Google Calendar is connected, create event
             // (This would be done server-side in production)
           }
@@ -1671,6 +1699,38 @@
                       </>
                     )}
                   </div>
+
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                    padding: '1.5rem',
+                    borderRadius: '12px',
+                    marginTop: '1.5rem',
+                    marginBottom: '1.5rem',
+                    textAlign: 'left'
+                  }}>
+                    <div style={{fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--primary)'}}>
+                      🎉 Your Customer Account is Ready!
+                    </div>
+                    <p style={{fontSize: '0.9rem', marginBottom: '0.75rem', color: 'var(--text)'}}>
+                      We've created an account for you. You can now view invoices and pay online!
+                    </p>
+                    <p style={{fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-muted)'}}>
+                      <strong>Portal:</strong> {window.location.origin}/customer-portal.html
+                    </p>
+                    <p style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>
+                      <strong>Email:</strong> {formData.email}
+                    </p>
+                    <button 
+                      className="btn btn-success"
+                      style={{width: '100%', marginTop: '1rem'}}
+                      onClick={() => {
+                        window.location.href = window.location.origin + '/customer-portal.html';
+                      }}
+                    >
+                      Go to Customer Portal
+                    </button>
+                  </div>
+
                   <button className="btn btn-primary" onClick={() => {
                     setStep('landing');
                     setFormData({
