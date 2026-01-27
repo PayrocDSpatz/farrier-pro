@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Portal - Farrier Pro</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+  
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+  <!-- React -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      --primary: #2c5f2d;
+      --primary-dark: #1a3a1b;
+      --accent: #97c05c;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --error: #ef4444;
+      --text: #1a1a1a;
+      --text-muted: #6b7280;
+      --background: #fafaf9;
+      --card: #ffffff;
+      --border: #e7e5e4;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--background);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app-container {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .logo-icon {
+      font-size: 1.75rem;
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+      width: 100%;
+    }
+
+    /* Auth Page */
+    .auth-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+
+    .auth-card {
+      background: var(--card);
+      padding: 3rem;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+      max-width: 450px;
+      width: 100%;
+    }
+
+    .auth-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .auth-header h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 2rem;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .auth-header p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-size: 1rem;
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.2s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(44, 95, 45, 0.1);
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 0.875rem 1.5rem;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'DM Sans', sans-serif;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      width: 100%;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(44, 95, 45, 0.3);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 2px solid var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-outline:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #22c55e;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--border);
+    }
+
+    .card h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.75rem;
+      color: var(--primary);
+      margin-bottom: 1.5rem;
+    }
+
+    /* Invoice List */
+    .invoice-grid {
+      display: grid;
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .invoice-card {
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .invoice-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 8px 24px rgba(44, 95, 45, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .invoice-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 1rem;
+    }
+
+    .invoice-number {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.25rem;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .invoice-status {
+      padding: 0.375rem 0.875rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .status-paid {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status-outstanding {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .invoice-amount {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .invoice-date {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .invoice-items {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .invoice-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Payment Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 2rem;
+      backdrop-filter: blur(4px);
+    }
+
+    .modal-content {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 2.5rem;
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .modal-header h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.75rem;
+      color: var(--primary);
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 0.5rem;
+      line-height: 1;
+    }
+
+    .close-btn:hover {
+      color: var(--text);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+    }
+
+    .empty-state-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.5rem;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+      color: var(--text-muted);
+    }
+
+    /* Spinner */
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top: 3px solid white;
+      width: 20px;
+      height: 20px;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Alert */
+    .alert {
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    .alert-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
+
+    .alert-success {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #6ee7b7;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header {
+        padding: 1rem;
+      }
+
+      .main-content {
+        padding: 2rem 1rem;
+      }
+
+      .auth-card {
+        padding: 2rem 1.5rem;
+      }
+
+      .modal-content {
+        padding: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDmua0i3w2Ke0g-CxX0GzQQiqMO3Ax1y7E",
+      authDomain: "farrier-pro.firebaseapp.com",
+      projectId: "farrier-pro",
+      storageBucket: "farrier-pro.firebasestorage.app",
+      messagingSenderId: "458461432563",
+      appId: "1:458461432563:web:de71eb2b0ce9e62f1fedd3"
+    };
+
+    let auth = null;
+    let db = null;
+
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      auth = firebase.auth();
+      db = firebase.firestore();
+    } catch (error) {
+      console.error('Firebase initialization error:', error);
+    }
+
+    // Main App Component
+    function App() {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        if (auth) {
+          const unsubscribe = auth.onAuthStateChanged((user) => {
+            setUser(user);
+            setLoading(false);
+          });
+          return () => unsubscribe();
+        }
+      }, []);
+
+      if (loading) {
+        return (
+          <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
+            <div className="spinner" style={{borderTopColor: 'var(--primary)'}}></div>
+          </div>
+        );
+      }
+
+      if (!user) {
+        return <AuthPage />;
+      }
+
+      return <CustomerDashboard user={user} />;
+    }
+
+    // Auth Page Component
+    function AuthPage() {
+      const [isLogin, setIsLogin] = useState(true);
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [name, setName] = useState('');
+      const [phone, setPhone] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState('');
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+          if (isLogin) {
+            await auth.signInWithEmailAndPassword(email, password);
+          } else {
+            const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+            
+            // Create customer profile
+            if (db) {
+              await db.collection('customers').doc(userCredential.user.uid).set({
+                name: name,
+                email: email,
+                phone: phone,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              });
+            }
+          }
+        } catch (err) {
+          setError(err.message);
+        }
+
+        setLoading(false);
+      };
+
+      return (
+        <div className="auth-container">
+          <div className="auth-card">
+            <div className="auth-header">
+              <div className="logo" style={{justifyContent: 'center', marginBottom: '1rem'}}>
+                <span className="logo-icon">🐴</span>
+                <span>Farrier Pro</span>
+              </div>
+              <h1>{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
+              <p>{isLogin ? 'Sign in to view your invoices' : 'Sign up to manage your invoices'}</p>
+            </div>
+
+            {error && (
+              <div className="alert alert-error">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              {!isLogin && (
+                <>
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input 
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="John Smith"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Phone Number</label>
+                    <input 
+                      type="tel"
+                      required
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="(555) 555-5555"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="form-group">
+                <label>Email</label>
+                <input 
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Password</label>
+                <input 
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  minLength="6"
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                disabled={loading}
+              >
+                {loading ? <span className="spinner"></span> : (isLogin ? 'Sign In' : 'Create Account')}
+              </button>
+            </form>
+
+            <div style={{textAlign: 'center', marginTop: '1.5rem'}}>
+              <button 
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setError('');
+                }}
+                style={{background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline'}}
+              >
+                {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Customer Dashboard Component
+    function CustomerDashboard({ user }) {
+      const [invoices, setInvoices] = useState([]);
+      const [customerProfile, setCustomerProfile] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [selectedInvoice, setSelectedInvoice] = useState(null);
+      const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+      useEffect(() => {
+        loadData();
+      }, []);
+
+      const loadData = async () => {
+        if (db) {
+          try {
+            // Load customer profile
+            const profileDoc = await db.collection('customers').doc(user.uid).get();
+            if (profileDoc.exists) {
+              setCustomerProfile(profileDoc.data());
+              
+              // Load invoices by email
+              const invoicesSnapshot = await db.collection('invoices')
+                .where('customerEmail', '==', user.email)
+                .get();
+
+              const invoiceData = invoicesSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              }));
+
+              // Sort by date
+              invoiceData.sort((a, b) => {
+                if (!a.createdAt || !b.createdAt) return 0;
+                return b.createdAt.toDate() - a.createdAt.toDate();
+              });
+
+              setInvoices(invoiceData);
+            }
+          } catch (error) {
+            console.error('Error loading data:', error);
+          }
+        }
+        setLoading(false);
+      };
+
+      const handleLogout = async () => {
+        await auth.signOut();
+      };
+
+      const handlePayInvoice = (invoice) => {
+        setSelectedInvoice(invoice);
+        setShowPaymentModal(true);
+      };
+
+      const totalPaid = invoices
+        .filter(inv => inv.status === 'paid')
+        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+
+      const totalOutstanding = invoices
+        .filter(inv => inv.status === 'outstanding')
+        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+
+      return (
+        <div className="app-container">
+          <header className="header">
+            <div className="header-content">
+              <div className="logo">
+                <span className="logo-icon">🐴</span>
+                <span>Farrier Pro</span>
+              </div>
+              <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>
+                  {customerProfile?.name || user.email}
+                </span>
+                <button 
+                  onClick={handleLogout}
+                  className="btn btn-outline"
+                  style={{padding: '0.5rem 1rem', fontSize: '0.9rem'}}
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="main-content">
+            <div style={{marginBottom: '2rem'}}>
+              <h1 style={{fontFamily: "'DM Serif Display', serif", fontSize: '2.5rem', color: 'var(--primary)', marginBottom: '0.5rem'}}>
+                Your Invoices
+              </h1>
+              <p style={{color: 'var(--text-muted)', fontSize: '1.1rem'}}>
+                View and pay your farrier service invoices
+              </p>
+            </div>
+
+            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '2rem'}}>
+              <div className="card" style={{textAlign: 'center'}}>
+                <div style={{fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: '500'}}>
+                  Total Paid
+                </div>
+                <div style={{fontSize: '2rem', fontWeight: '700', color: 'var(--success)'}}>
+                  ${totalPaid.toFixed(2)}
+                </div>
+              </div>
+
+              <div className="card" style={{textAlign: 'center'}}>
+                <div style={{fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: '500'}}>
+                  Outstanding
+                </div>
+                <div style={{fontSize: '2rem', fontWeight: '700', color: 'var(--warning)'}}>
+                  ${totalOutstanding.toFixed(2)}
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div style={{display: 'flex', justifyContent: 'center', padding: '4rem'}}>
+                <div className="spinner" style={{borderTopColor: 'var(--primary)'}}></div>
+              </div>
+            ) : invoices.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">📄</div>
+                <h3>No Invoices Yet</h3>
+                <p>Your farrier invoices will appear here</p>
+              </div>
+            ) : (
+              <div className="invoice-grid">
+                {invoices.map(invoice => (
+                  <div 
+                    key={invoice.id} 
+                    className="invoice-card"
+                    onClick={() => {
+                      setSelectedInvoice(invoice);
+                    }}
+                  >
+                    <div className="invoice-header">
+                      <div className="invoice-number">
+                        {invoice.invoiceNumber}
+                      </div>
+                      <span className={`invoice-status status-${invoice.status}`}>
+                        {invoice.status}
+                      </span>
+                    </div>
+
+                    <div className="invoice-amount">
+                      ${invoice.total?.toFixed(2)}
+                    </div>
+
+                    <div className="invoice-date">
+                      {invoice.createdAt?.toDate().toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </div>
+
+                    {invoice.items && invoice.items.length > 0 && (
+                      <div className="invoice-items">
+                        {invoice.items.map((item, idx) => (
+                          <div key={idx} className="invoice-item">
+                            <span>{item.description}</span>
+                            <span>${(item.amount || 0).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {invoice.status === 'outstanding' && (
+                      <button 
+                        className="btn btn-success"
+                        style={{width: '100%', marginTop: '1rem'}}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePayInvoice(invoice);
+                        }}
+                      >
+                        💳 Pay Now
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </main>
+
+          {showPaymentModal && selectedInvoice && (
+            <PaymentModal 
+              invoice={selectedInvoice}
+              onClose={() => {
+                setShowPaymentModal(false);
+                setSelectedInvoice(null);
+              }}
+              onSuccess={() => {
+                setShowPaymentModal(false);
+                setSelectedInvoice(null);
+                loadData();
+              }}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // Payment Modal Component
+    function PaymentModal({ invoice, onClose, onSuccess }) {
+      const [cardNumber, setCardNumber] = useState('');
+      const [expiryMonth, setExpiryMonth] = useState('');
+      const [expiryYear, setExpiryYear] = useState('');
+      const [cvv, setCvv] = useState('');
+      const [processing, setProcessing] = useState(false);
+      const [error, setError] = useState('');
+
+      const formatCardNumber = (value) => {
+        const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+        const matches = v.match(/\d{4,16}/g);
+        const match = (matches && matches[0]) || '';
+        const parts = [];
+        
+        for (let i = 0, len = match.length; i < len; i += 4) {
+          parts.push(match.substring(i, i + 4));
+        }
+        
+        return parts.length ? parts.join(' ') : value;
+      };
+
+      const handlePayment = async (e) => {
+        e.preventDefault();
+        setProcessing(true);
+        setError('');
+
+        try {
+          const expirationDate = `${expiryMonth.padStart(2, '0')}${expiryYear.slice(-2)}`;
+
+          const response = await fetch('/api/authorize-net-payment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              action: 'charge',
+              paymentData: {
+                cardNumber: cardNumber.replace(/\s/g, ''),
+                expirationDate: expirationDate,
+                cardCode: cvv,
+                amount: invoice.total,
+                customerEmail: invoice.customerEmail,
+                customerName: invoice.customerName,
+                invoiceNumber: invoice.invoiceNumber,
+                description: `Farrier Services`
+              }
+            })
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            // Update invoice status
+            if (db) {
+              await db.collection('invoices').doc(invoice.id).update({
+                status: 'paid',
+                paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+                transactionId: result.transactionId,
+                authCode: result.authCode
+              });
+            }
+
+            alert('✅ Payment successful! Thank you for your payment.');
+            onSuccess();
+          } else {
+            setError(result.error || 'Payment failed. Please try again.');
+          }
+        } catch (err) {
+          console.error('Payment error:', err);
+          setError('Payment processing failed. Please try again.');
+        }
+
+        setProcessing(false);
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Pay Invoice</h2>
+              <button className="close-btn" onClick={onClose}>×</button>
+            </div>
+
+            <div style={{background: 'var(--background)', padding: '1.5rem', borderRadius: '12px', marginBottom: '2rem'}}>
+              <div style={{fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.5rem'}}>
+                {invoice.invoiceNumber}
+              </div>
+              <div style={{fontSize: '2.5rem', fontWeight: '700', color: 'var(--primary)', fontFamily: "'DM Serif Display', serif"}}>
+                ${invoice.total?.toFixed(2)}
+              </div>
+            </div>
+
+            {error && (
+              <div className="alert alert-error">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handlePayment}>
+              <div className="form-group">
+                <label>Card Number</label>
+                <input 
+                  type="text"
+                  required
+                  value={cardNumber}
+                  onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                  placeholder="1234 5678 9012 3456"
+                  maxLength="19"
+                />
+              </div>
+
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem'}}>
+                <div className="form-group">
+                  <label>Month</label>
+                  <input 
+                    type="text"
+                    required
+                    value={expiryMonth}
+                    onChange={(e) => setExpiryMonth(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                    placeholder="MM"
+                    maxLength="2"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Year</label>
+                  <input 
+                    type="text"
+                    required
+                    value={expiryYear}
+                    onChange={(e) => setExpiryYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="YYYY"
+                    maxLength="4"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>CVV</label>
+                  <input 
+                    type="text"
+                    required
+                    value={cvv}
+                    onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="123"
+                    maxLength="4"
+                  />
+                </div>
+              </div>
+
+              <div style={{display: 'flex', gap: '1rem', marginTop: '2rem'}}>
+                <button 
+                  type="button"
+                  onClick={onClose}
+                  className="btn btn-outline"
+                  disabled={processing}
+                  style={{flex: 1}}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="btn btn-success"
+                  disabled={processing}
+                  style={{flex: 1}}
+                >
+                  {processing ? <span className="spinner"></span> : `Pay $${invoice.total?.toFixed(2)}`}
+                </button>
+              </div>
+            </form>
+
+            <div style={{marginTop: '2rem', padding: '1rem', background: 'var(--background)', borderRadius: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center'}}>
+              🔒 Secure payment processed by Authorize.Net
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
