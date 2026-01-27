@@ -1182,7 +1182,8 @@
         { id: 'calendar', label: 'Calendar', icon: '📅' },
         { id: 'appointments', label: 'Appointments', icon: '📋' },
         { id: 'invoices', label: 'Invoices', icon: '💰' },
-        { id: 'settings', label: 'Settings', icon: '⚙️' }
+        { id: 'settings', label: 'Settings', icon: '⚙️' },
+        { id: 'about', label: 'About', icon: 'ℹ️' }
       ];
 
       return (
@@ -1234,7 +1235,131 @@
             {tab === 'appointments' && <AppointmentsView userId={user.uid} userProfile={userProfile} />}
             {tab === 'invoices' && <InvoicesView userId={user.uid} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} />}
+            {tab === 'about' && <AboutView />}
           </main>
+        </div>
+      );
+    }
+
+    function AboutView() {
+      return (
+        <div>
+          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>
+            About Farrier Pro
+          </h1>
+
+          <div className="card">
+            <div style={{textAlign: 'center', padding: '2rem'}}>
+              <div style={{fontSize: '4rem', marginBottom: '1rem'}}>🐴</div>
+              <h2 style={{fontSize: '2rem', marginBottom: '0.5rem', color: 'var(--primary)'}}>
+                Farrier Pro
+              </h2>
+              <p style={{fontSize: '1.25rem', color: 'var(--text-muted)', marginBottom: '2rem'}}>
+                Professional Farrier Management Platform
+              </p>
+              
+              <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                padding: '1.5rem',
+                borderRadius: '8px',
+                marginBottom: '2rem'
+              }}>
+                <div style={{fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem'}}>
+                  Version 1.0.0
+                </div>
+                <div style={{fontSize: '0.875rem', opacity: 0.9}}>
+                  Released January 2026
+                </div>
+              </div>
+
+              <div style={{
+                background: '#f8f9fa',
+                padding: '2rem',
+                borderRadius: '8px',
+                marginBottom: '2rem'
+              }}>
+                <h3 style={{fontSize: '1.25rem', marginBottom: '1rem', color: 'var(--primary)'}}>
+                  📞 Support
+                </h3>
+                <p style={{fontSize: '1.125rem', color: 'var(--text)', marginBottom: '0.5rem'}}>
+                  Need help? We're here for you!
+                </p>
+                <a 
+                  href="tel:954-673-3041"
+                  style={{
+                    fontSize: '1.5rem',
+                    fontWeight: 'bold',
+                    color: 'var(--primary)',
+                    textDecoration: 'none',
+                    display: 'inline-block',
+                    padding: '0.75rem 1.5rem',
+                    background: 'white',
+                    borderRadius: '8px',
+                    border: '2px solid var(--primary)',
+                    marginTop: '0.5rem'
+                  }}
+                >
+                  📱 (954) 673-3041
+                </a>
+                <p style={{fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '1rem'}}>
+                  Monday - Friday: 9:00 AM - 5:00 PM EST
+                </p>
+              </div>
+
+              <div style={{
+                borderTop: '1px solid #e0e0e0',
+                paddingTop: '2rem',
+                marginTop: '2rem'
+              }}>
+                <h3 style={{fontSize: '1.25rem', marginBottom: '1rem', color: 'var(--primary)'}}>
+                  ✨ Features
+                </h3>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '1rem',
+                  textAlign: 'left'
+                }}>
+                  <div>
+                    <div style={{fontSize: '1.5rem', marginBottom: '0.5rem'}}>📱</div>
+                    <div style={{fontWeight: '500', marginBottom: '0.25rem'}}>QR Code Booking</div>
+                    <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Easy customer bookings</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize: '1.5rem', marginBottom: '0.5rem'}}>📅</div>
+                    <div style={{fontWeight: '500', marginBottom: '0.25rem'}}>Calendar Sync</div>
+                    <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Google Calendar integration</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize: '1.5rem', marginBottom: '0.5rem'}}>💰</div>
+                    <div style={{fontWeight: '500', marginBottom: '0.25rem'}}>Invoicing</div>
+                    <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Professional invoices</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize: '1.5rem', marginBottom: '0.5rem'}}>⏰</div>
+                    <div style={{fontWeight: '500', marginBottom: '0.25rem'}}>Availability</div>
+                    <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Smart scheduling</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                borderTop: '1px solid #e0e0e0',
+                paddingTop: '2rem',
+                marginTop: '2rem',
+                color: 'var(--text-muted)',
+                fontSize: '0.875rem'
+              }}>
+                <p style={{marginBottom: '0.5rem'}}>
+                  © 2026 Farrier Pro. All rights reserved.
+                </p>
+                <p style={{fontSize: '0.75rem'}}>
+                  Built with ❤️ for professional farriers
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }
@@ -2192,6 +2317,8 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
     function InvoicesView({ userId }) {
       const [invoices, setInvoices] = useState([]);
       const [showCreateModal, setShowCreateModal] = useState(false);
+      const [showPaymentModal, setShowPaymentModal] = useState(false);
+      const [selectedInvoice, setSelectedInvoice] = useState(null);
       const [loading, setLoading] = useState(false);
 
       useEffect(() => {
@@ -2267,6 +2394,17 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       <span className={`badge badge-${invoice.status === 'paid' ? 'success' : 'warning'}`}>
                         {invoice.status}
                       </span>
+                      {invoice.status === 'outstanding' && (
+                        <button 
+                          className="btn btn-sm btn-success"
+                          onClick={() => {
+                            setSelectedInvoice(invoice);
+                            setShowPaymentModal(true);
+                          }}
+                        >
+                          💳 Pay Now
+                        </button>
+                      )}
                       {invoice.status === 'outstanding' && invoice.paymentUrl && (
                         <button 
                           className="btn btn-sm btn-warning"
@@ -2295,6 +2433,211 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               }}
             />
           )}
+
+          {showPaymentModal && selectedInvoice && (
+            <PaymentModal 
+              invoice={selectedInvoice}
+              onClose={() => {
+                setShowPaymentModal(false);
+                setSelectedInvoice(null);
+              }}
+              onPaymentSuccess={() => {
+                setShowPaymentModal(false);
+                setSelectedInvoice(null);
+                loadInvoices();
+              }}
+            />
+          )}
+        </div>
+      );
+    }
+
+    function PaymentModal({ invoice, onClose, onPaymentSuccess }) {
+      const [cardNumber, setCardNumber] = useState('');
+      const [expiryMonth, setExpiryMonth] = useState('');
+      const [expiryYear, setExpiryYear] = useState('');
+      const [cvv, setCvv] = useState('');
+      const [processing, setProcessing] = useState(false);
+      const [error, setError] = useState('');
+
+      const handlePayment = async (e) => {
+        e.preventDefault();
+        setProcessing(true);
+        setError('');
+
+        try {
+          // Format expiration date as MMYY
+          const expirationDate = `${expiryMonth.padStart(2, '0')}${expiryYear.slice(-2)}`;
+
+          // Call Vercel function to process payment
+          const response = await fetch('/api/authorize-net-payment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              action: 'charge',
+              paymentData: {
+                cardNumber: cardNumber.replace(/\s/g, ''),
+                expirationDate: expirationDate,
+                cardCode: cvv,
+                amount: invoice.total,
+                customerEmail: invoice.customerEmail || 'customer@example.com',
+                customerName: invoice.customerName,
+                invoiceNumber: invoice.invoiceNumber,
+                description: `Farrier Pro Invoice #${invoice.invoiceNumber}`
+              },
+              invoiceData: {
+                invoiceId: invoice.id,
+                farrierId: invoice.farrierId
+              }
+            })
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            // Update invoice status in Firestore
+            if (db) {
+              await db.collection('invoices').doc(invoice.id).update({
+                status: 'paid',
+                paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+                transactionId: result.transactionId,
+                authCode: result.authCode,
+                accountNumber: result.accountNumber
+              });
+            }
+
+            alert('✅ Payment successful! Invoice has been marked as paid.');
+            onPaymentSuccess();
+          } else {
+            setError(result.error || 'Payment failed. Please try again.');
+          }
+        } catch (err) {
+          console.error('Payment error:', err);
+          setError('Payment processing failed. Please try again.');
+        }
+
+        setProcessing(false);
+      };
+
+      // Format card number with spaces
+      const formatCardNumber = (value) => {
+        const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+        const matches = v.match(/\d{4,16}/g);
+        const match = (matches && matches[0]) || '';
+        const parts = [];
+        
+        for (let i = 0, len = match.length; i < len; i += 4) {
+          parts.push(match.substring(i, i + 4));
+        }
+        
+        return parts.length ? parts.join(' ') : value;
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '500px'}}>
+            <h2 style={{marginBottom: '1.5rem'}}>💳 Pay Invoice</h2>
+            
+            <div style={{background: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem'}}>
+              <div style={{fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem'}}>
+                Invoice #{invoice.invoiceNumber}
+              </div>
+              <div style={{fontSize: '2rem', fontWeight: 'bold', color: 'var(--primary)'}}>
+                ${invoice.total?.toFixed(2)}
+              </div>
+              <div style={{fontSize: '0.875rem', color: '#666', marginTop: '0.5rem'}}>
+                {invoice.customerName}
+              </div>
+            </div>
+
+            {error && (
+              <div className="error-message" style={{marginBottom: '1rem'}}>
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handlePayment}>
+              <div className="form-group">
+                <label>Card Number *</label>
+                <input 
+                  type="text"
+                  required
+                  value={cardNumber}
+                  onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                  placeholder="1234 5678 9012 3456"
+                  maxLength="19"
+                />
+                <div style={{fontSize: '0.75rem', color: '#666', marginTop: '0.25rem'}}>
+                  Test: 4111 1111 1111 1111
+                </div>
+              </div>
+
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem'}}>
+                <div className="form-group">
+                  <label>Month *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={expiryMonth}
+                    onChange={(e) => setExpiryMonth(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                    placeholder="MM"
+                    maxLength="2"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Year *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={expiryYear}
+                    onChange={(e) => setExpiryYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="YYYY"
+                    maxLength="4"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>CVV *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={cvv}
+                    onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="123"
+                    maxLength="4"
+                  />
+                </div>
+              </div>
+
+              <div style={{display: 'flex', gap: '0.75rem', marginTop: '1.5rem'}}>
+                <button 
+                  type="button"
+                  onClick={onClose}
+                  className="btn btn-outline"
+                  disabled={processing}
+                  style={{flex: 1}}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="btn btn-success"
+                  disabled={processing}
+                  style={{flex: 1}}
+                >
+                  {processing ? <span className="spinner"></span> : `Pay $${invoice.total?.toFixed(2)}`}
+                </button>
+              </div>
+            </form>
+
+            <div style={{marginTop: '1.5rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px', fontSize: '0.875rem'}}>
+              🔒 <strong>Secure Payment</strong><br/>
+              Your payment is processed securely by Authorize.Net
+            </div>
+          </div>
         </div>
       );
     }
