@@ -2326,17 +2326,29 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       }, []);
 
       const loadInvoices = async () => {
+        console.log('🔵 Loading invoices for userId:', userId);
         if (db) {
           const snapshot = await db.collection('invoices')
             .where('farrierId', '==', userId)
-            .orderBy('createdAt', 'desc')
             .get();
+          
+          console.log('📋 Found invoices:', snapshot.docs.length);
           
           const invoiceData = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           }));
+          
+          // Sort in JavaScript instead of Firestore
+          invoiceData.sort((a, b) => {
+            if (!a.createdAt || !b.createdAt) return 0;
+            return b.createdAt.toDate() - a.createdAt.toDate();
+          });
+          
+          console.log('✅ Loaded invoices:', invoiceData);
           setInvoices(invoiceData);
+        } else {
+          console.error('❌ Database not initialized');
         }
       };
 
@@ -2685,7 +2697,14 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           // Save invoice to Firestore (no payment link needed - using Pay Now button)
           if (db) {
             const invoiceNumber = `INV-${Date.now()}`;
-            await db.collection('invoices').add({
+            console.log('🔵 Creating invoice:', {
+              farrierId: userId,
+              customerName,
+              total,
+              invoiceNumber
+            });
+            
+            const docRef = await db.collection('invoices').add({
               farrierId: userId,
               customerName: customerName,
               customerEmail: customerEmail,
@@ -2697,11 +2716,15 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
+            console.log('✅ Invoice created with ID:', docRef.id);
             alert('✅ Invoice created successfully! Customer can now pay using the "Pay Now" button.');
             onCreated();
+          } else {
+            console.error('❌ Database not initialized');
+            setError('Database not available');
           }
         } catch (err) {
-          console.error('Error:', err);
+          console.error('❌ Error creating invoice:', err);
           setError('Error creating invoice. Please try again.');
         }
 
