@@ -2718,10 +2718,31 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [customerName, setCustomerName] = useState('');
       const [customerEmail, setCustomerEmail] = useState('');
       const [customerPhone, setCustomerPhone] = useState('');
-      const [items, setItems] = useState([{ description: 'Farrier Service', amount: 0 }]);
-      const [paymentUrl, setPaymentUrl] = useState('');
+      const [items, setItems] = useState([{ description: '', amount: 0 }]);
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
+
+      // Farrier service options for dropdown
+      const serviceOptions = [
+        { name: '-- Select Service --', price: 0 },
+        { name: '─── TOP SERVICES ───', price: 0, isHeader: true },
+        { name: 'Hot Shoeing All Four', price: 170 },
+        { name: 'Dressage Shoes All Four', price: 200 },
+        { name: 'Hunter/Jumper Competition Shoes', price: 195 },
+        { name: 'Reset All Four', price: 120 },
+        { name: 'Trim All Four', price: 75 },
+        { name: 'Front Shoes Only', price: 110 },
+        { name: 'Show Prep Package', price: 50 },
+        { name: 'Studs Installation', price: 40 },
+        { name: 'Leather Pads', price: 40 },
+        { name: 'Emergency Call Out', price: 100 },
+        { name: '─── PACKAGES ───', price: 0, isHeader: true },
+        { name: 'Dressage Maintenance Package', price: 210 },
+        { name: 'Hunter/Jumper Show Package', price: 250 },
+        { name: 'Training Horse Package', price: 165 },
+        { name: '─── OTHER ───', price: 0, isHeader: true },
+        { name: 'Custom Service (enter manually)', price: 0 }
+      ];
 
       const addItem = () => {
         setItems([...items, { description: '', amount: 0 }]);
@@ -2731,6 +2752,16 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         const newItems = [...items];
         newItems[index][field] = value;
         setItems(newItems);
+      };
+
+      const selectService = (index, serviceName) => {
+        const service = serviceOptions.find(s => s.name === serviceName);
+        if (service && !service.isHeader && service.name !== '-- Select Service --') {
+          const newItems = [...items];
+          newItems[index].description = service.name;
+          newItems[index].amount = service.price;
+          setItems(newItems);
+        }
       };
 
       const removeItem = (index) => {
@@ -2840,36 +2871,87 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             <div className="form-group">
               <label>Invoice Items</label>
               {items.map((item, idx) => (
-                <div key={idx} style={{display: 'flex', gap: '0.5rem', marginBottom: '0.75rem'}}>
-                  <input 
-                    type="text"
-                    placeholder="Description"
-                    value={item.description}
-                    onChange={(e) => updateItem(idx, 'description', e.target.value)}
-                    style={{flex: 2}}
-                  />
-                  <input 
-                    type="number"
-                    placeholder="Amount"
-                    value={item.amount}
-                    onChange={(e) => updateItem(idx, 'amount', e.target.value)}
-                    style={{flex: 1}}
-                    step="0.01"
-                    min="0"
-                  />
-                  {items.length > 1 && (
-                    <button 
-                      className="btn btn-sm btn-outline"
-                      onClick={() => removeItem(idx)}
-                      type="button"
+                <div key={idx} style={{marginBottom: '1rem', padding: '1rem', background: '#f8f9fa', borderRadius: '8px'}}>
+                  <div style={{display: 'flex', gap: '0.5rem', marginBottom: '0.5rem'}}>
+                    <select
+                      value={item.description}
+                      onChange={(e) => selectService(idx, e.target.value)}
+                      style={{
+                        flex: 2,
+                        padding: '0.75rem',
+                        border: '2px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        fontFamily: 'inherit'
+                      }}
                     >
-                      ✕
-                    </button>
-                  )}
+                      {serviceOptions.map((service, i) => (
+                        <option 
+                          key={i} 
+                          value={service.name}
+                          disabled={service.isHeader}
+                          style={{
+                            fontWeight: service.isHeader ? 'bold' : 'normal',
+                            color: service.isHeader ? '#666' : 'inherit'
+                          }}
+                        >
+                          {service.name}
+                        </option>
+                      ))}
+                    </select>
+                    {items.length > 1 && (
+                      <button 
+                        className="btn btn-sm btn-outline"
+                        onClick={() => removeItem(idx)}
+                        type="button"
+                        style={{padding: '0.75rem 1rem'}}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  
+                  {item.description === 'Custom Service (enter manually)' || 
+                   (item.description && !serviceOptions.find(s => s.name === item.description)) ? (
+                    <input 
+                      type="text"
+                      placeholder="Enter custom service description"
+                      value={item.description === 'Custom Service (enter manually)' ? '' : item.description}
+                      onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '2px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        marginBottom: '0.5rem'
+                      }}
+                    />
+                  ) : null}
+
+                  <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                    <label style={{marginBottom: 0, fontSize: '0.9rem', fontWeight: '500'}}>Price:</label>
+                    <span style={{fontSize: '1.5rem', fontWeight: 'bold'}}>$</span>
+                    <input 
+                      type="number"
+                      placeholder="0.00"
+                      value={item.amount || ''}
+                      onChange={(e) => updateItem(idx, 'amount', e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '0.75rem',
+                        border: '2px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '1rem'
+                      }}
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
                 </div>
               ))}
               <button className="btn btn-sm btn-outline" onClick={addItem} type="button">
-                + Add Item
+                + Add Another Service
               </button>
             </div>
 
