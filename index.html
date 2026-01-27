@@ -2682,50 +2682,27 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         setLoading(true);
 
         try {
-          // Call Netlify function to create Authorize.Net payment
-          const response = await fetch('/.netlify/functions/create-authorize-payment', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
+          // Save invoice to Firestore (no payment link needed - using Pay Now button)
+          if (db) {
+            const invoiceNumber = `INV-${Date.now()}`;
+            await db.collection('invoices').add({
+              farrierId: userId,
               customerName: customerName,
               customerEmail: customerEmail,
-              amount: total,
-              invoiceNumber: `INV-${Date.now()}`,
-              description: items.map(i => i.description).join(', ')
-            })
-          });
+              customerPhone: customerPhone,
+              items: items,
+              total: total,
+              invoiceNumber: invoiceNumber,
+              status: 'outstanding',
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
 
-          const data = await response.json();
-
-          if (data.success) {
-            setPaymentUrl(data.paymentUrl);
-            
-            // Save invoice to Firestore
-            if (db) {
-              const invoiceNumber = `INV-${Date.now()}`;
-              await db.collection('invoices').add({
-                farrierId: userId,
-                customerName: customerName,
-                customerEmail: customerEmail,
-                customerPhone: customerPhone,
-                items: items,
-                total: total,
-                invoiceNumber: invoiceNumber,
-                paymentUrl: data.paymentUrl,
-                status: 'outstanding',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-              });
-            }
-
-            alert('Invoice created successfully!');
-          } else {
-            setError(data.error || 'Failed to create payment link');
+            alert('✅ Invoice created successfully! Customer can now pay using the "Pay Now" button.');
+            onCreated();
           }
         } catch (err) {
           console.error('Error:', err);
-          setError('Error creating payment link. Make sure Authorize.Net is configured.');
+          setError('Error creating invoice. Please try again.');
         }
 
         setLoading(false);
@@ -2820,42 +2797,18 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               </div>
             </div>
 
-            {!paymentUrl ? (
-              <button 
-                className="btn btn-primary" 
-                style={{width: '100%', marginTop: '1rem'}}
-                onClick={generatePaymentLink}
-                disabled={loading}
-              >
-                {loading ? <span className="spinner"></span> : '🔗 Generate Authorize.Net Payment Link'}
-              </button>
-            ) : (
-              <div>
-                <div style={{background: '#E6F4EA', border: '2px solid var(--success)', borderRadius: '8px', padding: '1rem', marginTop: '1rem'}}>
-                  <strong>✓ Payment Link Created!</strong>
-                  <div style={{marginTop: '0.5rem', wordBreak: 'break-all', fontSize: '0.875rem'}}>
-                    {paymentUrl}
-                  </div>
-                </div>
-                <button 
-                  className="btn btn-outline" 
-                  style={{width: '100%', marginTop: '0.5rem'}}
-                  onClick={() => {
-                    navigator.clipboard.writeText(paymentUrl);
-                    alert('Payment link copied!');
-                  }}
-                >
-                  📋 Copy Link
-                </button>
-                <button 
-                  className="btn btn-success" 
-                  style={{width: '100%', marginTop: '0.5rem'}}
-                  onClick={sendInvoice}
-                >
-                  📱 Send Invoice via SMS
-                </button>
-              </div>
-            )}
+            <button 
+              className="btn btn-primary" 
+              style={{width: '100%', marginTop: '1rem'}}
+              onClick={generatePaymentLink}
+              disabled={loading}
+            >
+              {loading ? <span className="spinner"></span> : '✓ Create Invoice'}
+            </button>
+
+            <p style={{fontSize: '0.875rem', color: '#666', marginTop: '0.5rem', textAlign: 'center'}}>
+              Customer will use "Pay Now" button to pay with Authorize.Net
+            </p>
           </div>
         </div>
       );
