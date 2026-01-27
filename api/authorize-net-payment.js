@@ -74,21 +74,39 @@ async function processPayment(req, res, paymentData, invoiceData) {
             cardCode: cardCode
           }
         },
+        lineItems: {
+          lineItem: [
+            {
+              itemId: '1',
+              name: description || `Invoice #${invoiceNumber}`,
+              description: description || `Farrier Pro Invoice`,
+              quantity: '1',
+              unitPrice: amount.toFixed(2)
+            }
+          ]
+        },
+        customer: {
+          email: customerEmail
+        },
         billTo: {
           firstName: customerName.split(' ')[0] || customerName,
           lastName: customerName.split(' ').slice(1).join(' ') || 'Customer',
           email: customerEmail
         },
-        order: {
-          invoiceNumber: invoiceNumber,
-          description: description || `Farrier Pro Invoice #${invoiceNumber}`
-        },
-        customerEmail: customerEmail,
+        customerIP: '255.255.255.255',
         transactionSettings: {
           setting: [
             {
               settingName: 'emailCustomer',
               settingValue: 'true'
+            }
+          ]
+        },
+        userFields: {
+          userField: [
+            {
+              name: 'invoiceNumber',
+              value: invoiceNumber
             }
           ]
         }
