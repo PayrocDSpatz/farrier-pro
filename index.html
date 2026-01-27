@@ -2724,6 +2724,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [customers, setCustomers] = useState([]);
       const [loadingCustomers, setLoadingCustomers] = useState(true);
       const [phoneSearching, setPhoneSearching] = useState(false);
+      const [selectedCustomerInfo, setSelectedCustomerInfo] = useState(null);
 
       // Load existing customers
       useEffect(() => {
@@ -2765,11 +2766,59 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         setLoadingCustomers(false);
       };
 
-      const selectCustomer = (customerData) => {
+      const loadCustomerInvoiceInfo = async (customerEmail) => {
+        if (!db || !customerEmail) {
+          setSelectedCustomerInfo(null);
+          return;
+        }
+
+        try {
+          // Get all invoices for this customer
+          const invoicesSnapshot = await db.collection('invoices')
+            .where('customerEmail', '==', customerEmail)
+            .orderBy('createdAt', 'desc')
+            .get();
+
+          const invoices = invoicesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          // Calculate balance (outstanding invoices)
+          const balance = invoices
+            .filter(inv => inv.status === 'outstanding')
+            .reduce((sum, inv) => sum + (inv.total || 0), 0);
+
+          // Get last invoice
+          const lastInvoice = invoices.length > 0 ? invoices[0] : null;
+
+          // Total paid
+          const totalPaid = invoices
+            .filter(inv => inv.status === 'paid')
+            .reduce((sum, inv) => sum + (inv.total || 0), 0);
+
+          setSelectedCustomerInfo({
+            balance,
+            lastInvoice,
+            totalInvoices: invoices.length,
+            totalPaid
+          });
+        } catch (error) {
+          console.error('Error loading customer invoice info:', error);
+          setSelectedCustomerInfo(null);
+        }
+      };
+
+      const selectCustomer = async (customerData) => {
         if (customerData) {
           setCustomerName(customerData.name || '');
           setCustomerEmail(customerData.email || '');
           setCustomerPhone(customerData.phone || '');
+          
+          // Load invoice info for this customer
+          await loadCustomerInvoiceInfo(customerData.email);
+        } else {
+          setSelectedCustomerInfo(null);
         }
       };
 
@@ -2789,6 +2838,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         if (customer) {
           setCustomerName(customer.name || '');
           setCustomerEmail(customer.email || '');
+          
+          // Load invoice info
+          await loadCustomerInvoiceInfo(customer.email);
         }
         
         setPhoneSearching(false);
@@ -2918,7 +2970,11 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 <select
                   onChange={(e) => {
                     const customer = customers.find(c => c.email === e.target.value);
-                    if (customer) selectCustomer(customer);
+                    if (customer) {
+                      selectCustomer(customer);
+                    } else {
+                      selectCustomer(null);
+                    }
                   }}
                   style={{
                     width: '100%',
@@ -2940,6 +2996,102 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 Or search by phone number below
               </div>
             </div>
+
+            {selectedCustomerInfo && (
+              <div style={{
+                background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                border: '2px solid #0ea5e9',
+                borderRadius: '12px',
+                padding: '1rem',
+                marginBottom: '1rem'
+              }}>
+                <div style={{
+                  fontSize: '0.9rem',
+                  fontWeight: '600',
+                  color: '#0369a1',
+                  marginBottom: '0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  📊 Customer Account Summary
+                </div>
+                
+                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem'}}>
+                  <div>
+                    <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem'}}>
+                      Current Balance
+                    </div>
+                    <div style={{
+                      fontSize: '1.5rem',
+                      fontWeight: 'bold',
+                      color: selectedCustomerInfo.balance > 0 ? '#dc2626' : '#16a34a'
+                    }}>
+                      ${selectedCustomerInfo.balance.toFixed(2)}
+                    </div>
+                    {selectedCustomerInfo.balance > 0 && (
+                      <div style={{fontSize: '0.7rem', color: '#dc2626', fontWeight: '500'}}>
+                        OUTSTANDING
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem'}}>
+                      Total Paid
+                    </div>
+                    <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a'}}>
+                      ${selectedCustomerInfo.totalPaid.toFixed(2)}
+                    </div>
+                    <div style={{fontSize: '0.7rem', color: '#64748b'}}>
+                      {selectedCustomerInfo.totalInvoices} invoice{selectedCustomerInfo.totalInvoices !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedCustomerInfo.lastInvoice && (
+                  <div style={{
+                    marginTop: '0.75rem',
+                    paddingTop: '0.75rem',
+                    borderTop: '1px solid #bae6fd'
+                  }}>
+                    <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem'}}>
+                      Last Invoice
+                    </div>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                      <div>
+                        <div style={{fontSize: '0.85rem', fontWeight: '600', color: '#0369a1'}}>
+                          {selectedCustomerInfo.lastInvoice.invoiceNumber}
+                        </div>
+                        <div style={{fontSize: '0.75rem', color: '#64748b'}}>
+                          {selectedCustomerInfo.lastInvoice.createdAt?.toDate().toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </div>
+                      </div>
+                      <div style={{textAlign: 'right'}}>
+                        <div style={{fontSize: '1rem', fontWeight: 'bold', color: '#0369a1'}}>
+                          ${selectedCustomerInfo.lastInvoice.total?.toFixed(2)}
+                        </div>
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '0.125rem 0.5rem',
+                          borderRadius: '12px',
+                          fontWeight: '600',
+                          textTransform: 'uppercase',
+                          background: selectedCustomerInfo.lastInvoice.status === 'paid' ? '#dcfce7' : '#fef3c7',
+                          color: selectedCustomerInfo.lastInvoice.status === 'paid' ? '#166534' : '#92400e'
+                        }}>
+                          {selectedCustomerInfo.lastInvoice.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="form-group">
               <label>Customer Phone {phoneSearching && <span style={{color: 'var(--primary)'}}>🔍 Searching...</span>}</label>
