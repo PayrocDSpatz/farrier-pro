@@ -2721,6 +2721,78 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [items, setItems] = useState([{ description: '', amount: 0 }]);
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
+      const [customers, setCustomers] = useState([]);
+      const [loadingCustomers, setLoadingCustomers] = useState(true);
+      const [phoneSearching, setPhoneSearching] = useState(false);
+
+      // Load existing customers
+      useEffect(() => {
+        loadCustomers();
+      }, []);
+
+      const loadCustomers = async () => {
+        if (db) {
+          try {
+            // Load from customers collection
+            const customersSnapshot = await db.collection('customers').get();
+            const customersList = customersSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+
+            // Also load from appointments (for customers who booked but might not have customer profile)
+            const appointmentsSnapshot = await db.collection('appointments')
+              .where('farrierId', '==', userId)
+              .get();
+            
+            const appointmentCustomers = appointmentsSnapshot.docs.map(doc => ({
+              name: doc.data().customerName,
+              email: doc.data().email,
+              phone: doc.data().phone
+            }));
+
+            // Combine and deduplicate by email
+            const allCustomers = [...customersList, ...appointmentCustomers];
+            const uniqueCustomers = Array.from(
+              new Map(allCustomers.map(c => [c.email, c])).values()
+            ).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            setCustomers(uniqueCustomers);
+          } catch (error) {
+            console.error('Error loading customers:', error);
+          }
+        }
+        setLoadingCustomers(false);
+      };
+
+      const selectCustomer = (customerData) => {
+        if (customerData) {
+          setCustomerName(customerData.name || '');
+          setCustomerEmail(customerData.email || '');
+          setCustomerPhone(customerData.phone || '');
+        }
+      };
+
+      const lookupByPhone = async (phone) => {
+        if (!phone || phone.length < 10) return;
+        
+        setPhoneSearching(true);
+        
+        // Clean phone number (remove spaces, dashes, parentheses)
+        const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+        
+        // Search in customers
+        const customer = customers.find(c => 
+          c.phone && c.phone.replace(/[\s\-\(\)]/g, '').includes(cleanPhone)
+        );
+
+        if (customer) {
+          setCustomerName(customer.name || '');
+          setCustomerEmail(customer.email || '');
+        }
+        
+        setPhoneSearching(false);
+      };
 
       // Farrier service options for dropdown
       const serviceOptions = [
@@ -2839,6 +2911,55 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             {error && <div className="error-message">{error}</div>}
 
             <div className="form-group">
+              <label>Select Existing Customer (Optional)</label>
+              {loadingCustomers ? (
+                <div style={{padding: '0.75rem', color: 'var(--text-muted)'}}>Loading customers...</div>
+              ) : (
+                <select
+                  onChange={(e) => {
+                    const customer = customers.find(c => c.email === e.target.value);
+                    if (customer) selectCustomer(customer);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '2px solid var(--border)',
+                    borderRadius: '8px',
+                    fontSize: '1rem'
+                  }}
+                >
+                  <option value="">-- Select Customer or Enter New Below --</option>
+                  {customers.map((customer, i) => (
+                    <option key={i} value={customer.email}>
+                      {customer.name} - {customer.email}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
+                Or search by phone number below
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Customer Phone {phoneSearching && <span style={{color: 'var(--primary)'}}>🔍 Searching...</span>}</label>
+              <input 
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => {
+                  setCustomerPhone(e.target.value);
+                  if (e.target.value.replace(/\D/g, '').length >= 10) {
+                    lookupByPhone(e.target.value);
+                  }
+                }}
+                placeholder="555-123-4567 (auto-fills customer info)"
+              />
+              <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
+                Enter phone to auto-fill customer details
+              </div>
+            </div>
+
+            <div className="form-group">
               <label>Customer Name *</label>
               <input 
                 type="text"
@@ -2855,16 +2976,6 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 value={customerEmail}
                 onChange={(e) => setCustomerEmail(e.target.value)}
                 placeholder="customer@email.com"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Customer Phone</label>
-              <input 
-                type="tel"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="+1234567890"
               />
             </div>
 
