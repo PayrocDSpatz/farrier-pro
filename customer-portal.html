@@ -728,29 +728,29 @@
       const loadData = async () => {
         if (db) {
           try {
-            // Load customer profile
+            // Load customer profile (optional)
             const profileDoc = await db.collection('customers').doc(user.uid).get();
             if (profileDoc.exists) {
               setCustomerProfile(profileDoc.data());
-              
-              // Load invoices by email
-              const invoicesSnapshot = await db.collection('invoices')
-                .where('customerEmail', '==', user.email)
-                .get();
-
-              const invoiceData = invoicesSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-              }));
-
-              // Sort by date
-              invoiceData.sort((a, b) => {
-                if (!a.createdAt || !b.createdAt) return 0;
-                return b.createdAt.toDate() - a.createdAt.toDate();
-              });
-
-              setInvoices(invoiceData);
             }
+            
+            // Load invoices by email (always, even if no profile)
+            const invoicesSnapshot = await db.collection('invoices')
+              .where('customerEmail', '==', user.email)
+              .get();
+
+            const invoiceData = invoicesSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+
+            // Sort by date
+            invoiceData.sort((a, b) => {
+              if (!a.createdAt || !b.createdAt) return 0;
+              return b.createdAt.toDate() - a.createdAt.toDate();
+            });
+
+            setInvoices(invoiceData);
           } catch (error) {
             console.error('Error loading data:', error);
           }
