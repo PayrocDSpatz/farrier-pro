@@ -2477,6 +2477,12 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       </div>
                       <div className="appointment-details">
                         Amount: ${invoice.total?.toFixed(2)} • Created: {invoice.createdAt?.toDate().toLocaleDateString()}
+                        {invoice.status === 'paid' && invoice.paidAt && (
+                          <><br/>Paid: {invoice.paidAt?.toDate().toLocaleDateString()} 
+                          {invoice.cardLast4 && <> • {invoice.cardType || 'Card'} {invoice.cardLast4}</>}
+                          {invoice.transactionId && <> • Transaction: {invoice.transactionId}</>}
+                          </>
+                        )}
                         {invoice.paymentUrl && (
                           <><br/>Payment Link: <a href={invoice.paymentUrl} target="_blank" style={{color: 'var(--primary)'}}>View</a></>
                         )}

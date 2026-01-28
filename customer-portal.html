@@ -895,6 +895,30 @@
                       </div>
                     )}
 
+                    {invoice.status === 'paid' && invoice.cardLast4 && (
+                      <div style={{
+                        marginTop: '1rem',
+                        paddingTop: '1rem',
+                        borderTop: '1px solid var(--border)',
+                        fontSize: '0.85rem',
+                        color: 'var(--text-muted)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <div>
+                          💳 {invoice.cardType || 'Card'} {invoice.cardLast4}
+                        </div>
+                        <div>
+                          Paid: {invoice.paidAt?.toDate().toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {invoice.status === 'outstanding' && (
                       <button 
                         className="btn btn-success"
@@ -990,7 +1014,9 @@
                 status: 'paid',
                 paidAt: firebase.firestore.FieldValue.serverTimestamp(),
                 transactionId: result.transactionId,
-                authCode: result.authCode
+                authCode: result.authCode,
+                cardLast4: result.accountNumber, // Last 4 digits (e.g., "XXXX1111")
+                cardType: result.accountType // Card type (e.g., "Visa", "Mastercard")
               });
             }
 
