@@ -16,6 +16,9 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
   <style>
     :root {
       --primary: #2c5f2d;
@@ -720,7 +723,7 @@
       const [loading, setLoading] = useState(true);
       const [selectedInvoice, setSelectedInvoice] = useState(null);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
-      const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, ytd
+      const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, ytd, unpaid
 
       useEffect(() => {
         loadData();
@@ -783,9 +786,65 @@
         setShowPaymentModal(true);
       };
 
+      // Export to Excel
+      const exportToExcel = () => {
+        // Prepare data for export
+        const exportData = filteredInvoices.map(invoice => ({
+          'Invoice Number': invoice.invoiceNumber || '',
+          'Date': invoice.createdAt ? invoice.createdAt.toDate().toLocaleDateString('en-US') : '',
+          'Customer': invoice.customerName || '',
+          'Status': invoice.status || '',
+          'Amount': invoice.total || 0,
+          'Paid Date': invoice.paidAt ? invoice.paidAt.toDate().toLocaleDateString('en-US') : '',
+          'Payment Method': invoice.cardLast4 ? `${invoice.cardType || 'Card'} ${invoice.cardLast4}` : '',
+          'Transaction ID': invoice.transactionId || ''
+        }));
+
+        // Create worksheet
+        const ws = window.XLSX.utils.json_to_sheet(exportData);
+
+        // Set column widths
+        ws['!cols'] = [
+          { wch: 20 }, // Invoice Number
+          { wch: 12 }, // Date
+          { wch: 20 }, // Customer
+          { wch: 12 }, // Status
+          { wch: 12 }, // Amount
+          { wch: 12 }, // Paid Date
+          { wch: 20 }, // Payment Method
+          { wch: 15 }  // Transaction ID
+        ];
+
+        // Format amounts as currency
+        const range = window.XLSX.utils.decode_range(ws['!ref']);
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+          const cellAddress = window.XLSX.utils.encode_cell({ r: R, c: 4 }); // Column E (Amount)
+          if (ws[cellAddress]) {
+            ws[cellAddress].z = '$#,##0.00';
+          }
+        }
+
+        // Create workbook
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
+
+        // Generate filename with date filter
+        const filterText = 
+          dateFilter === 'thisMonth' ? 'This_Month' :
+          dateFilter === 'lastMonth' ? 'Last_Month' :
+          dateFilter === 'ytd' ? 'YTD' :
+          'All_Time';
+        
+        const filename = `Farrier_Invoices_${filterText}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        // Download
+        window.XLSX.writeFile(wb, filename);
+      };
+
       // Filter invoices by date
       const getFilteredInvoices = () => {
         if (dateFilter === 'all') return invoices;
+        if (dateFilter === 'unpaid') return invoices.filter(inv => inv.status === 'outstanding');
 
         const now = new Date();
         const currentYear = now.getFullYear();
@@ -864,76 +923,123 @@
               display: 'flex',
               gap: '0.75rem',
               marginBottom: '2rem',
-              flexWrap: 'wrap'
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
-              <button
-                onClick={() => setDateFilter('all')}
-                style={{
-                  padding: '0.625rem 1.25rem',
-                  borderRadius: '8px',
-                  border: dateFilter === 'all' ? '2px solid var(--primary)' : '2px solid var(--border)',
-                  background: dateFilter === 'all' ? 'var(--primary)' : 'white',
-                  color: dateFilter === 'all' ? 'white' : 'var(--text)',
-                  fontWeight: '500',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  fontFamily: 'inherit'
-                }}
-              >
-                All Time
-              </button>
-              <button
-                onClick={() => setDateFilter('thisMonth')}
-                style={{
-                  padding: '0.625rem 1.25rem',
-                  borderRadius: '8px',
-                  border: dateFilter === 'thisMonth' ? '2px solid var(--primary)' : '2px solid var(--border)',
-                  background: dateFilter === 'thisMonth' ? 'var(--primary)' : 'white',
-                  color: dateFilter === 'thisMonth' ? 'white' : 'var(--text)',
-                  fontWeight: '500',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  fontFamily: 'inherit'
-                }}
-              >
-                This Month
-              </button>
-              <button
-                onClick={() => setDateFilter('lastMonth')}
-                style={{
-                  padding: '0.625rem 1.25rem',
-                  borderRadius: '8px',
-                  border: dateFilter === 'lastMonth' ? '2px solid var(--primary)' : '2px solid var(--border)',
-                  background: dateFilter === 'lastMonth' ? 'var(--primary)' : 'white',
-                  color: dateFilter === 'lastMonth' ? 'white' : 'var(--text)',
-                  fontWeight: '500',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  fontFamily: 'inherit'
-                }}
-              >
-                Last Month
-              </button>
-              <button
-                onClick={() => setDateFilter('ytd')}
-                style={{
-                  padding: '0.625rem 1.25rem',
-                  borderRadius: '8px',
-                  border: dateFilter === 'ytd' ? '2px solid var(--primary)' : '2px solid var(--border)',
-                  background: dateFilter === 'ytd' ? 'var(--primary)' : 'white',
-                  color: dateFilter === 'ytd' ? 'white' : 'var(--text)',
-                  fontWeight: '500',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  fontFamily: 'inherit'
-                }}
-              >
-                Year to Date
-              </button>
+              <div style={{display: 'flex', gap: '0.75rem', flexWrap: 'wrap'}}>
+                <button
+                  onClick={() => setDateFilter('all')}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '8px',
+                    border: dateFilter === 'all' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                    background: dateFilter === 'all' ? 'var(--primary)' : 'white',
+                    color: dateFilter === 'all' ? 'white' : 'var(--text)',
+                    fontWeight: '500',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  All Time
+                </button>
+                <button
+                  onClick={() => setDateFilter('unpaid')}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '8px',
+                    border: dateFilter === 'unpaid' ? '2px solid #ef4444' : '2px solid var(--border)',
+                    background: dateFilter === 'unpaid' ? '#ef4444' : 'white',
+                    color: dateFilter === 'unpaid' ? 'white' : 'var(--text)',
+                    fontWeight: '500',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  ⚠️ Unpaid
+                </button>
+                <button
+                  onClick={() => setDateFilter('thisMonth')}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '8px',
+                    border: dateFilter === 'thisMonth' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                    background: dateFilter === 'thisMonth' ? 'var(--primary)' : 'white',
+                    color: dateFilter === 'thisMonth' ? 'white' : 'var(--text)',
+                    fontWeight: '500',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  This Month
+                </button>
+                <button
+                  onClick={() => setDateFilter('lastMonth')}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '8px',
+                    border: dateFilter === 'lastMonth' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                    background: dateFilter === 'lastMonth' ? 'var(--primary)' : 'white',
+                    color: dateFilter === 'lastMonth' ? 'white' : 'var(--text)',
+                    fontWeight: '500',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  Last Month
+                </button>
+                <button
+                  onClick={() => setDateFilter('ytd')}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '8px',
+                    border: dateFilter === 'ytd' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                    background: dateFilter === 'ytd' ? 'var(--primary)' : 'white',
+                    color: dateFilter === 'ytd' ? 'white' : 'var(--text)',
+                    fontWeight: '500',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  Year to Date
+                </button>
+              </div>
+
+              {/* Export Button */}
+              {filteredInvoices.length > 0 && (
+                <button
+                  onClick={exportToExcel}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '8px',
+                    border: '2px solid #16a34a',
+                    background: '#16a34a',
+                    color: 'white',
+                    fontWeight: '600',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                  onMouseOver={(e) => e.target.style.background = '#15803d'}
+                  onMouseOut={(e) => e.target.style.background = '#16a34a'}
+                >
+                  📊 Export to Excel
+                </button>
+              )}
             </div>
 
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '2rem'}}>
@@ -984,10 +1090,11 @@
                   fontWeight: '500'
                 }}>
                   Showing {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''}
-                  {dateFilter !== 'all' && ` for ${
-                    dateFilter === 'thisMonth' ? 'this month' :
-                    dateFilter === 'lastMonth' ? 'last month' :
-                    'year to date'
+                  {dateFilter !== 'all' && ` ${
+                    dateFilter === 'unpaid' ? '(unpaid only)' :
+                    dateFilter === 'thisMonth' ? 'for this month' :
+                    dateFilter === 'lastMonth' ? 'for last month' :
+                    'for year to date'
                   }`}
                 </div>
                 <div className="invoice-grid">
