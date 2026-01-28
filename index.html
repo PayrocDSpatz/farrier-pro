@@ -467,9 +467,9 @@
     }
 
     .badge-secondary {
-      background: #f3f4f6;
-      color: #6b7280;
-      text-decoration: line-through;
+      background: #fee2e2;
+      color: #dc2626;
+      font-weight: 600;
     }
 
     .badge-pending {
@@ -3241,6 +3241,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [loading, setLoading] = useState(false);
       const [showCancelModal, setShowCancelModal] = useState(false);
       const [cancelPassword, setCancelPassword] = useState('');
+      const [invoiceFilter, setInvoiceFilter] = useState('all'); // all, thisMonth, lastMonth, lastQuarter, ytd, paidOnly, openOnly, cancelledOnly
 
       useEffect(() => {
         loadInvoices();
@@ -3306,15 +3307,61 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         }
       };
 
-      const totalCollected = invoices
+      // Filter invoices based on selected filter
+      const getFilteredInvoices = () => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+
+        return invoices.filter(invoice => {
+          // Apply status filter first
+          if (invoiceFilter === 'paidOnly' && invoice.status !== 'paid') return false;
+          if (invoiceFilter === 'openOnly' && invoice.status !== 'outstanding') return false;
+          if (invoiceFilter === 'cancelledOnly' && invoice.status !== 'cancelled') return false;
+
+          // Apply date filters
+          if (!invoice.createdAt) return true; // Include invoices without dates
+          
+          const invoiceDate = invoice.createdAt.toDate();
+          const invoiceYear = invoiceDate.getFullYear();
+          const invoiceMonth = invoiceDate.getMonth();
+
+          switch (invoiceFilter) {
+            case 'thisMonth':
+              return invoiceYear === currentYear && invoiceMonth === currentMonth;
+            
+            case 'lastMonth':
+              const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+              const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+              return invoiceYear === lastMonthYear && invoiceMonth === lastMonth;
+            
+            case 'lastQuarter':
+              const currentQuarter = Math.floor(currentMonth / 3);
+              const lastQuarter = currentQuarter === 0 ? 3 : currentQuarter - 1;
+              const lastQuarterYear = currentQuarter === 0 ? currentYear - 1 : currentYear;
+              const invoiceQuarter = Math.floor(invoiceMonth / 3);
+              return invoiceYear === lastQuarterYear && invoiceQuarter === lastQuarter;
+            
+            case 'ytd':
+              return invoiceYear === currentYear;
+            
+            default:
+              return true;
+          }
+        });
+      };
+
+      const filteredInvoices = getFilteredInvoices();
+
+      const totalCollected = filteredInvoices
         .filter(inv => inv.status === 'paid')
         .reduce((sum, inv) => sum + (inv.total || 0), 0);
 
-      const totalOutstanding = invoices
+      const totalOutstanding = filteredInvoices
         .filter(inv => inv.status === 'outstanding')
         .reduce((sum, inv) => sum + (inv.total || 0), 0);
 
-      const totalCancelled = invoices
+      const totalCancelled = filteredInvoices
         .filter(inv => inv.status === 'cancelled')
         .reduce((sum, inv) => sum + (inv.total || 0), 0);
 
@@ -3346,14 +3393,77 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 + Create Invoice
               </button>
             </div>
-            
-            {invoices.length === 0 ? (
+
+            {/* Filter Buttons */}
+            <div style={{
+              display: 'flex',
+              gap: '0.5rem',
+              marginBottom: '1.5rem',
+              flexWrap: 'wrap',
+              paddingBottom: '1rem',
+              borderBottom: '1px solid var(--border)'
+            }}>
+              <button
+                onClick={() => setInvoiceFilter('all')}
+                className={`btn btn-sm ${invoiceFilter === 'all' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                All Invoices
+              </button>
+              <button
+                onClick={() => setInvoiceFilter('thisMonth')}
+                className={`btn btn-sm ${invoiceFilter === 'thisMonth' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                This Month
+              </button>
+              <button
+                onClick={() => setInvoiceFilter('lastMonth')}
+                className={`btn btn-sm ${invoiceFilter === 'lastMonth' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                Last Month
+              </button>
+              <button
+                onClick={() => setInvoiceFilter('lastQuarter')}
+                className={`btn btn-sm ${invoiceFilter === 'lastQuarter' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                Last Quarter
+              </button>
+              <button
+                onClick={() => setInvoiceFilter('ytd')}
+                className={`btn btn-sm ${invoiceFilter === 'ytd' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                Year to Date
+              </button>
+              <button
+                onClick={() => setInvoiceFilter('paidOnly')}
+                className={`btn btn-sm ${invoiceFilter === 'paidOnly' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                ✅ Paid Only
+              </button>
+              <button
+                onClick={() => setInvoiceFilter('openOnly')}
+                className={`btn btn-sm ${invoiceFilter === 'openOnly' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                ⏳ Open Only
+              </button>
+              <button
+                onClick={() => setInvoiceFilter('cancelledOnly')}
+                className={`btn btn-sm ${invoiceFilter === 'cancelledOnly' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                🚫 Cancelled Only
+              </button>
+            </div>
+
+            {filteredInvoices.length === 0 ? (
               <p style={{color: 'var(--text-muted)'}}>
-                No invoices yet. Create your first invoice with Authorize.Net payment links!
+                No invoices found for selected filter.
               </p>
             ) : (
-              <div className="appointments-list">
-                {invoices.map(invoice => (
+              <>
+                <div style={{fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem'}}>
+                  Showing {filteredInvoices.length} of {invoices.length} invoice{invoices.length !== 1 ? 's' : ''}
+                </div>
+                <div className="appointments-list">
+                  {filteredInvoices.map(invoice => (
                   <div key={invoice.id} className="appointment-item">
                     <div className="appointment-info">
                       <div className="appointment-customer">
@@ -3418,6 +3528,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                   </div>
                 ))}
               </div>
+              </>
             )}
           </div>
 
