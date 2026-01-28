@@ -466,6 +466,12 @@
       color: var(--warning);
     }
 
+    .badge-secondary {
+      background: #f3f4f6;
+      color: #6b7280;
+      text-decoration: line-through;
+    }
+
     .badge-pending {
       background: #E8EAF6;
       color: #5E35B1;
@@ -3233,6 +3239,8 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [showPaymentModal, setShowPaymentModal] = useState(false);
       const [selectedInvoice, setSelectedInvoice] = useState(null);
       const [loading, setLoading] = useState(false);
+      const [showCancelModal, setShowCancelModal] = useState(false);
+      const [cancelPassword, setCancelPassword] = useState('');
 
       useEffect(() => {
         loadInvoices();
@@ -3265,12 +3273,49 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         }
       };
 
+      const handleCancelInvoice = async () => {
+        // Generate today's password (MMDDYYYY format)
+        const today = new Date();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const year = today.getFullYear();
+        const correctPassword = `${month}${day}${year}`;
+
+        if (cancelPassword !== correctPassword) {
+          alert(`❌ Incorrect password. Today's password is MMDDYYYY format (e.g., ${correctPassword.slice(0,2)}${correctPassword.slice(2,4)}${correctPassword.slice(4)})`);
+          return;
+        }
+
+        try {
+          if (db && selectedInvoice) {
+            await db.collection('invoices').doc(selectedInvoice.id).update({
+              status: 'cancelled',
+              cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+              cancelledBy: userId
+            });
+
+            alert('✅ Invoice cancelled successfully');
+            setShowCancelModal(false);
+            setSelectedInvoice(null);
+            setCancelPassword('');
+            loadInvoices();
+          }
+        } catch (error) {
+          console.error('Error cancelling invoice:', error);
+          alert('❌ Error cancelling invoice');
+        }
+      };
+
       const totalCollected = invoices
         .filter(inv => inv.status === 'paid')
         .reduce((sum, inv) => sum + (inv.total || 0), 0);
 
       const totalOutstanding = invoices
         .filter(inv => inv.status === 'outstanding')
+        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+
+      const totalCancelled = invoices
+        .filter(inv => inv.status === 'cancelled')
         .reduce((sum, inv) => sum + (inv.total || 0), 0);
 
       return (
@@ -3286,6 +3331,12 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               <div className="stat-label">Outstanding</div>
               <div className="stat-value" style={{color: 'var(--warning)'}}>${totalOutstanding.toFixed(2)}</div>
             </div>
+            {totalCancelled > 0 && (
+              <div className="stat-card">
+                <div className="stat-label">Cancelled</div>
+                <div className="stat-value" style={{color: '#6b7280'}}>${totalCancelled.toFixed(2)}</div>
+              </div>
+            )}
           </div>
 
           <div className="card">
@@ -3322,19 +3373,35 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       </div>
                     </div>
                     <div className="appointment-actions">
-                      <span className={`badge badge-${invoice.status === 'paid' ? 'success' : 'warning'}`}>
+                      <span className={`badge badge-${
+                        invoice.status === 'paid' ? 'success' : 
+                        invoice.status === 'cancelled' ? 'secondary' : 
+                        'warning'
+                      }`}>
                         {invoice.status}
                       </span>
                       {invoice.status === 'outstanding' && (
-                        <button 
-                          className="btn btn-sm btn-success"
-                          onClick={() => {
-                            setSelectedInvoice(invoice);
-                            setShowPaymentModal(true);
-                          }}
-                        >
-                          💳 Pay Now
-                        </button>
+                        <>
+                          <button 
+                            className="btn btn-sm btn-success"
+                            onClick={() => {
+                              setSelectedInvoice(invoice);
+                              setShowPaymentModal(true);
+                            }}
+                          >
+                            💳 Pay Now
+                          </button>
+                          <button 
+                            className="btn btn-sm btn-danger"
+                            onClick={() => {
+                              setSelectedInvoice(invoice);
+                              setShowCancelModal(true);
+                            }}
+                            style={{background: '#ef4444'}}
+                          >
+                            🚫 Cancel
+                          </button>
+                        </>
                       )}
                       {invoice.status === 'outstanding' && invoice.paymentUrl && (
                         <button 
@@ -3378,6 +3445,75 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 loadInvoices();
               }}
             />
+          )}
+
+          {showCancelModal && selectedInvoice && (
+            <div className="modal-overlay" onClick={() => setShowCancelModal(false)}>
+              <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth: '500px'}}>
+                <div className="modal-header">
+                  <h2>🚫 Cancel Invoice</h2>
+                  <button className="close-btn" onClick={() => setShowCancelModal(false)}>×</button>
+                </div>
+
+                <div style={{padding: '1.5rem'}}>
+                  <div style={{
+                    padding: '1rem',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: '8px',
+                    marginBottom: '1.5rem'
+                  }}>
+                    <div style={{fontWeight: '600', marginBottom: '0.5rem'}}>
+                      Invoice: {selectedInvoice.invoiceNumber}
+                    </div>
+                    <div style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>
+                      Customer: {selectedInvoice.customerName}
+                    </div>
+                    <div style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>
+                      Amount: ${selectedInvoice.total?.toFixed(2)}
+                    </div>
+                  </div>
+
+                  <div style={{marginBottom: '1rem', color: '#991b1b', fontWeight: '500'}}>
+                    ⚠️ This will mark the invoice as CANCELLED. It will remain in the system for records but cannot be paid.
+                  </div>
+
+                  <div className="form-group">
+                    <label>Password (MMDDYYYY format) *</label>
+                    <input 
+                      type="password"
+                      value={cancelPassword}
+                      onChange={(e) => setCancelPassword(e.target.value)}
+                      placeholder="Enter today's date (e.g., 01272026)"
+                      autoFocus
+                    />
+                    <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
+                      Enter today's date in MMDDYYYY format
+                    </div>
+                  </div>
+
+                  <div style={{display: 'flex', gap: '0.75rem', marginTop: '1.5rem'}}>
+                    <button 
+                      className="btn btn-outline"
+                      onClick={() => {
+                        setShowCancelModal(false);
+                        setCancelPassword('');
+                      }}
+                      style={{flex: 1}}
+                    >
+                      Nevermind
+                    </button>
+                    <button 
+                      className="btn"
+                      onClick={handleCancelInvoice}
+                      style={{flex: 1, background: '#ef4444', color: 'white'}}
+                    >
+                      Cancel Invoice
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       );
