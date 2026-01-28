@@ -720,6 +720,7 @@
       const [loading, setLoading] = useState(true);
       const [selectedInvoice, setSelectedInvoice] = useState(null);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
+      const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, ytd
 
       useEffect(() => {
         loadData();
@@ -782,11 +783,46 @@
         setShowPaymentModal(true);
       };
 
-      const totalPaid = invoices
+      // Filter invoices by date
+      const getFilteredInvoices = () => {
+        if (dateFilter === 'all') return invoices;
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+
+        return invoices.filter(invoice => {
+          if (!invoice.createdAt) return false;
+          
+          const invoiceDate = invoice.createdAt.toDate();
+          const invoiceYear = invoiceDate.getFullYear();
+          const invoiceMonth = invoiceDate.getMonth();
+
+          switch (dateFilter) {
+            case 'thisMonth':
+              return invoiceYear === currentYear && invoiceMonth === currentMonth;
+            
+            case 'lastMonth':
+              const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+              const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+              return invoiceYear === lastMonthYear && invoiceMonth === lastMonth;
+            
+            case 'ytd':
+              return invoiceYear === currentYear;
+            
+            default:
+              return true;
+          }
+        });
+      };
+
+      const filteredInvoices = getFilteredInvoices();
+
+      const totalPaid = filteredInvoices
         .filter(inv => inv.status === 'paid')
         .reduce((sum, inv) => sum + (inv.total || 0), 0);
 
-      const totalOutstanding = invoices
+      const totalOutstanding = filteredInvoices
         .filter(inv => inv.status === 'outstanding')
         .reduce((sum, inv) => sum + (inv.total || 0), 0);
 
@@ -823,6 +859,83 @@
               </p>
             </div>
 
+            {/* Date Filter Buttons */}
+            <div style={{
+              display: 'flex',
+              gap: '0.75rem',
+              marginBottom: '2rem',
+              flexWrap: 'wrap'
+            }}>
+              <button
+                onClick={() => setDateFilter('all')}
+                style={{
+                  padding: '0.625rem 1.25rem',
+                  borderRadius: '8px',
+                  border: dateFilter === 'all' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                  background: dateFilter === 'all' ? 'var(--primary)' : 'white',
+                  color: dateFilter === 'all' ? 'white' : 'var(--text)',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  fontFamily: 'inherit'
+                }}
+              >
+                All Time
+              </button>
+              <button
+                onClick={() => setDateFilter('thisMonth')}
+                style={{
+                  padding: '0.625rem 1.25rem',
+                  borderRadius: '8px',
+                  border: dateFilter === 'thisMonth' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                  background: dateFilter === 'thisMonth' ? 'var(--primary)' : 'white',
+                  color: dateFilter === 'thisMonth' ? 'white' : 'var(--text)',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  fontFamily: 'inherit'
+                }}
+              >
+                This Month
+              </button>
+              <button
+                onClick={() => setDateFilter('lastMonth')}
+                style={{
+                  padding: '0.625rem 1.25rem',
+                  borderRadius: '8px',
+                  border: dateFilter === 'lastMonth' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                  background: dateFilter === 'lastMonth' ? 'var(--primary)' : 'white',
+                  color: dateFilter === 'lastMonth' ? 'white' : 'var(--text)',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  fontFamily: 'inherit'
+                }}
+              >
+                Last Month
+              </button>
+              <button
+                onClick={() => setDateFilter('ytd')}
+                style={{
+                  padding: '0.625rem 1.25rem',
+                  borderRadius: '8px',
+                  border: dateFilter === 'ytd' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                  background: dateFilter === 'ytd' ? 'var(--primary)' : 'white',
+                  color: dateFilter === 'ytd' ? 'white' : 'var(--text)',
+                  fontWeight: '500',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  fontFamily: 'inherit'
+                }}
+              >
+                Year to Date
+              </button>
+            </div>
+
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '2rem'}}>
               <div className="card" style={{textAlign: 'center'}}>
                 <div style={{fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: '500'}}>
@@ -847,15 +960,38 @@
               <div style={{display: 'flex', justifyContent: 'center', padding: '4rem'}}>
                 <div className="spinner" style={{borderTopColor: 'var(--primary)'}}></div>
               </div>
-            ) : invoices.length === 0 ? (
+            ) : filteredInvoices.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-state-icon">📄</div>
-                <h3>No Invoices Yet</h3>
-                <p>Your farrier invoices will appear here</p>
+                <h3>No Invoices Found</h3>
+                <p>{dateFilter === 'all' ? 'Your farrier invoices will appear here' : 'No invoices for this time period'}</p>
+                {dateFilter !== 'all' && (
+                  <button 
+                    onClick={() => setDateFilter('all')}
+                    className="btn btn-outline"
+                    style={{marginTop: '1rem'}}
+                  >
+                    View All Invoices
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="invoice-grid">
-                {invoices.map(invoice => (
+              <>
+                <div style={{
+                  fontSize: '0.9rem',
+                  color: 'var(--text-muted)',
+                  marginBottom: '1rem',
+                  fontWeight: '500'
+                }}>
+                  Showing {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''}
+                  {dateFilter !== 'all' && ` for ${
+                    dateFilter === 'thisMonth' ? 'this month' :
+                    dateFilter === 'lastMonth' ? 'last month' :
+                    'year to date'
+                  }`}
+                </div>
+                <div className="invoice-grid">
+                  {filteredInvoices.map(invoice => (
                   <div 
                     key={invoice.id} 
                     className="invoice-card"
@@ -934,6 +1070,7 @@
                   </div>
                 ))}
               </div>
+              </>
             )}
           </main>
 
