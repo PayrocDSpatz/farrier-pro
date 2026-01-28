@@ -728,21 +728,33 @@
       const loadData = async () => {
         if (db) {
           try {
+            console.log('🔍 Loading data for user:', user.email);
+            
             // Load customer profile (optional)
             const profileDoc = await db.collection('customers').doc(user.uid).get();
             if (profileDoc.exists) {
               setCustomerProfile(profileDoc.data());
+              console.log('✅ Customer profile found');
+            } else {
+              console.log('⚠️ No customer profile found (but that\'s OK)');
             }
             
             // Load invoices by email (always, even if no profile)
+            console.log('🔍 Searching for invoices with email:', user.email);
             const invoicesSnapshot = await db.collection('invoices')
               .where('customerEmail', '==', user.email)
               .get();
 
-            const invoiceData = invoicesSnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
+            console.log('📊 Found', invoicesSnapshot.docs.length, 'invoices');
+
+            const invoiceData = invoicesSnapshot.docs.map(doc => {
+              const data = doc.data();
+              console.log('📄 Invoice:', doc.id, data);
+              return {
+                id: doc.id,
+                ...data
+              };
+            });
 
             // Sort by date
             invoiceData.sort((a, b) => {
@@ -750,10 +762,13 @@
               return b.createdAt.toDate() - a.createdAt.toDate();
             });
 
+            console.log('✅ Setting', invoiceData.length, 'invoices to state');
             setInvoices(invoiceData);
           } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('❌ Error loading data:', error);
           }
+        } else {
+          console.error('❌ Database not initialized');
         }
         setLoading(false);
       };
