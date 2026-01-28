@@ -889,7 +889,7 @@
                         {invoice.items.map((item, idx) => (
                           <div key={idx} className="invoice-item">
                             <span>{item.description}</span>
-                            <span>${(item.amount || 0).toFixed(2)}</span>
+                            <span>${parseFloat(item.amount || 0).toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
