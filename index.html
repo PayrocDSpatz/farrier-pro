@@ -1249,6 +1249,7 @@
       const [dateRange, setDateRange] = useState('thisMonth'); // thisMonth, lastMonth, thisQuarter, thisYear, custom
       const [customStartDate, setCustomStartDate] = useState('');
       const [customEndDate, setCustomEndDate] = useState('');
+      const [detailView, setDetailView] = useState(null); // { type: 'month', data: {...} } or { type: 'status', data: {...} } or { type: 'customer', data: {...} } or { type: 'service', data: {...} }
 
       useEffect(() => {
         loadInvoices();
@@ -1381,11 +1382,60 @@
 
         monthlyData.push({
           month: date.toLocaleDateString('en-US', { month: 'short' }),
+          year: date.getFullYear(),
           revenue: monthRevenue
         });
       }
 
       const maxRevenue = Math.max(...monthlyData.map(d => d.revenue), 1);
+
+      // Calculate aging report (overdue invoices)
+      const now = new Date();
+      const aging = {
+        current: { amount: 0, count: 0, invoices: [] },
+        days30: { amount: 0, count: 0, invoices: [] },
+        days60: { amount: 0, count: 0, invoices: [] },
+        days90: { amount: 0, count: 0, invoices: [] },
+        days90plus: { amount: 0, count: 0, invoices: [] }
+      };
+
+      filteredInvoices.forEach(inv => {
+        if (inv.status === 'outstanding' && inv.createdAt) {
+          const createdDate = inv.createdAt.toDate();
+          const daysOld = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));
+          
+          if (daysOld <= 30) {
+            aging.current.amount += inv.total || 0;
+            aging.current.count++;
+            aging.current.invoices.push(inv);
+          } else if (daysOld <= 60) {
+            aging.days30.amount += inv.total || 0;
+            aging.days30.count++;
+            aging.days30.invoices.push(inv);
+          } else if (daysOld <= 90) {
+            aging.days60.amount += inv.total || 0;
+            aging.days60.count++;
+            aging.days60.invoices.push(inv);
+          } else if (daysOld <= 120) {
+            aging.days90.amount += inv.total || 0;
+            aging.days90.count++;
+            aging.days90.invoices.push(inv);
+          } else {
+            aging.days90plus.amount += inv.total || 0;
+            aging.days90plus.count++;
+            aging.days90plus.invoices.push(inv);
+          }
+        }
+      });
+
+      const maxAging = Math.max(
+        aging.current.amount,
+        aging.days30.amount,
+        aging.days60.amount,
+        aging.days90.amount,
+        aging.days90plus.amount,
+        1
+      );
 
       return (
         <div>
@@ -1505,75 +1555,193 @@
                 {/* Revenue Trend */}
                 <div className="card">
                   <h3 style={{fontSize: '1.25rem', marginBottom: '1.5rem', color: 'var(--primary)'}}>
-                    📊 6-Month Revenue Trend
+                    📊 6-Month Revenue Trend <span style={{fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'normal'}}>(click bars)</span>
                   </h3>
                   <div style={{height: '200px', display: 'flex', alignItems: 'flex-end', gap: '0.5rem', justifyContent: 'space-between'}}>
-                    {monthlyData.map((data, i) => (
-                      <div key={i} style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
-                        <div style={{
-                          width: '100%',
-                          height: `${(data.revenue / maxRevenue) * 180}px`,
-                          minHeight: data.revenue > 0 ? '10px' : '0',
-                          background: 'linear-gradient(to top, #16a34a, #22c55e)',
-                          borderRadius: '4px 4px 0 0',
-                          transition: 'all 0.3s',
-                          marginBottom: '0.5rem'
-                        }} title={`$${data.revenue.toFixed(2)}`}></div>
-                        <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500'}}>
-                          {data.month}
+                    {monthlyData.map((data, i) => {
+                      const monthInvoices = invoices.filter(inv => {
+                        if (!inv.createdAt || inv.status !== 'paid') return false;
+                        const invDate = inv.createdAt.toDate();
+                        return invDate.toLocaleDateString('en-US', { month: 'short' }) === data.month &&
+                               invDate.getFullYear() === data.year;
+                      });
+
+                      return (
+                        <div 
+                          key={i} 
+                          style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: data.revenue > 0 ? 'pointer' : 'default'}}
+                          onClick={() => {
+                            if (data.revenue > 0) {
+                              setDetailView({
+                                type: 'month',
+                                data: {
+                                  month: `${data.month} ${data.year}`,
+                                  invoices: monthInvoices,
+                                  total: data.revenue
+                                }
+                              });
+                            }
+                          }}
+                        >
+                          <div style={{
+                            width: '100%',
+                            height: `${(data.revenue / maxRevenue) * 180}px`,
+                            minHeight: data.revenue > 0 ? '10px' : '0',
+                            background: 'linear-gradient(to top, #16a34a, #22c55e)',
+                            borderRadius: '4px 4px 0 0',
+                            transition: 'all 0.3s',
+                            marginBottom: '0.5rem',
+                            transform: 'scale(1)',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (data.revenue > 0) {
+                              e.target.style.transform = 'scale(1.05)';
+                              e.target.style.filter = 'brightness(1.1)';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.transform = 'scale(1)';
+                            e.target.style.filter = 'brightness(1)';
+                          }}
+                          title={`${data.month}: $${data.revenue.toFixed(2)} (click to see invoices)`}></div>
+                          <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500'}}>
+                            {data.month}
+                          </div>
+                          <div style={{fontSize: '0.7rem', color: 'var(--text-muted)'}}>
+                            ${(data.revenue / 1000).toFixed(1)}k
+                          </div>
                         </div>
-                        <div style={{fontSize: '0.7rem', color: 'var(--text-muted)'}}>
-                          ${(data.revenue / 1000).toFixed(1)}k
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Invoice Status */}
                 <div className="card">
                   <h3 style={{fontSize: '1.25rem', marginBottom: '1.5rem', color: 'var(--primary)'}}>
-                    📋 Invoice Breakdown
+                    📋 Invoice Breakdown <span style={{fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'normal'}}>(click to view)</span>
                   </h3>
                   <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                       <span style={{color: 'var(--text-muted)'}}>Total Invoices</span>
                       <span style={{fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary)'}}>{totalInvoices}</span>
                     </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <div 
+                      style={{
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        padding: '0.5rem',
+                        borderRadius: '8px',
+                        cursor: paidInvoices > 0 ? 'pointer' : 'default',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => { if (paidInvoices > 0) e.currentTarget.style.background = '#f0fdf4'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      onClick={() => {
+                        if (paidInvoices > 0) {
+                          const paidInvs = filteredInvoices.filter(inv => inv.status === 'paid');
+                          setDetailView({
+                            type: 'status',
+                            data: {
+                              status: 'paid',
+                              invoices: paidInvs,
+                              total: paidInvs.reduce((sum, inv) => sum + (inv.total || 0), 0)
+                            }
+                          });
+                        }
+                      }}
+                    >
                       <span style={{color: 'var(--text-muted)'}}>✅ Paid</span>
                       <span style={{fontSize: '1.25rem', fontWeight: '600', color: '#16a34a'}}>{paidInvoices}</span>
                     </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <div 
+                      style={{
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        padding: '0.5rem',
+                        borderRadius: '8px',
+                        cursor: unpaidInvoices > 0 ? 'pointer' : 'default',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => { if (unpaidInvoices > 0) e.currentTarget.style.background = '#fef3c7'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      onClick={() => {
+                        if (unpaidInvoices > 0) {
+                          const unpaidInvs = filteredInvoices.filter(inv => inv.status === 'outstanding');
+                          setDetailView({
+                            type: 'status',
+                            data: {
+                              status: 'outstanding',
+                              invoices: unpaidInvs,
+                              total: unpaidInvs.reduce((sum, inv) => sum + (inv.total || 0), 0)
+                            }
+                          });
+                        }
+                      }}
+                    >
                       <span style={{color: 'var(--text-muted)'}}>⏳ Unpaid</span>
                       <span style={{fontSize: '1.25rem', fontWeight: '600', color: '#f59e0b'}}>{unpaidInvoices}</span>
                     </div>
-                    <div style={{marginTop: '1rem', height: '30px', display: 'flex', borderRadius: '8px', overflow: 'hidden'}}>
+                    <div style={{marginTop: '1rem', height: '30px', display: 'flex', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer'}}>
                       {paidInvoices > 0 && (
-                        <div style={{
-                          width: `${(paidInvoices / totalInvoices) * 100}%`,
-                          background: '#16a34a',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white',
-                          fontSize: '0.75rem',
-                          fontWeight: '600'
-                        }}>
+                        <div 
+                          style={{
+                            width: `${(paidInvoices / totalInvoices) * 100}%`,
+                            background: '#16a34a',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            transition: 'filter 0.2s'
+                          }}
+                          onMouseEnter={(e) => { e.target.style.filter = 'brightness(1.1)'; }}
+                          onMouseLeave={(e) => { e.target.style.filter = 'brightness(1)'; }}
+                          onClick={() => {
+                            const paidInvs = filteredInvoices.filter(inv => inv.status === 'paid');
+                            setDetailView({
+                              type: 'status',
+                              data: {
+                                status: 'paid',
+                                invoices: paidInvs,
+                                total: paidInvs.reduce((sum, inv) => sum + (inv.total || 0), 0)
+                              }
+                            });
+                          }}
+                        >
                           {((paidInvoices / totalInvoices) * 100).toFixed(0)}%
                         </div>
                       )}
                       {unpaidInvoices > 0 && (
-                        <div style={{
-                          width: `${(unpaidInvoices / totalInvoices) * 100}%`,
-                          background: '#f59e0b',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white',
-                          fontSize: '0.75rem',
-                          fontWeight: '600'
-                        }}>
+                        <div 
+                          style={{
+                            width: `${(unpaidInvoices / totalInvoices) * 100}%`,
+                            background: '#f59e0b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            transition: 'filter 0.2s'
+                          }}
+                          onMouseEnter={(e) => { e.target.style.filter = 'brightness(1.1)'; }}
+                          onMouseLeave={(e) => { e.target.style.filter = 'brightness(1)'; }}
+                          onClick={() => {
+                            const unpaidInvs = filteredInvoices.filter(inv => inv.status === 'outstanding');
+                            setDetailView({
+                              type: 'status',
+                              data: {
+                                status: 'outstanding',
+                                invoices: unpaidInvs,
+                                total: unpaidInvs.reduce((sum, inv) => sum + (inv.total || 0), 0)
+                              }
+                            });
+                          }}
+                        >
                           {((unpaidInvoices / totalInvoices) * 100).toFixed(0)}%
                         </div>
                       )}
@@ -1582,25 +1750,173 @@
                 </div>
               </div>
 
+              {/* Aging Report */}
+              <div style={{marginBottom: '2rem'}}>
+                <div className="card">
+                  <h3 style={{fontSize: '1.25rem', marginBottom: '1.5rem', color: 'var(--primary)'}}>
+                    📅 Accounts Receivable Aging <span style={{fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'normal'}}>(click bars)</span>
+                  </h3>
+                  <div style={{fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.5rem'}}>
+                    Outstanding invoices by age
+                  </div>
+                  <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem'}}>
+                    {[
+                      { label: 'Current', sublabel: '0-30 days', data: aging.current, color: '#22c55e' },
+                      { label: '30 Days', sublabel: '31-60 days', data: aging.days30, color: '#eab308' },
+                      { label: '60 Days', sublabel: '61-90 days', data: aging.days60, color: '#f97316' },
+                      { label: '90 Days', sublabel: '91-120 days', data: aging.days90, color: '#ef4444' },
+                      { label: '120+ Days', sublabel: 'over 120', data: aging.days90plus, color: '#991b1b' }
+                    ].map((bucket, i) => (
+                      <div 
+                        key={i}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          cursor: bucket.data.count > 0 ? 'pointer' : 'default',
+                          padding: '1rem',
+                          borderRadius: '8px',
+                          transition: 'all 0.3s'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (bucket.data.count > 0) {
+                            e.currentTarget.style.background = '#f9fafb';
+                            e.currentTarget.style.transform = 'translateY(-4px)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.transform = 'translateY(0)';
+                        }}
+                        onClick={() => {
+                          if (bucket.data.count > 0) {
+                            setDetailView({
+                              type: 'status',
+                              data: {
+                                status: `${bucket.label} (${bucket.sublabel})`,
+                                invoices: bucket.data.invoices,
+                                total: bucket.data.amount
+                              }
+                            });
+                          }
+                        }}
+                      >
+                        <div style={{
+                          width: '100%',
+                          height: '120px',
+                          display: 'flex',
+                          alignItems: 'flex-end',
+                          marginBottom: '0.75rem'
+                        }}>
+                          <div style={{
+                            width: '100%',
+                            height: `${bucket.data.amount > 0 ? Math.max((bucket.data.amount / maxAging) * 100, 10) : 0}%`,
+                            background: bucket.data.count > 0 ? `linear-gradient(to top, ${bucket.color}, ${bucket.color}dd)` : '#e5e7eb',
+                            borderRadius: '8px 8px 0 0',
+                            transition: 'all 0.3s',
+                            position: 'relative'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (bucket.data.count > 0) {
+                              e.target.style.filter = 'brightness(1.1)';
+                              e.target.style.transform = 'scaleY(1.05)';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.filter = 'brightness(1)';
+                            e.target.style.transform = 'scaleY(1)';
+                          }}
+                          title={`${bucket.label}: $${bucket.data.amount.toFixed(2)} (${bucket.data.count} invoice${bucket.data.count !== 1 ? 's' : ''})`}
+                          ></div>
+                        </div>
+                        <div style={{textAlign: 'center'}}>
+                          <div style={{fontSize: '0.75rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.25rem'}}>
+                            {bucket.label}
+                          </div>
+                          <div style={{fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.5rem'}}>
+                            {bucket.sublabel}
+                          </div>
+                          <div style={{fontSize: '1rem', fontWeight: '700', color: bucket.color}}>
+                            ${bucket.data.amount.toFixed(0)}
+                          </div>
+                          <div style={{fontSize: '0.7rem', color: 'var(--text-muted)'}}>
+                            {bucket.data.count} invoice{bucket.data.count !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {totalOutstanding > 0 && (
+                    <div style={{
+                      marginTop: '1.5rem',
+                      padding: '1rem',
+                      background: totalOutstanding > 500 ? '#fef2f2' : '#f0fdf4',
+                      borderRadius: '8px',
+                      borderLeft: `4px solid ${totalOutstanding > 500 ? '#ef4444' : '#22c55e'}`
+                    }}>
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                        <span style={{fontWeight: '600', color: 'var(--text)'}}>Total Outstanding:</span>
+                        <span style={{fontSize: '1.5rem', fontWeight: '700', color: totalOutstanding > 500 ? '#ef4444' : '#22c55e'}}>
+                          ${totalOutstanding.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem'}}>
                 {/* Top Customers */}
                 <div className="card">
                   <h3 style={{fontSize: '1.25rem', marginBottom: '1.5rem', color: 'var(--primary)'}}>
-                    👥 Top 5 Customers
+                    👥 Top 5 Customers <span style={{fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'normal'}}>(click to view)</span>
                   </h3>
                   {topCustomers.length > 0 ? (
                     <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
-                      {topCustomers.map(([name, total], i) => (
-                        <div key={i} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f9fafb', borderRadius: '8px'}}>
-                          <div>
-                            <div style={{fontWeight: '600'}}>{name}</div>
-                            <div style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>Rank #{i + 1}</div>
+                      {topCustomers.map(([name, total], i) => {
+                        const customerInvoices = filteredInvoices.filter(inv => inv.customerName === name && inv.status === 'paid');
+                        return (
+                          <div 
+                            key={i} 
+                            style={{
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center', 
+                              padding: '0.75rem', 
+                              background: '#f9fafb', 
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#dcfce7';
+                              e.currentTarget.style.transform = 'translateX(4px)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = '#f9fafb';
+                              e.currentTarget.style.transform = 'translateX(0)';
+                            }}
+                            onClick={() => {
+                              setDetailView({
+                                type: 'customer',
+                                data: {
+                                  name,
+                                  invoices: customerInvoices,
+                                  total
+                                }
+                              });
+                            }}
+                          >
+                            <div>
+                              <div style={{fontWeight: '600'}}>{name}</div>
+                              <div style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>Rank #{i + 1} • {customerInvoices.length} invoice{customerInvoices.length !== 1 ? 's' : ''}</div>
+                            </div>
+                            <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#16a34a'}}>
+                              ${total.toFixed(2)}
+                            </div>
                           </div>
-                          <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#16a34a'}}>
-                            ${total.toFixed(2)}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p style={{color: 'var(--text-muted)', textAlign: 'center', padding: '2rem'}}>
@@ -1612,21 +1928,58 @@
                 {/* Top Services */}
                 <div className="card">
                   <h3 style={{fontSize: '1.25rem', marginBottom: '1.5rem', color: 'var(--primary)'}}>
-                    🔧 Top 5 Services
+                    🔧 Top 5 Services <span style={{fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'normal'}}>(click to view)</span>
                   </h3>
                   {topServices.length > 0 ? (
                     <div style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
-                      {topServices.map(([service, revenue], i) => (
-                        <div key={i} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f9fafb', borderRadius: '8px'}}>
-                          <div style={{flex: 1}}>
-                            <div style={{fontWeight: '600', fontSize: '0.9rem'}}>{service}</div>
-                            <div style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>Rank #{i + 1}</div>
+                      {topServices.map(([service, revenue], i) => {
+                        const serviceInvoices = filteredInvoices.filter(inv => 
+                          inv.status === 'paid' && 
+                          inv.items && 
+                          inv.items.some(item => item.description === service)
+                        );
+                        return (
+                          <div 
+                            key={i} 
+                            style={{
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center', 
+                              padding: '0.75rem', 
+                              background: '#f9fafb', 
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#dcfce7';
+                              e.currentTarget.style.transform = 'translateX(4px)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = '#f9fafb';
+                              e.currentTarget.style.transform = 'translateX(0)';
+                            }}
+                            onClick={() => {
+                              setDetailView({
+                                type: 'service',
+                                data: {
+                                  service,
+                                  invoices: serviceInvoices,
+                                  total: revenue
+                                }
+                              });
+                            }}
+                          >
+                            <div style={{flex: 1}}>
+                              <div style={{fontWeight: '600', fontSize: '0.9rem'}}>{service}</div>
+                              <div style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>Rank #{i + 1} • {serviceInvoices.length} invoice{serviceInvoices.length !== 1 ? 's' : ''}</div>
+                            </div>
+                            <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#16a34a'}}>
+                              ${revenue.toFixed(2)}
+                            </div>
                           </div>
-                          <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#16a34a'}}>
-                            ${revenue.toFixed(2)}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p style={{color: 'var(--text-muted)', textAlign: 'center', padding: '2rem'}}>
@@ -1636,6 +1989,86 @@
                 </div>
               </div>
             </>
+          )}
+
+          {/* Detail Modal */}
+          {detailView && (
+            <div className="modal-overlay" onClick={() => setDetailView(null)}>
+              <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth: '800px'}}>
+                <div className="modal-header">
+                  <h2>
+                    {detailView.type === 'month' && `📅 ${detailView.data.month} Invoices`}
+                    {detailView.type === 'status' && `${detailView.data.status === 'paid' ? '✅' : '⏳'} ${detailView.data.status === 'paid' ? 'Paid' : 'Unpaid'} Invoices`}
+                    {detailView.type === 'customer' && `👤 ${detailView.data.name}`}
+                    {detailView.type === 'service' && `🔧 ${detailView.data.service}`}
+                  </h2>
+                  <button className="close-btn" onClick={() => setDetailView(null)}>×</button>
+                </div>
+
+                <div style={{padding: '1.5rem'}}>
+                  {detailView.data.invoices.length === 0 ? (
+                    <p style={{color: 'var(--text-muted)', textAlign: 'center', padding: '2rem'}}>
+                      No invoices found
+                    </p>
+                  ) : (
+                    <>
+                      <div style={{marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--text-muted)'}}>
+                        {detailView.data.invoices.length} invoice{detailView.data.invoices.length !== 1 ? 's' : ''} • 
+                        Total: <strong style={{color: 'var(--primary)'}}>${detailView.data.total.toFixed(2)}</strong>
+                      </div>
+                      <div style={{maxHeight: '400px', overflowY: 'auto'}}>
+                        {detailView.data.invoices.map(inv => (
+                          <div key={inv.id} style={{
+                            padding: '1rem',
+                            marginBottom: '0.75rem',
+                            background: '#f9fafb',
+                            borderRadius: '8px',
+                            border: '1px solid #e5e7eb'
+                          }}>
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem'}}>
+                              <div>
+                                <div style={{fontWeight: '600', fontSize: '1rem'}}>{inv.invoiceNumber}</div>
+                                <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>{inv.customerName}</div>
+                              </div>
+                              <div style={{textAlign: 'right'}}>
+                                <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#16a34a'}}>
+                                  ${inv.total?.toFixed(2)}
+                                </div>
+                                <span className={`badge badge-${inv.status === 'paid' ? 'success' : 'warning'}`}>
+                                  {inv.status}
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>
+                              {inv.createdAt?.toDate().toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}
+                              {inv.paidAt && inv.status === 'paid' && (
+                                <> • Paid: {inv.paidAt.toDate().toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}</>
+                              )}
+                            </div>
+                            {inv.items && inv.items.length > 0 && (
+                              <div style={{marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e5e7eb'}}>
+                                {inv.items.map((item, idx) => (
+                                  <div key={idx} style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
+                                    • {item.description} - ${parseFloat(item.amount || 0).toFixed(2)}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       );
