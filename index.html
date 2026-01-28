@@ -1666,6 +1666,26 @@
                 <span className="logo-icon">🐴</span>
                 <span>{farrierInfo.businessName}</span>
               </div>
+              <a 
+                href={window.location.origin + '/customer-portal.html'}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: 'var(--primary)',
+                  color: 'white',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontSize: '0.9rem',
+                  fontWeight: '500',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => e.target.style.background = 'var(--primary-dark)'}
+                onMouseOut={(e) => e.target.style.background = 'var(--primary)'}
+              >
+                💳 Pay Invoices
+              </a>
             </div>
           </header>
 
