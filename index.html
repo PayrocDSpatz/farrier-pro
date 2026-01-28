@@ -2951,17 +2951,26 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             // Generate sequential 5-digit invoice number
             let invoiceNumber;
             
-            // Get the last invoice number used
-            const lastInvoiceQuery = await db.collection('invoices')
+            // Get all invoices for this farrier to find the highest number
+            const allInvoicesQuery = await db.collection('invoices')
               .where('farrierId', '==', userId)
-              .orderBy('createdAt', 'desc')
-              .limit(1)
               .get();
             
-            if (!lastInvoiceQuery.empty) {
-              const lastInvoice = lastInvoiceQuery.docs[0].data();
-              const lastNumber = parseInt(lastInvoice.invoiceNumber.replace('INV-', ''));
-              const nextNumber = lastNumber + 1;
+            if (!allInvoicesQuery.empty) {
+              // Find the highest invoice number
+              let highestNumber = 9999; // Start below 10000
+              
+              allInvoicesQuery.docs.forEach(doc => {
+                const data = doc.data();
+                if (data.invoiceNumber && data.invoiceNumber.startsWith('INV-')) {
+                  const num = parseInt(data.invoiceNumber.replace('INV-', ''));
+                  if (!isNaN(num) && num > highestNumber) {
+                    highestNumber = num;
+                  }
+                }
+              });
+              
+              const nextNumber = highestNumber + 1;
               invoiceNumber = `INV-${nextNumber}`;
             } else {
               // First invoice - start at 10000
