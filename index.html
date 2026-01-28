@@ -2957,14 +2957,15 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               .get();
             
             if (!allInvoicesQuery.empty) {
-              // Find the highest invoice number
+              // Find the highest 5-digit invoice number (ignore old 13-digit ones)
               let highestNumber = 9999; // Start below 10000
               
               allInvoicesQuery.docs.forEach(doc => {
                 const data = doc.data();
                 if (data.invoiceNumber && data.invoiceNumber.startsWith('INV-')) {
                   const num = parseInt(data.invoiceNumber.replace('INV-', ''));
-                  if (!isNaN(num) && num > highestNumber) {
+                  // Only count 5-digit numbers (10000-99999)
+                  if (!isNaN(num) && num >= 10000 && num <= 99999 && num > highestNumber) {
                     highestNumber = num;
                   }
                 }
