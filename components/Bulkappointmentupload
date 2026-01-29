@@ -1,0 +1,546 @@
+import React, { useState } from 'react';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase-config'; // Adjust path to your Firebase config
+
+// Your appointment data
+const DEMO_APPOINTMENTS = [
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-01-30",
+    "requestedTime": "11:00:00",
+    "numberOfHorses": 2,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Shoeing - Front Only",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-01-31",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 1,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Trim",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-03",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 5,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Therapeutic Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-02",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 4,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Corrective Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-03",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 3,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Corrective Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-04",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 2,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Corrective Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-05",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 1,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Shoeing - Front Only",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-06",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 5,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Cold Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-07",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 4,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Barefoot Trim",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-08",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 3,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Trim",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-09",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 2,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Corrective Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-10",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 1,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Barefoot Trim",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-11",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 5,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Cold Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-12",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 4,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Shoeing - Front Only",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-13",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 3,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Reset Shoes",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-14",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 2,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Trim",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-15",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 1,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Corrective Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-16",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 5,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Cold Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-17",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 4,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Shoeing - All Four",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-18",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 3,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Barefoot Trim",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-19",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 2,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Hot Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-20",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 1,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Trim",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-21",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 5,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Reset Shoes",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-22",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 4,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Cold Shoeing",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-23",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 3,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Shoeing - Front Only",
+    "comments": ""
+  },
+  {
+    "customerName": "David Jones",
+    "email": "davidjones123@gmail.com",
+    "phone": "8005551212",
+    "address": "123 Main Street",
+    "city": "Miami",
+    "state": "FL",
+    "zip": "33414",
+    "requestedDate": "2026-02-24",
+    "requestedTime": "09:00:00",
+    "numberOfHorses": 2,
+    "farrierId": "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+    "status": "Pending",
+    "services": "Corrective Shoeing",
+    "comments": ""
+  }
+];
+
+const BulkAppointmentUpload = () => {
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [completed, setCompleted] = useState(false);
+  const [error, setError] = useState(null);
+
+  const uploadAppointments = async () => {
+    setUploading(true);
+    setError(null);
+    setProgress(0);
+    
+    try {
+      const total = DEMO_APPOINTMENTS.length;
+      
+      for (let i = 0; i < total; i++) {
+        const appointment = DEMO_APPOINTMENTS[i];
+        
+        // Add to Firestore
+        await addDoc(collection(db, 'appointments'), {
+          ...appointment,
+          numberOfHorses: parseInt(appointment.numberOfHorses),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        // Update progress
+        setProgress(Math.round(((i + 1) / total) * 100));
+        
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      setCompleted(true);
+      console.log(`Successfully uploaded ${total} appointments!`);
+      
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
+      <h2>Bulk Appointment Upload</h2>
+      <p>This will upload {DEMO_APPOINTMENTS.length} demo appointments to Firebase.</p>
+      
+      {!completed && (
+        <button
+          onClick={uploadAppointments}
+          disabled={uploading}
+          style={{
+            padding: '12px 24px',
+            fontSize: '16px',
+            backgroundColor: uploading ? '#ccc' : '#4CAF50',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: uploading ? 'not-allowed' : 'pointer',
+            marginTop: '20px'
+          }}
+        >
+          {uploading ? `Uploading... ${progress}%` : 'Upload Appointments'}
+        </button>
+      )}
+      
+      {uploading && (
+        <div style={{ marginTop: '20px' }}>
+          <div style={{
+            width: '100%',
+            backgroundColor: '#f0f0f0',
+            borderRadius: '4px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              width: `${progress}%`,
+              height: '30px',
+              backgroundColor: '#4CAF50',
+              transition: 'width 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontWeight: 'bold'
+            }}>
+              {progress}%
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {completed && (
+        <div style={{
+          marginTop: '20px',
+          padding: '15px',
+          backgroundColor: '#d4edda',
+          color: '#155724',
+          borderRadius: '4px',
+          border: '1px solid #c3e6cb'
+        }}>
+          ✅ Successfully uploaded {DEMO_APPOINTMENTS.length} appointments!
+        </div>
+      )}
+      
+      {error && (
+        <div style={{
+          marginTop: '20px',
+          padding: '15px',
+          backgroundColor: '#f8d7da',
+          color: '#721c24',
+          borderRadius: '4px',
+          border: '1px solid #f5c6cb'
+        }}>
+          ❌ Error: {error}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default BulkAppointmentUpload;
