@@ -2974,7 +2974,7 @@
 
               case 'all-confirmed':
                 query = db.collection('appointments')
-                  .where('status', '==', 'Confirmed')
+                  .where('status', '==', 'confirmed')
                   .where('farrierId', '==', userId);
                 break;
 
