@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Upload Appointments</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <div style="padding: 20px; max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
+        <h2>Bulk Appointment Upload</h2>
+        <p>This will upload 26 demo appointments to Firebase.</p>
+        
+        <button id="uploadBtn" style="
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        ">
+            Upload Appointments
+        </button>
+        
+        <div id="progress" style="margin-top: 20px; display: none;">
+            <div style="width: 100%; background-color: #f0f0f0; border-radius: 4px; overflow: hidden;">
+                <div id="progressBar" style="
+                    width: 0%;
+                    height: 30px;
+                    background-color: #4CAF50;
+                    transition: width 0.3s ease;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: bold;
+                ">0%</div>
+            </div>
+        </div>
+        
+        <div id="message" style="margin-top: 20px;"></div>
+    </div>
+
+    <script type="module">
+        // Copy your Firebase config from api/config.js or wherever you have it
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        const appointments = [
+            {
+                customerName: "David Jones",
+                email: "davidjones123@gmail.com",
+                phone: "8005551212",
+                address: "123 Main Street",
+                city: "Miami",
+                state: "FL",
+                zip: "33414",
+                requestedDate: "2026-01-30",
+                requestedTime: "11:00:00",
+                numberOfHorses: 2,
+                farrierId: "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+                status: "Pending",
+                services: "Shoeing - Front Only",
+                comments: ""
+            },
+            {
+                customerName: "David Jones",
+                email: "davidjones123@gmail.com",
+                phone: "8005551212",
+                address: "123 Main Street",
+                city: "Miami",
+                state: "FL",
+                zip: "33414",
+                requestedDate: "2026-01-31",
+                requestedTime: "09:00:00",
+                numberOfHorses: 1,
+                farrierId: "oRUPcVWxhJNm7urb3lyEq64ZnlE2",
+                status: "Pending",
+                services: "Trim",
+                comments: ""
+            },
+            {
+                cu
