@@ -2968,13 +2968,13 @@
             switch (filterType) {
               case 'all-pending':
                 query = db.collection('appointments')
-                  .where('status', '==', 'pending')
+                  .where('status', '==', 'Pending')
                   .where('farrierId', '==', userId);
                 break;
 
               case 'all-confirmed':
                 query = db.collection('appointments')
-                  .where('status', '==', 'confirmed')
+                  .where('status', '==', 'Confirmed')
                   .where('farrierId', '==', userId);
                 break;
 
@@ -2983,7 +2983,7 @@
               case 'confirmed-this-month':
               case 'confirmed-next-month':
                 query = db.collection('appointments')
-                  .where('status', '==', 'confirmed')
+                  .where('status', '==', 'Confirmed')
                   .where('farrierId', '==', userId);
                 break;
 
