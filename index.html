@@ -2983,7 +2983,7 @@
               case 'confirmed-this-month':
               case 'confirmed-next-month':
                 query = db.collection('appointments')
-                  .where('status', '==', 'Confirmed')
+                  .where('status', '==', 'confirmed')
                   .where('farrierId', '==', userId);
                 break;
 
