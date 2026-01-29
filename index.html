@@ -2911,31 +2911,118 @@
       );
     }
 
+ // REPLACE your existing AppointmentsView function with this entire code block
+// Find "function AppointmentsView({ userId, userProfile }) {" in your index.html
+// Replace everything from that line until its closing "}" with this code:
+
     function AppointmentsView({ userId, userProfile }) {
       const [appointments, setAppointments] = useState([]);
       const [loading, setLoading] = useState(true);
+      const [activeFilter, setActiveFilter] = useState('all-pending');
 
       useEffect(() => {
-        loadAppointments();
+        loadAppointments('all-pending');
       }, []);
 
-      const loadAppointments = async () => {
+      const getDateRanges = () => {
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        const startOfNextWeek = new Date(endOfWeek);
+        startOfNextWeek.setDate(endOfWeek.getDate() + 1);
+        startOfNextWeek.setHours(0, 0, 0, 0);
+
+        const endOfNextWeek = new Date(startOfNextWeek);
+        endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
+        endOfNextWeek.setHours(23, 59, 59, 999);
+
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+        const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999);
+
+        return {
+          thisWeek: { start: startOfWeek, end: endOfWeek },
+          nextWeek: { start: startOfNextWeek, end: endOfNextWeek },
+          thisMonth: { start: startOfMonth, end: endOfMonth },
+          nextMonth: { start: startOfNextMonth, end: endOfNextMonth }
+        };
+      };
+
+      const loadAppointments = async (filterType) => {
+        setLoading(true);
+        setActiveFilter(filterType);
+        
         if (db) {
           try {
-            const snapshot = await db.collection('appointments')
-              .where('farrierId', '==', userId)
-              .get();
-            
-            const appointmentData = snapshot.docs.map(doc => ({
+            const ranges = getDateRanges();
+            let query;
+
+            switch (filterType) {
+              case 'all-pending':
+                query = db.collection('appointments')
+                  .where('status', '==', 'pending')
+                  .where('farrierId', '==', userId);
+                break;
+
+              case 'all-confirmed':
+                query = db.collection('appointments')
+                  .where('status', '==', 'confirmed')
+                  .where('farrierId', '==', userId);
+                break;
+
+              case 'confirmed-this-week':
+              case 'confirmed-next-week':
+              case 'confirmed-this-month':
+              case 'confirmed-next-month':
+                query = db.collection('appointments')
+                  .where('status', '==', 'confirmed')
+                  .where('farrierId', '==', userId);
+                break;
+
+              default:
+                query = db.collection('appointments')
+                  .where('farrierId', '==', userId);
+            }
+
+            const snapshot = await query.get();
+            let appointmentData = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
+
+            // Client-side date filtering for week/month ranges
+            if (filterType.includes('week') || filterType.includes('month')) {
+              appointmentData = appointmentData.filter(apt => {
+                const aptDate = new Date(apt.requestedDate);
+
+                switch (filterType) {
+                  case 'confirmed-this-week':
+                    return aptDate >= ranges.thisWeek.start && aptDate <= ranges.thisWeek.end;
+                  case 'confirmed-next-week':
+                    return aptDate >= ranges.nextWeek.start && aptDate <= ranges.nextWeek.end;
+                  case 'confirmed-this-month':
+                    return aptDate >= ranges.thisMonth.start && aptDate <= ranges.thisMonth.end;
+                  case 'confirmed-next-month':
+                    return aptDate >= ranges.nextMonth.start && aptDate <= ranges.nextMonth.end;
+                  default:
+                    return true;
+                }
+              });
+            }
             
-            // Sort in JavaScript instead of Firestore
+            // Sort by date
             appointmentData.sort((a, b) => {
               const dateA = new Date(a.requestedDate);
               const dateB = new Date(b.requestedDate);
-              return dateB - dateA; // Newest first
+              return dateA - dateB; // Oldest first for upcoming appointments
             });
             
             setAppointments(appointmentData);
@@ -3141,7 +3228,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             }
           }
           
-          loadAppointments();
+          loadAppointments(activeFilter);
         }
       };
 
@@ -3149,6 +3236,15 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         const message = `Hi ${appointment.customerName}! Reminder: Your farrier appointment is on ${appointment.requestedDate} at ${appointment.requestedTime}. ${appointment.address ? 'Location: ' + appointment.address : ''}`;
         alert(`SMS would be sent to ${appointment.phone}:\n\n${message}`);
       };
+
+      const filters = [
+        { id: 'all-pending', label: 'All Pending' },
+        { id: 'all-confirmed', label: 'All Confirmed' },
+        { id: 'confirmed-this-week', label: 'Confirmed This Week' },
+        { id: 'confirmed-next-week', label: 'Confirmed Next Week' },
+        { id: 'confirmed-this-month', label: 'Confirmed This Month' },
+        { id: 'confirmed-next-month', label: 'Confirmed Next Month' }
+      ];
 
       if (loading) {
         return (
@@ -3162,11 +3258,54 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         <div>
           <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Appointments</h1>
           
+          {/* Filter Buttons */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '10px',
+            marginBottom: '20px',
+            padding: '15px',
+            backgroundColor: '#f5f5f5',
+            borderRadius: '8px'
+          }}>
+            {filters.map(filter => (
+              <button
+                key={filter.id}
+                onClick={() => loadAppointments(filter.id)}
+                disabled={loading}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  fontWeight: activeFilter === filter.id ? 'bold' : 'normal',
+                  backgroundColor: activeFilter === filter.id ? '#4CAF50' : 'white',
+                  color: activeFilter === filter.id ? 'white' : '#333',
+                  border: '2px solid #4CAF50',
+                  borderRadius: '6px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease',
+                  opacity: loading ? 0.6 : 1
+                }}
+                onMouseEnter={(e) => {
+                  if (activeFilter !== filter.id && !loading) {
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = 'none';
+                }}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+          
           {appointments.length === 0 ? (
             <div className="card">
-              <h2>No Appointments Yet</h2>
+              <h2>No Appointments Found</h2>
               <p style={{color: 'var(--text-muted)'}}>
-                Appointments booked through your QR code will appear here. Share your QR code to start receiving bookings!
+                No appointments match the selected filter. Try selecting a different filter above.
               </p>
             </div>
           ) : (
