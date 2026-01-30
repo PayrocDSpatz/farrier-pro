@@ -2871,13 +2871,21 @@
               counts[date] = { confirmed: 0, pending: 0, total: 0 };
             }
             counts[date].total++;
-            if (apt.status === 'confirmed') {
+            
+            // Handle status - if not set or 'pending', treat as pending
+            const status = apt.status || 'pending';
+            
+            if (status === 'confirmed') {
               counts[date].confirmed++;
-            } else if (apt.status === 'pending') {
+            } else {
+              // Treat everything else (pending, undefined, null) as pending
               counts[date].pending++;
             }
+            
+            console.log(`📅 Date: ${date}, Status: ${status}, Counts:`, counts[date]);
           }
         });
+        console.log('📊 Final appointment counts:', counts);
         return counts;
       };
 
