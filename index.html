@@ -2916,6 +2916,7 @@
       const [loading, setLoading] = useState(true);
       const [showInvoiceModal, setShowInvoiceModal] = useState(false);
       const [selectedAppointment, setSelectedAppointment] = useState(null);
+      const [sortOrder, setSortOrder] = useState('newest'); // 'newest' or 'oldest'
 
       useEffect(() => {
         loadAppointments();
@@ -2933,13 +2934,6 @@
               ...doc.data()
             }));
             
-            // Sort in JavaScript instead of Firestore
-            appointmentData.sort((a, b) => {
-              const dateA = new Date(a.requestedDate);
-              const dateB = new Date(b.requestedDate);
-              return dateB - dateA; // Newest first
-            });
-            
             setAppointments(appointmentData);
             console.log('✅ Loaded appointments:', appointmentData.length);
           } catch (error) {
@@ -2948,6 +2942,18 @@
         }
         setLoading(false);
       };
+
+      // Get sorted appointments based on sortOrder
+      const getSortedAppointments = () => {
+        return [...appointments].sort((a, b) => {
+          if (!a.createdAt || !b.createdAt) return 0;
+          const dateA = a.createdAt.toDate();
+          const dateB = b.createdAt.toDate();
+          return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+        });
+      };
+
+      const sortedAppointments = getSortedAppointments();
 
       const createCalendarEvent = async (appointment, userProfile) => {
         console.log('=== CREATE CALENDAR EVENT START ===');
@@ -3153,6 +3159,10 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       };
 
       const handleCreateInvoiceFromAppointment = (appointment) => {
+        console.log('🎯 Creating invoice from appointment:', appointment);
+        console.log('Customer Name:', appointment.customerName);
+        console.log('Customer Email:', appointment.email);
+        console.log('Customer Phone:', appointment.phone);
         setSelectedAppointment(appointment);
         setShowInvoiceModal(true);
       };
@@ -3185,7 +3195,18 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
       return (
         <div>
-          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Appointments</h1>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem'}}>
+            <h1 style={{marginBottom: 0, fontSize: '2rem', color: 'var(--primary)'}}>Appointments</h1>
+            {appointments.length > 0 && (
+              <button
+                onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
+                className="btn btn-sm btn-outline"
+                style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}
+              >
+                {sortOrder === 'newest' ? '📅 Newest First' : '📅 Oldest First'}
+              </button>
+            )}
+          </div>
           
           {appointments.length === 0 ? (
             <div className="card">
@@ -3198,7 +3219,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             <div className="card">
               <h2>Your Appointments ({appointments.length})</h2>
               <div className="appointments-list">
-                {appointments.map(apt => (
+                {sortedAppointments.map(apt => (
                   <div key={apt.id} className="appointment-item">
                     <div className="appointment-info">
                       <div className="appointment-customer">{apt.customerName}</div>
@@ -3278,9 +3299,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               }}
               onCreated={handleInvoiceCreated}
               prefillData={{
-                customerName: selectedAppointment.customerName,
-                customerEmail: selectedAppointment.email,
-                customerPhone: selectedAppointment.phone
+                customerName: selectedAppointment.customerName || '',
+                customerEmail: selectedAppointment.email || '',
+                customerPhone: selectedAppointment.phone || ''
               }}
             />
           )}
@@ -4040,6 +4061,16 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [phoneSearching, setPhoneSearching] = useState(false);
       const [selectedCustomerInfo, setSelectedCustomerInfo] = useState(null);
 
+      // Handle prefill data
+      useEffect(() => {
+        if (prefillData) {
+          console.log('📝 Prefilling invoice with data:', prefillData);
+          if (prefillData.customerName) setCustomerName(prefillData.customerName);
+          if (prefillData.customerEmail) setCustomerEmail(prefillData.customerEmail);
+          if (prefillData.customerPhone) setCustomerPhone(prefillData.customerPhone);
+        }
+      }, [prefillData]);
+
       // Load existing customers
       useEffect(() => {
         loadCustomers();
@@ -4315,40 +4346,59 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
             {error && <div className="error-message">{error}</div>}
 
-            <div className="form-group">
-              <label>Select Existing Customer (Optional)</label>
-              {loadingCustomers ? (
-                <div style={{padding: '0.75rem', color: 'var(--text-muted)'}}>Loading customers...</div>
-              ) : (
-                <select
-                  onChange={(e) => {
-                    const customer = customers.find(c => c.email === e.target.value);
-                    if (customer) {
-                      selectCustomer(customer);
-                    } else {
-                      selectCustomer(null);
-                    }
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '2px solid var(--border)',
-                    borderRadius: '8px',
-                    fontSize: '1rem'
-                  }}
-                >
-                  <option value="">-- Select Customer or Enter New Below --</option>
-                  {customers.map((customer, i) => (
-                    <option key={i} value={customer.email}>
-                      {customer.name} - {customer.email}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
-                Or search by phone number below
+            {prefillData && (
+              <div style={{
+                marginBottom: '1.5rem',
+                padding: '1rem',
+                background: '#f0f9ff',
+                border: '2px solid #0ea5e9',
+                borderRadius: '8px'
+              }}>
+                <div style={{fontSize: '0.875rem', fontWeight: '600', color: '#0369a1', marginBottom: '0.5rem'}}>
+                  📋 Invoice from Appointment
+                </div>
+                <div style={{fontSize: '0.875rem', color: '#0369a1'}}>
+                  Customer info pre-filled from appointment booking
+                </div>
               </div>
-            </div>
+            )}
+
+            {!prefillData && (
+              <div className="form-group">
+                <label>Select Existing Customer (Optional)</label>
+                {loadingCustomers ? (
+                  <div style={{padding: '0.75rem', color: 'var(--text-muted)'}}>Loading customers...</div>
+                ) : (
+                  <select
+                    onChange={(e) => {
+                      const customer = customers.find(c => c.email === e.target.value);
+                      if (customer) {
+                        selectCustomer(customer);
+                      } else {
+                        selectCustomer(null);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '2px solid var(--border)',
+                      borderRadius: '8px',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    <option value="">-- Select Customer or Enter New Below --</option>
+                    {customers.map((customer, i) => (
+                      <option key={i} value={customer.email}>
+                        {customer.name} - {customer.email}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
+                  Or search by phone number below
+                </div>
+              </div>
+            )}
 
             {selectedCustomerInfo && (
               <div style={{
