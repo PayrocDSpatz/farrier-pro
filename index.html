@@ -3268,24 +3268,23 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               </div>
             </div>
           )}
-        </div>
 
-        {showInvoiceModal && selectedAppointment && (
-          <InvoiceCreateModal 
-            userId={userId}
-            onClose={() => {
-              setShowInvoiceModal(false);
-              setSelectedAppointment(null);
-            }}
-            onCreated={handleInvoiceCreated}
-            prefillData={{
-              customerName: selectedAppointment.customerName,
-              customerEmail: selectedAppointment.email,
-              customerPhone: selectedAppointment.phone
-            }}
-          />
-        )}
-      </div>
+          {showInvoiceModal && selectedAppointment && (
+            <InvoiceCreateModal 
+              userId={userId}
+              onClose={() => {
+                setShowInvoiceModal(false);
+                setSelectedAppointment(null);
+              }}
+              onCreated={handleInvoiceCreated}
+              prefillData={{
+                customerName: selectedAppointment.customerName,
+                customerEmail: selectedAppointment.email,
+                customerPhone: selectedAppointment.phone
+              }}
+            />
+          )}
+        </div>
       );
     }
 
