@@ -2911,118 +2911,33 @@
       );
     }
 
- // REPLACE your existing AppointmentsView function with this entire code block
-// Find "function AppointmentsView({ userId, userProfile }) {" in your index.html
-// Replace everything from that line until its closing "}" with this code:
-
     function AppointmentsView({ userId, userProfile }) {
       const [appointments, setAppointments] = useState([]);
       const [loading, setLoading] = useState(true);
-      const [activeFilter, setActiveFilter] = useState('all-pending');
+      const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+      const [selectedAppointment, setSelectedAppointment] = useState(null);
 
       useEffect(() => {
-        loadAppointments('all-pending');
+        loadAppointments();
       }, []);
 
-      const getDateRanges = () => {
-        const now = new Date();
-        const startOfWeek = new Date(now);
-        startOfWeek.setDate(now.getDate() - now.getDay());
-        startOfWeek.setHours(0, 0, 0, 0);
-
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
-
-        const startOfNextWeek = new Date(endOfWeek);
-        startOfNextWeek.setDate(endOfWeek.getDate() + 1);
-        startOfNextWeek.setHours(0, 0, 0, 0);
-
-        const endOfNextWeek = new Date(startOfNextWeek);
-        endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
-        endOfNextWeek.setHours(23, 59, 59, 999);
-
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
-        const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999);
-
-        return {
-          thisWeek: { start: startOfWeek, end: endOfWeek },
-          nextWeek: { start: startOfNextWeek, end: endOfNextWeek },
-          thisMonth: { start: startOfMonth, end: endOfMonth },
-          nextMonth: { start: startOfNextMonth, end: endOfNextMonth }
-        };
-      };
-
-      const loadAppointments = async (filterType) => {
-        setLoading(true);
-        setActiveFilter(filterType);
-        
+      const loadAppointments = async () => {
         if (db) {
           try {
-            const ranges = getDateRanges();
-            let query;
-
-            switch (filterType) {
-              case 'all-pending':
-                query = db.collection('appointments')
-                  .where('status', '==', 'Pending')
-                  .where('farrierId', '==', userId);
-                break;
-
-              case 'all-confirmed':
-                query = db.collection('appointments')
-                  .where('status', '==', 'confirmed')
-                  .where('farrierId', '==', userId);
-                break;
-
-              case 'confirmed-this-week':
-              case 'confirmed-next-week':
-              case 'confirmed-this-month':
-              case 'confirmed-next-month':
-                query = db.collection('appointments')
-                  .where('status', '==', 'confirmed')
-                  .where('farrierId', '==', userId);
-                break;
-
-              default:
-                query = db.collection('appointments')
-                  .where('farrierId', '==', userId);
-            }
-
-            const snapshot = await query.get();
-            let appointmentData = snapshot.docs.map(doc => ({
+            const snapshot = await db.collection('appointments')
+              .where('farrierId', '==', userId)
+              .get();
+            
+            const appointmentData = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
-
-            // Client-side date filtering for week/month ranges
-            if (filterType.includes('week') || filterType.includes('month')) {
-              appointmentData = appointmentData.filter(apt => {
-                const aptDate = new Date(apt.requestedDate);
-
-                switch (filterType) {
-                  case 'confirmed-this-week':
-                    return aptDate >= ranges.thisWeek.start && aptDate <= ranges.thisWeek.end;
-                  case 'confirmed-next-week':
-                    return aptDate >= ranges.nextWeek.start && aptDate <= ranges.nextWeek.end;
-                  case 'confirmed-this-month':
-                    return aptDate >= ranges.thisMonth.start && aptDate <= ranges.thisMonth.end;
-                  case 'confirmed-next-month':
-                    return aptDate >= ranges.nextMonth.start && aptDate <= ranges.nextMonth.end;
-                  default:
-                    return true;
-                }
-              });
-            }
             
-            // Sort by date
+            // Sort in JavaScript instead of Firestore
             appointmentData.sort((a, b) => {
               const dateA = new Date(a.requestedDate);
               const dateB = new Date(b.requestedDate);
-              return dateA - dateB; // Oldest first for upcoming appointments
+              return dateB - dateA; // Newest first
             });
             
             setAppointments(appointmentData);
@@ -3228,7 +3143,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             }
           }
           
-          loadAppointments(activeFilter);
+          loadAppointments();
         }
       };
 
@@ -3237,14 +3152,28 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         alert(`SMS would be sent to ${appointment.phone}:\n\n${message}`);
       };
 
-      const filters = [
-        { id: 'all-pending', label: 'All Pending' },
-        { id: 'all-confirmed', label: 'All Confirmed' },
-        { id: 'confirmed-this-week', label: 'Confirmed This Week' },
-        { id: 'confirmed-next-week', label: 'Confirmed Next Week' },
-        { id: 'confirmed-this-month', label: 'Confirmed This Month' },
-        { id: 'confirmed-next-month', label: 'Confirmed Next Month' }
-      ];
+      const handleCreateInvoiceFromAppointment = (appointment) => {
+        setSelectedAppointment(appointment);
+        setShowInvoiceModal(true);
+      };
+
+      const handleInvoiceCreated = async () => {
+        // Mark appointment as invoiced
+        if (selectedAppointment && db) {
+          try {
+            await db.collection('appointments').doc(selectedAppointment.id).update({
+              invoiced: true,
+              invoicedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            console.log('✅ Appointment marked as invoiced');
+            loadAppointments();
+          } catch (error) {
+            console.error('Error marking appointment as invoiced:', error);
+          }
+        }
+        setShowInvoiceModal(false);
+        setSelectedAppointment(null);
+      };
 
       if (loading) {
         return (
@@ -3258,54 +3187,11 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         <div>
           <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Appointments</h1>
           
-          {/* Filter Buttons */}
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '10px',
-            marginBottom: '20px',
-            padding: '15px',
-            backgroundColor: '#f5f5f5',
-            borderRadius: '8px'
-          }}>
-            {filters.map(filter => (
-              <button
-                key={filter.id}
-                onClick={() => loadAppointments(filter.id)}
-                disabled={loading}
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  fontWeight: activeFilter === filter.id ? 'bold' : 'normal',
-                  backgroundColor: activeFilter === filter.id ? '#4CAF50' : 'white',
-                  color: activeFilter === filter.id ? 'white' : '#333',
-                  border: '2px solid #4CAF50',
-                  borderRadius: '6px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.3s ease',
-                  opacity: loading ? 0.6 : 1
-                }}
-                onMouseEnter={(e) => {
-                  if (activeFilter !== filter.id && !loading) {
-                    e.target.style.transform = 'translateY(-2px)';
-                    e.target.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow = 'none';
-                }}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
-          
           {appointments.length === 0 ? (
             <div className="card">
-              <h2>No Appointments Found</h2>
+              <h2>No Appointments Yet</h2>
               <p style={{color: 'var(--text-muted)'}}>
-                No appointments match the selected filter. Try selecting a different filter above.
+                Appointments booked through your QR code will appear here. Share your QR code to start receiving bookings!
               </p>
             </div>
           ) : (
@@ -3340,12 +3226,26 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       <span className={`badge badge-${apt.status === 'confirmed' ? 'success' : apt.status === 'pending' ? 'warning' : 'pending'}`}>
                         {apt.status || 'pending'}
                       </span>
+                      {apt.invoiced && (
+                        <span className="badge" style={{background: '#dcfce7', color: '#166534'}}>
+                          ✓ Invoiced
+                        </span>
+                      )}
                       {apt.status !== 'confirmed' && (
                         <button 
                           className="btn btn-sm btn-success"
                           onClick={() => updateStatus(apt.id, 'confirmed')}
                         >
                           ✓ Confirm
+                        </button>
+                      )}
+                      {!apt.invoiced && (
+                        <button 
+                          className="btn btn-sm"
+                          style={{background: '#2563eb', color: 'white'}}
+                          onClick={() => handleCreateInvoiceFromAppointment(apt)}
+                        >
+                          💰 Create Invoice
                         </button>
                       )}
                       <button 
@@ -3369,6 +3269,23 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             </div>
           )}
         </div>
+
+        {showInvoiceModal && selectedAppointment && (
+          <InvoiceCreateModal 
+            userId={userId}
+            onClose={() => {
+              setShowInvoiceModal(false);
+              setSelectedAppointment(null);
+            }}
+            onCreated={handleInvoiceCreated}
+            prefillData={{
+              customerName: selectedAppointment.customerName,
+              customerEmail: selectedAppointment.email,
+              customerPhone: selectedAppointment.phone
+            }}
+          />
+        )}
+      </div>
       );
     }
 
@@ -3380,7 +3297,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [loading, setLoading] = useState(false);
       const [showCancelModal, setShowCancelModal] = useState(false);
       const [cancelPassword, setCancelPassword] = useState('');
-      const [invoiceFilter, setInvoiceFilter] = useState('all'); // all, thisMonth, lastMonth, lastQuarter, ytd, paidOnly, openOnly, cancelledOnly
+      const [invoiceFilter, setInvoiceFilter] = useState('all'); // all, thisMonth, lastMonth, lastQuarter, ytd, paidOnly, openOnly, cancelledOnly, customRange
+      const [customStartDate, setCustomStartDate] = useState('');
+      const [customEndDate, setCustomEndDate] = useState('');
 
       useEffect(() => {
         loadInvoices();
@@ -3446,6 +3365,67 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         }
       };
 
+      // Export to Excel
+      const exportToExcel = () => {
+        const exportData = filteredInvoices.map(invoice => ({
+          'Invoice Number': invoice.invoiceNumber || '',
+          'Date': invoice.createdAt ? invoice.createdAt.toDate().toLocaleDateString('en-US') : '',
+          'Customer': invoice.customerName || '',
+          'Status': invoice.status || '',
+          'Amount': invoice.total || 0,
+          'Paid Date': invoice.paidAt ? invoice.paidAt.toDate().toLocaleDateString('en-US') : '',
+          'Payment Method': invoice.cardLast4 ? `${invoice.cardType || 'Card'} ${invoice.cardLast4}` : '',
+          'Transaction ID': invoice.transactionId || '',
+          'Cancelled Date': invoice.cancelledAt ? invoice.cancelledAt.toDate().toLocaleDateString('en-US') : ''
+        }));
+
+        // Create worksheet
+        const ws = window.XLSX.utils.json_to_sheet(exportData);
+
+        // Set column widths
+        ws['!cols'] = [
+          { wch: 20 }, // Invoice Number
+          { wch: 12 }, // Date
+          { wch: 20 }, // Customer
+          { wch: 12 }, // Status
+          { wch: 12 }, // Amount
+          { wch: 12 }, // Paid Date
+          { wch: 20 }, // Payment Method
+          { wch: 15 }, // Transaction ID
+          { wch: 15 }  // Cancelled Date
+        ];
+
+        // Format amounts as currency
+        const range = window.XLSX.utils.decode_range(ws['!ref']);
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+          const cellAddress = window.XLSX.utils.encode_cell({ r: R, c: 4 }); // Column E (Amount)
+          if (ws[cellAddress]) {
+            ws[cellAddress].z = '$#,##0.00';
+          }
+        }
+
+        // Create workbook
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
+
+        // Generate filename with filter info
+        const filterText = 
+          invoiceFilter === 'thisMonth' ? 'This_Month' :
+          invoiceFilter === 'lastMonth' ? 'Last_Month' :
+          invoiceFilter === 'lastQuarter' ? 'Last_Quarter' :
+          invoiceFilter === 'ytd' ? 'YTD' :
+          invoiceFilter === 'paidOnly' ? 'Paid_Only' :
+          invoiceFilter === 'openOnly' ? 'Open_Only' :
+          invoiceFilter === 'cancelledOnly' ? 'Cancelled_Only' :
+          invoiceFilter === 'customRange' ? 'Custom_Range' :
+          'All_Invoices';
+        
+        const filename = `Farrier_Invoices_${filterText}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        // Download
+        window.XLSX.writeFile(wb, filename);
+      };
+
       // Filter invoices based on selected filter
       const getFilteredInvoices = () => {
         const now = new Date();
@@ -3483,6 +3463,13 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             
             case 'ytd':
               return invoiceYear === currentYear;
+            
+            case 'customRange':
+              if (!customStartDate || !customEndDate) return true;
+              const start = new Date(customStartDate);
+              const end = new Date(customEndDate);
+              end.setHours(23, 59, 59);
+              return invoiceDate >= start && invoiceDate <= end;
             
             default:
               return true;
@@ -3590,7 +3577,90 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               >
                 🚫 Cancelled Only
               </button>
+              <button
+                onClick={() => setInvoiceFilter('customRange')}
+                className={`btn btn-sm ${invoiceFilter === 'customRange' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                📅 Custom Range
+              </button>
+              {filteredInvoices.length > 0 && (
+                <button
+                  onClick={exportToExcel}
+                  className="btn btn-sm"
+                  style={{
+                    background: '#16a34a',
+                    color: 'white',
+                    fontWeight: '600',
+                    marginLeft: 'auto'
+                  }}
+                  onMouseOver={(e) => e.target.style.background = '#15803d'}
+                  onMouseOut={(e) => e.target.style.background = '#16a34a'}
+                >
+                  📊 Export to Excel
+                </button>
+              )}
             </div>
+
+            {/* Custom Date Range Picker */}
+            {invoiceFilter === 'customRange' && (
+              <div style={{
+                marginBottom: '1.5rem',
+                padding: '1rem',
+                background: '#f9fafb',
+                borderRadius: '8px',
+                display: 'flex',
+                gap: '1rem',
+                alignItems: 'end',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{flex: 1, minWidth: '200px'}}>
+                  <label style={{display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500'}}>
+                    Start Date
+                  </label>
+                  <input 
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      fontSize: '0.875rem'
+                    }}
+                  />
+                </div>
+                <div style={{flex: 1, minWidth: '200px'}}>
+                  <label style={{display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500'}}>
+                    End Date
+                  </label>
+                  <input 
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      fontSize: '0.875rem'
+                    }}
+                  />
+                </div>
+                {customStartDate && customEndDate && (
+                  <div style={{
+                    padding: '0.5rem 1rem',
+                    background: 'white',
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    fontSize: '0.875rem',
+                    color: 'var(--text-muted)'
+                  }}>
+                    📆 {new Date(customStartDate).toLocaleDateString()} - {new Date(customEndDate).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            )}
 
             {filteredInvoices.length === 0 ? (
               <p style={{color: 'var(--text-muted)'}}>
@@ -3959,10 +4029,10 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       );
     }
 
-    function InvoiceCreateModal({ userId, onClose, onCreated }) {
-      const [customerName, setCustomerName] = useState('');
-      const [customerEmail, setCustomerEmail] = useState('');
-      const [customerPhone, setCustomerPhone] = useState('');
+    function InvoiceCreateModal({ userId, onClose, onCreated, prefillData }) {
+      const [customerName, setCustomerName] = useState(prefillData?.customerName || '');
+      const [customerEmail, setCustomerEmail] = useState(prefillData?.customerEmail || '');
+      const [customerPhone, setCustomerPhone] = useState(prefillData?.customerPhone || '');
       const [items, setItems] = useState([{ description: '', amount: 0 }]);
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
