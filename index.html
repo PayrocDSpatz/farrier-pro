@@ -3158,9 +3158,9 @@
           if (appointmentFilter === 'cancelled' && apt.status === 'cancelled') return true;
           if (appointmentFilter === 'invoiced' && !apt.invoiced) return false;
 
-          // Date filters
-          if (!apt.createdAt) return true;
-          const aptDate = apt.createdAt.toDate();
+          // Date filters - use requestedDate (appointment date)
+          if (!apt.requestedDate) return true;
+          const aptDate = new Date(apt.requestedDate);
           const aptYear = aptDate.getFullYear();
           const aptMonth = aptDate.getMonth();
 
