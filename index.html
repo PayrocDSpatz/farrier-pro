@@ -2917,6 +2917,7 @@
       const [showInvoiceModal, setShowInvoiceModal] = useState(false);
       const [selectedAppointment, setSelectedAppointment] = useState(null);
       const [sortOrder, setSortOrder] = useState('newest'); // 'newest' or 'oldest'
+      const [appointmentFilter, setAppointmentFilter] = useState('all'); // all, pending, confirmed, cancelled, invoiced, thisMonth, lastMonth
 
       useEffect(() => {
         loadAppointments();
@@ -2943,9 +2944,42 @@
         setLoading(false);
       };
 
+      // Filter appointments
+      const getFilteredAppointments = () => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+
+        return appointments.filter(apt => {
+          // Status filters
+          if (appointmentFilter === 'pending' && apt.status !== 'pending') return false;
+          if (appointmentFilter === 'confirmed' && apt.status !== 'confirmed') return false;
+          if (appointmentFilter === 'cancelled' && apt.status === 'cancelled') return true;
+          if (appointmentFilter === 'invoiced' && !apt.invoiced) return false;
+
+          // Date filters
+          if (!apt.createdAt) return true;
+          const aptDate = apt.createdAt.toDate();
+          const aptYear = aptDate.getFullYear();
+          const aptMonth = aptDate.getMonth();
+
+          if (appointmentFilter === 'thisMonth') {
+            return aptYear === currentYear && aptMonth === currentMonth;
+          }
+          if (appointmentFilter === 'lastMonth') {
+            const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+            const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+            return aptYear === lastMonthYear && aptMonth === lastMonth;
+          }
+
+          return true;
+        });
+      };
+
       // Get sorted appointments based on sortOrder
       const getSortedAppointments = () => {
-        return [...appointments].sort((a, b) => {
+        const filtered = getFilteredAppointments();
+        return [...filtered].sort((a, b) => {
           if (!a.createdAt || !b.createdAt) return 0;
           const dateA = a.createdAt.toDate();
           const dateB = b.createdAt.toDate();
@@ -3218,6 +3252,64 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           ) : (
             <div className="card">
               <h2>Your Appointments ({appointments.length})</h2>
+              
+              {/* Filter Buttons */}
+              <div style={{
+                display: 'flex',
+                gap: '0.5rem',
+                marginBottom: '1.5rem',
+                flexWrap: 'wrap',
+                paddingBottom: '1rem',
+                borderBottom: '1px solid var(--border)'
+              }}>
+                <button
+                  onClick={() => setAppointmentFilter('all')}
+                  className={`btn btn-sm ${appointmentFilter === 'all' ? 'btn-primary' : 'btn-outline'}`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setAppointmentFilter('pending')}
+                  className={`btn btn-sm ${appointmentFilter === 'pending' ? 'btn-primary' : 'btn-outline'}`}
+                >
+                  ⏳ Pending
+                </button>
+                <button
+                  onClick={() => setAppointmentFilter('confirmed')}
+                  className={`btn btn-sm ${appointmentFilter === 'confirmed' ? 'btn-primary' : 'btn-outline'}`}
+                >
+                  ✓ Confirmed
+                </button>
+                <button
+                  onClick={() => setAppointmentFilter('cancelled')}
+                  className={`btn btn-sm ${appointmentFilter === 'cancelled' ? 'btn-primary' : 'btn-outline'}`}
+                >
+                  ✕ Cancelled
+                </button>
+                <button
+                  onClick={() => setAppointmentFilter('invoiced')}
+                  className={`btn btn-sm ${appointmentFilter === 'invoiced' ? 'btn-primary' : 'btn-outline'}`}
+                >
+                  💰 Invoiced
+                </button>
+                <button
+                  onClick={() => setAppointmentFilter('thisMonth')}
+                  className={`btn btn-sm ${appointmentFilter === 'thisMonth' ? 'btn-primary' : 'btn-outline'}`}
+                >
+                  This Month
+                </button>
+                <button
+                  onClick={() => setAppointmentFilter('lastMonth')}
+                  className={`btn btn-sm ${appointmentFilter === 'lastMonth' ? 'btn-primary' : 'btn-outline'}`}
+                >
+                  Last Month
+                </button>
+              </div>
+
+              <div style={{fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem'}}>
+                Showing {sortedAppointments.length} of {appointments.length} appointment{appointments.length !== 1 ? 's' : ''}
+              </div>
+
               <div className="appointments-list">
                 {sortedAppointments.map(apt => (
                   <div key={apt.id} className="appointment-item">
