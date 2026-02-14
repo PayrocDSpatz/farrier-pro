@@ -9,6 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
   <!-- Authorize.Net integration via backend functions -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -688,6 +689,290 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
+
+      /**********************
+       * INVOICE PDF / PRINT HELPERS
+       * - Generates a professional PDF (jsPDF) with optional logo + payment QR
+       * - Also supports opening print dialog
+       **********************/
+
+      const money_ = (n) => {
+        const x = Number(n || 0);
+        try { return x.toLocaleString(undefined, { style: "currency", currency: "USD" }); }
+        catch { return `$${x.toFixed(2)}`; }
+      };
+
+      const formatDate_ = (tsOrDate) => {
+        try {
+          const d = tsOrDate?.toDate ? tsOrDate.toDate() : (tsOrDate instanceof Date ? tsOrDate : new Date(tsOrDate));
+          return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
+        } catch { return ""; }
+      };
+
+      const safeText_ = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
+
+      // Wrap long text to fit PDF width
+      const pdfWrapText_ = (doc, text, x, y, maxWidth, lineHeight) => {
+        const lines = doc.splitTextToSize(String(text || ""), maxWidth);
+        lines.forEach((ln, i) => doc.text(ln, x, y + (i * lineHeight)));
+        return y + (lines.length * lineHeight);
+      };
+
+      const buildInvoicePayUrl_ = (invoice) => {
+        // Prefer paymentUrl if it exists
+        if (invoice?.paymentUrl) return String(invoice.paymentUrl);
+        return "";
+      };
+
+      const qrToDataUrl_ = async (text) => {
+        try {
+          if (!text) return "";
+          if (window.QRCode && typeof window.QRCode.toDataURL === "function") {
+            return await window.QRCode.toDataURL(text, { margin: 1, width: 220 });
+          }
+        } catch (e) {}
+        return "";
+      };
+
+      async function generateInvoicePdfBlobUrl(invoice, farrierProfile) {
+        if (!window.jspdf?.jsPDF) throw new Error("jsPDF not loaded");
+        const { jsPDF } = window.jspdf;
+
+        const profile = farrierProfile || {};
+        const businessName = safeText_(profile.businessName) || "Farrier Pro";
+        const bizPhone = safeText_(profile.phone);
+        const bizEmail = safeText_(profile.email || ""); // optional
+        const bizAddr = [safeText_(profile.address), safeText_(profile.city), safeText_(profile.state), safeText_(profile.zip)]
+          .filter(Boolean)
+          .join(", ");
+
+        const doc = new jsPDF({ unit: "pt", format: "letter" });
+        const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
+
+        // Style
+        doc.setFont("helvetica", "normal");
+
+        // Optional logo
+        const logoUrl = safeText_(profile.logoUrl);
+        let cursorY = 54;
+
+        if (logoUrl) {
+          try {
+            // Fetch logo as dataURL (works for public URLs with CORS)
+            const resp = await fetch(logoUrl, { mode: "cors" });
+            const blob = await resp.blob();
+            const dataUrl = await new Promise((resolve) => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result);
+              r.readAsDataURL(blob);
+            });
+
+            // Draw logo (fit into 120x50)
+            doc.addImage(dataUrl, "PNG", 48, 40, 120, 50);
+          } catch (e) {
+            // If logo fails, fall back to text
+          }
+        }
+
+        // Header right: INVOICE
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(22);
+        doc.text("INVOICE", pageW - 48, 56, { align: "right" });
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+
+        // Business block (left)
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text(businessName, 48, 108);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+
+        let bizLine = 126;
+        if (bizAddr) { doc.text(bizAddr, 48, bizLine); bizLine += 14; }
+        if (bizPhone) { doc.text(`Phone: ${bizPhone}`, 48, bizLine); bizLine += 14; }
+        if (bizEmail) { doc.text(`Email: ${bizEmail}`, 48, bizLine); bizLine += 14; }
+
+        // Invoice meta (right)
+        const invNo = safeText_(invoice.invoiceNumber || "");
+        const invDate = formatDate_(invoice.createdAt) || formatDate_(new Date());
+        const invStatus = safeText_(invoice.status || "outstanding");
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Invoice #", pageW - 220, 108);
+        doc.text("Date", pageW - 220, 126);
+        doc.text("Status", pageW - 220, 144);
+        doc.setFont("helvetica", "normal");
+        doc.text(invNo, pageW - 48, 108, { align: "right" });
+        doc.text(invDate, pageW - 48, 126, { align: "right" });
+        doc.text(invStatus.toUpperCase(), pageW - 48, 144, { align: "right" });
+
+        // Watermark if paid/cancelled
+        if (invStatus === "paid" || invStatus === "cancelled") {
+          doc.saveGraphicsState();
+          doc.setTextColor(200, 200, 200);
+          doc.setFontSize(72);
+          doc.setFont("helvetica", "bold");
+          doc.text(invStatus.toUpperCase(), pageW / 2, pageH / 2, { align: "center", angle: 30 });
+          doc.restoreGraphicsState();
+          doc.setTextColor(0, 0, 0);
+        }
+
+        // Bill to
+        doc.setDrawColor(220);
+        doc.setLineWidth(1);
+        doc.roundedRect(48, 170, pageW - 96, 78, 10, 10);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text("BILL TO", 64, 192);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        const custName = safeText_(invoice.customerName || "");
+        const custEmail = safeText_(invoice.customerEmail || "");
+        const custPhone = safeText_(invoice.customerPhone || "");
+
+        doc.text(custName, 64, 212);
+        let custY = 228;
+        if (custEmail) { doc.text(custEmail, 64, custY); custY += 14; }
+        if (custPhone) { doc.text(custPhone, 64, custY); custY += 14; }
+
+        // Payment QR (if paymentUrl exists)
+        const payUrl = buildInvoicePayUrl_(invoice);
+        if (payUrl) {
+          try {
+            const qr = await qrToDataUrl_(payUrl);
+            if (qr) {
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(9);
+              doc.text("PAY ONLINE", pageW - 150, 192, { align: "center" });
+              doc.addImage(qr, "PNG", pageW - 190, 200, 80, 80);
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(8);
+              doc.text("Scan to pay", pageW - 150, 290, { align: "center" });
+            }
+          } catch (e) {}
+        }
+
+        // Items table header
+        let y = 270;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text("DESCRIPTION", 48, y);
+        doc.text("QTY", pageW - 220, y, { align: "right" });
+        doc.text("RATE", pageW - 140, y, { align: "right" });
+        doc.text("AMOUNT", pageW - 48, y, { align: "right" });
+        y += 10;
+        doc.setDrawColor(200);
+        doc.line(48, y, pageW - 48, y);
+        y += 18;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+
+        const items = Array.isArray(invoice.items) ? invoice.items : [];
+        const maxDescW = pageW - 48 - 240; // leave room for qty/rate/amount
+        const lineH = 14;
+
+        const computeTotal = () => items.reduce((sum, it) => {
+          const qty = Number(it.qty || 1);
+          const rate = Number(it.amount ?? it.unitPriceSnapshot ?? 0);
+          return sum + (qty * rate);
+        }, 0);
+
+        for (const it of items) {
+          const desc = safeText_(it.serviceNameSnapshot || it.description || "");
+          const horse = safeText_(it.horseName || "");
+          const qty = Number(it.qty || 1);
+          const rate = Number(it.amount ?? it.unitPriceSnapshot ?? 0);
+          const lineTotal = qty * rate;
+
+          // Page break
+          if (y > pageH - 140) {
+            doc.addPage();
+            y = 72;
+          }
+
+          // Description + optional horse/comment
+          let yAfter = pdfWrapText_(doc, desc, 48, y, maxDescW, lineH);
+          if (horse) {
+            doc.setTextColor(90);
+            yAfter = pdfWrapText_(doc, `Horse/Comment: ${horse}`, 48, yAfter, maxDescW, lineH);
+            doc.setTextColor(0);
+          }
+
+          // Numbers aligned to first line y
+          doc.text(String(qty), pageW - 220, y, { align: "right" });
+          doc.text(money_(rate), pageW - 140, y, { align: "right" });
+          doc.text(money_(lineTotal), pageW - 48, y, { align: "right" });
+
+          y = Math.max(yAfter, y + lineH) + 10;
+          doc.setDrawColor(235);
+          doc.line(48, y - 6, pageW - 48, y - 6);
+        }
+
+        // Totals
+        const total = money_(invoice.total || computeTotal());
+        y += 10;
+        if (y > pageH - 110) { doc.addPage(); y = 72; }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text("TOTAL", pageW - 140, y, { align: "right" });
+        doc.text(total, pageW - 48, y, { align: "right" });
+
+        // Footer
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(120);
+        doc.text("Thank you for your business.", 48, pageH - 54);
+        doc.setTextColor(0);
+
+        const blob = doc.output("blob");
+        const url = URL.createObjectURL(blob);
+        return url;
+      }
+
+      async function openInvoicePdf(invoice, farrierProfile, autoPrint = true) {
+        try {
+          const url = await generateInvoicePdfBlobUrl(invoice, farrierProfile);
+          const w = window.open(url, "_blank", "noopener,noreferrer");
+          if (!w) {
+            alert("Popup blocked. Please allow popups to view/print the invoice PDF.");
+            return;
+          }
+          if (autoPrint) {
+            // Give it a moment to load, then print
+            setTimeout(() => {
+              try { w.focus(); w.print(); } catch (e) {}
+            }, 700);
+          }
+        } catch (e) {
+          console.error("PDF generation failed:", e);
+          alert("Could not generate PDF. Check console for details.");
+        }
+      }
+
+      function emailInvoiceLink(invoice) {
+        const payUrl = buildInvoicePayUrl_(invoice);
+        const subject = encodeURIComponent(`Invoice ${safeText_(invoice.invoiceNumber || "")}`);
+        const lines = [
+          `Hi ${safeText_(invoice.customerName || "")},`,
+          ``,
+          `Here is your invoice: ${safeText_(invoice.invoiceNumber || "")}`,
+          payUrl ? `Pay online: ${payUrl}` : ``,
+          ``,
+          `Thank you!`
+        ].filter(Boolean);
+        const body = encodeURIComponent(lines.join("\n"));
+        const to = encodeURIComponent(safeText_(invoice.customerEmail || ""));
+        window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+      }
+
+
     // Firebase Configuration
     const firebaseConfig = {
       apiKey: "AIzaSyAQ1LaWG9lE9j5h6X0T0YQKa_j04vJZHE4",
@@ -950,6 +1235,10 @@ async function seedDefaultServicesIfEmpty_(userId) {
             city: city,
             state: state,
             zip: zip,
+              logoUrl: logoUrl,
+              autoPrintPdf: autoPrintPdf,
+              logoUrl: logoUrl,
+              autoPrintPdf: autoPrintPdf,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             googleCalendarConnected: false,
             bookingUrl: window.location.origin + '?farrier=' + user.uid
@@ -1011,6 +1300,19 @@ async function seedDefaultServicesIfEmpty_(userId) {
                         onChange={(e) => setBusinessName(e.target.value)}
                         placeholder="John's Farrier Services"
                       />
+              <label style={{marginTop:'10px'}}>Logo URL (optional)</label>
+              <input
+                type="text"
+                value={logoUrl}
+                onChange={(e)=>setLogoUrl(e.target.value)}
+                placeholder="https://.../logo.png"
+              />
+
+              <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'10px'}}>
+                <input type="checkbox" checked={Boolean(autoPrintPdf)} onChange={(e)=>setAutoPrintPdf(e.target.checked)} />
+                <span>Auto-open PDF after creating an invoice</span>
+              </div>
+
                     </div>
                     
                     <div className="form-group">
@@ -1297,7 +1599,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
             {tab === 'dashboard' && <DashboardView userId={user.uid} />}
             {tab === 'calendar' && <CalendarView userId={user.uid} />}
             {tab === 'appointments' && <AppointmentsView userId={user.uid} userProfile={userProfile} />}
-            {tab === 'invoices' && <InvoicesView userId={user.uid} />}
+            {tab === 'invoices' && <InvoicesView userId={user.uid} userProfile={userProfile} />}
             {tab === 'services' && <ServicesView userId={user.uid} />}
             {tab === 'reports' && <ReportsView userId={user.uid} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} />}
@@ -4137,7 +4439,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       );
     }
 
-    function InvoicesView({ userId }) {
+    function InvoicesView({ userId, userProfile }) {
       const [invoices, setInvoices] = useState([]);
       const [showCreateModal, setShowCreateModal] = useState(false);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -4547,6 +4849,29 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       }`}>
                         {invoice.status}
                       </span>
+                      <button
+                        className="btn btn-sm btn-outline"
+                        onClick={() => openInvoicePdf(invoice, userProfile, userProfile?.autoPrintPdf ?? true)}
+                        title="Open a professional PDF invoice (then print or save as PDF)"
+                      >
+                        🖨️ Print / PDF
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline"
+                        onClick={() => emailInvoiceLink(invoice)}
+                        title="Email the invoice link"
+                      >
+                        ✉️ Email
+                      </button>
+                      {invoice.paymentUrl && (
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={() => { navigator.clipboard?.writeText(String(invoice.paymentUrl)); alert("Payment link copied."); }}
+                          title="Copy payment link"
+                        >
+                          🔗 Copy Link
+                        </button>
+                      )}
                       {invoice.status === 'outstanding' && (
                         <>
                           <button 
@@ -4592,10 +4917,15 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           {showCreateModal && (
             <InvoiceCreateModal 
               userId={userId}
+              userProfile={userProfile}
               onClose={() => setShowCreateModal(false)}
-              onCreated={() => {
+              onCreated={(createdInvoice) => {
                 setShowCreateModal(false);
                 loadInvoices();
+                if (createdInvoice) {
+                  // Auto-open PDF after create (toggle in Settings)
+                  openInvoicePdf(createdInvoice, userProfile, userProfile?.autoPrintPdf ?? true);
+                }
               }}
             />
           )}
@@ -4877,7 +5207,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       );
     }
 
-    function InvoiceCreateModal({ userId, onClose, onCreated, prefillData }) {
+    function InvoiceCreateModal({ userId, userProfile, onClose, onCreated, prefillData }) {
       const [customerName, setCustomerName] = useState(prefillData?.customerName || '');
       const [customerEmail, setCustomerEmail] = useState(prefillData?.customerEmail || '');
       const [customerPhone, setCustomerPhone] = useState(prefillData?.customerPhone || '');
@@ -5197,8 +5527,21 @@ useEffect(() => {
 
             console.log('✅ Invoice created with ID:', docRef.id);
             alert('✅ Invoice created successfully! Customer can now pay using the "Pay Now" button.');
-            onCreated();
-          } else {
+            const createdInvoice = {
+              id: docRef.id,
+              farrierId: userId,
+              customerName,
+              customerEmail,
+              customerPhone,
+              items: cleanedItems,
+              total,
+              invoiceNumber,
+              status: 'outstanding',
+              paymentUrl: '',
+              createdAt: new Date()
+            };
+            onCreated(createdInvoice);
+} else {
             console.error('❌ Database not initialized');
             setError('Database not available');
           }
@@ -5542,6 +5885,8 @@ useEffect(() => {
 
     function SettingsView({ user, userProfile, setUserProfile }) {
       const [businessName, setBusinessName] = useState(userProfile?.businessName || '');
+      const [logoUrl, setLogoUrl] = useState(userProfile?.logoUrl || '');
+      const [autoPrintPdf, setAutoPrintPdf] = useState(userProfile?.autoPrintPdf ?? true);
       const [phone, setPhone] = useState(userProfile?.phone || '');
       const [address, setAddress] = useState(userProfile?.address || '');
       const [city, setCity] = useState(userProfile?.city || '');
@@ -5591,6 +5936,8 @@ useEffect(() => {
               city: city,
               state: state,
               zip: zip,
+              logoUrl: logoUrl,
+              autoPrintPdf: autoPrintPdf,
               availability: availability,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
