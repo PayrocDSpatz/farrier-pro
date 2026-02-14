@@ -5015,21 +5015,6 @@ useEffect(() => {
   loadServices();
 }, [userId]);
 
-
-useEffect(() => {
-  const loadServiceOptions = async () => {
-    if (!db) return;
-    const snap = await db.collection("services")
-      .where("farrierId", "==", userId)
-      .where("isActive", "==", true)
-      .get();
-
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    list.sort((a,b) => (a.category || "").localeCompare(b.category || "") || (a.name || "").localeCompare(b.name || ""));
-
-    setServiceOptions([{ id: "", name: "-- Select Service --", price: 0 }, ...list]);
-  };
-
   loadServiceOptions();
 }, [userId]);
 
