@@ -750,6 +750,12 @@
         const pageW = doc.internal.pageSize.getWidth();
         const pageH = doc.internal.pageSize.getHeight();
 
+        // Outer border
+        const borderMargin = 28; // points
+        doc.setDrawColor(0);
+        doc.setLineWidth(1);
+        doc.rect(borderMargin, borderMargin, pageW - (borderMargin * 2), pageH - (borderMargin * 2));
+
         // Style
         doc.setFont("helvetica", "normal");
 
