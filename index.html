@@ -708,7 +708,62 @@
     } catch (error) {
       console.log("Firebase not configured yet - using demo mode");
     }
+async function seedDefaultServicesIfEmpty_(userId) {
+  if (!db || !userId) return;
 
+  const userRef = db.collection("users").doc(userId);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() : null;
+
+  if (userData?.servicesSeeded) return;
+
+  const existing = await db.collection("services")
+    .where("farrierId", "==", userId)
+    .limit(1)
+    .get();
+
+  if (!existing.empty) {
+    await userRef.set({ servicesSeeded: true }, { merge: true });
+    return;
+  }
+
+  const defaults = [
+    { name: "Hot Shoeing All Four", price: 170, category: "Top Services" },
+    { name: "Dressage Shoes All Four", price: 200, category: "Top Services" },
+    { name: "Hunter/Jumper Competition Shoes", price: 195, category: "Top Services" },
+    { name: "Reset All Four", price: 120, category: "Top Services" },
+    { name: "Trim All Four", price: 75, category: "Top Services" },
+    { name: "Front Shoes Only", price: 110, category: "Top Services" },
+    { name: "Show Prep Package", price: 50, category: "Top Services" },
+    { name: "Studs Installation", price: 40, category: "Top Services" },
+    { name: "Leather Pads", price: 40, category: "Top Services" },
+    { name: "Emergency Call Out", price: 100, category: "Top Services" },
+    { name: "Dressage Maintenance Package", price: 210, category: "Packages" },
+    { name: "Hunter/Jumper Show Package", price: 250, category: "Packages" },
+    { name: "Training Horse Package", price: 165, category: "Packages" },
+  ];
+
+  const batch = db.batch();
+  const now = firebase.firestore.FieldValue.serverTimestamp();
+
+  defaults.forEach(svc => {
+    const ref = db.collection("services").doc();
+    batch.set(ref, {
+      farrierId: userId,
+      name: svc.name,
+      price: Number(svc.price || 0),
+      category: svc.category || "",
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+
+  batch.set(userRef, { servicesSeeded: true }, { merge: true });
+
+  await batch.commit();
+  console.log("✅ Default services seeded");
+}
     // Google Calendar API Configuration
     const GOOGLE_CLIENT_ID = "458461432563-pkncm66du9pipuihdrbrhfrsuggo7loh.apps.googleusercontent.com";
     const CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar";
