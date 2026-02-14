@@ -11,7 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   
   <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>items
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   
@@ -5072,15 +5072,20 @@ useEffect(() => {
         }
 
         // Clean up items - replace "Custom Service (enter manually)" with placeholder if not changed
-        const cleanedItems = items.map(item => {
-          if (item.description === 'Custom Service (enter manually)' || !item.description.trim()) {
-            return {
-              ...item,
-              description: 'Farrier Service'
-            };
-          }
-          return item;
-        });
+        const cleanedItems = items
+  .filter(i => String(i.description || "").trim() || Number(i.amount || 0) > 0)
+  .map(i => ({
+    // display fields
+    description: String(i.description || "").trim(),
+    qty: Number(i.qty || 1),
+    amount: Number(i.amount || 0),
+
+    // service linkage + immutable snapshots (so old invoices never change)
+    serviceId: i.serviceId || "",
+    serviceNameSnapshot: i.serviceNameSnapshot || String(i.description || "").trim(),
+    unitPriceSnapshot: Number(i.unitPriceSnapshot ?? i.amount ?? 0),
+  }));
+
 
         setError('');
         setLoading(true);
