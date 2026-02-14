@@ -1188,6 +1188,7 @@
         { id: 'calendar', label: 'Calendar', icon: '📅' },
         { id: 'appointments', label: 'Appointments', icon: '📋' },
         { id: 'invoices', label: 'Invoices', icon: '💰' },
+        { id: 'services', label: 'Services', icon: '🧾' },
         { id: 'reports', label: 'Reports', icon: '📈' },
         { id: 'settings', label: 'Settings', icon: '⚙️' },
         { id: 'about', label: 'About', icon: 'ℹ️' }
@@ -1241,6 +1242,7 @@
             {tab === 'calendar' && <CalendarView userId={user.uid} />}
             {tab === 'appointments' && <AppointmentsView userId={user.uid} userProfile={userProfile} />}
             {tab === 'invoices' && <InvoicesView userId={user.uid} />}
+            {tab === 'services' && <ServicesView userId={user.uid} />}
             {tab === 'reports' && <ReportsView userId={user.uid} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} />}
             {tab === 'about' && <AboutView />}
@@ -2079,6 +2081,157 @@
         </div>
       );
     }
+function ServicesView({ userId }) {
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [category, setCategory] = useState("");
+  const [isActive, setIsActive] = useState(true);
+
+  const [editingId, setEditingId] = useState(null);
+
+  const loadServices = async () => {
+    if (!db) return;
+    setLoading(true);
+    const snap = await db.collection("services")
+      .where("farrierId", "==", userId)
+      .get();
+
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    rows.sort((a,b) => (a.category || "").localeCompare(b.category || "") || (a.name || "").localeCompare(b.name || ""));
+    setServices(rows);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadServices(); }, [userId]);
+
+  const resetForm = () => {
+    setName(""); setPrice(""); setCategory(""); setIsActive(true); setEditingId(null);
+  };
+
+  const startEdit = (svc) => {
+    setEditingId(svc.id);
+    setName(svc.name || "");
+    setPrice(String(svc.price ?? ""));
+    setCategory(svc.category || "");
+    setIsActive(Boolean(svc.isActive));
+  };
+
+  const saveService = async () => {
+    if (!db) return;
+    const n = name.trim();
+    if (!n) return alert("Service name is required.");
+
+    const p = Number(price);
+    if (!isFinite(p) || p < 0) return alert("Price must be a valid number.");
+
+    const payload = {
+      farrierId: userId,
+      name: n,
+      price: p,
+      category: category.trim(),
+      isActive: Boolean(isActive),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (editingId) {
+      await db.collection("services").doc(editingId).update(payload);
+    } else {
+      await db.collection("services").add({
+        ...payload,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    resetForm();
+    await loadServices();
+  };
+
+  const toggleActive = async (svc) => {
+    await db.collection("services").doc(svc.id).update({
+      isActive: !svc.isActive,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await loadServices();
+  };
+
+  return (
+    <div className="card">
+      <h2 style={{ marginBottom: "1rem" }}>Services</h2>
+
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "0.75rem", alignItems: "end" }}>
+        <div>
+          <label style={{ fontWeight: 600 }}>Service Name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%", padding: "0.75rem", borderRadius: 8, border: "2px solid var(--border)" }} />
+        </div>
+
+        <div>
+          <label style={{ fontWeight: 600 }}>Default Price</label>
+          <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal"
+            style={{ width: "100%", padding: "0.75rem", borderRadius: 8, border: "2px solid var(--border)" }} />
+        </div>
+
+        <div>
+          <label style={{ fontWeight: 600 }}>Category (optional)</label>
+          <input value={category} onChange={(e) => setCategory(e.target.value)}
+            style={{ width: "100%", padding: "0.75rem", borderRadius: 8, border: "2px solid var(--border)" }} />
+        </div>
+
+        <div>
+          <label style={{ fontWeight: 600 }}>Active</label>
+          <select value={isActive ? "yes" : "no"} onChange={(e) => setIsActive(e.target.value === "yes")}
+            style={{ width: "100%", padding: "0.75rem", borderRadius: 8, border: "2px solid var(--border)" }}>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+
+        <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.5rem" }}>
+          <button className="btn btn-primary" onClick={saveService}>
+            {editingId ? "Update Service" : "Add Service"}
+          </button>
+          {editingId && <button className="btn btn-outline" onClick={resetForm}>Cancel</button>}
+        </div>
+      </div>
+
+      <div style={{ marginTop: "1.5rem" }}>
+        {loading ? (
+          <div>Loading...</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ textAlign: "left" }}>
+                <th style={{ padding: "0.5rem" }}>Name</th>
+                <th style={{ padding: "0.5rem" }}>Category</th>
+                <th style={{ padding: "0.5rem" }}>Price</th>
+                <th style={{ padding: "0.5rem" }}>Active</th>
+                <th style={{ padding: "0.5rem" }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {services.map(svc => (
+                <tr key={svc.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "0.5rem" }}>{svc.name}</td>
+                  <td style={{ padding: "0.5rem" }}>{svc.category || ""}</td>
+                  <td style={{ padding: "0.5rem" }}>${Number(svc.price || 0).toFixed(2)}</td>
+                  <td style={{ padding: "0.5rem" }}>{svc.isActive ? "Yes" : "No"}</td>
+                  <td style={{ padding: "0.5rem", display: "flex", gap: "0.5rem" }}>
+                    <button className="btn btn-sm btn-outline" onClick={() => startEdit(svc)}>Edit</button>
+                    <button className="btn btn-sm btn-outline" onClick={() => toggleActive(svc)}>
+                      {svc.isActive ? "Disable" : "Enable"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
 
     function AboutView() {
       return (
@@ -4810,27 +4963,75 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         setPhoneSearching(false);
       };
 
-      // Farrier service options for dropdown
-      const serviceOptions = [
-        { name: '-- Select Service --', price: 0 },
-        { name: '─── TOP SERVICES ───', price: 0, isHeader: true },
-        { name: 'Hot Shoeing All Four', price: 170 },
-        { name: 'Dressage Shoes All Four', price: 200 },
-        { name: 'Hunter/Jumper Competition Shoes', price: 195 },
-        { name: 'Reset All Four', price: 120 },
-        { name: 'Trim All Four', price: 75 },
-        { name: 'Front Shoes Only', price: 110 },
-        { name: 'Show Prep Package', price: 50 },
-        { name: 'Studs Installation', price: 40 },
-        { name: 'Leather Pads', price: 40 },
-        { name: 'Emergency Call Out', price: 100 },
-        { name: '─── PACKAGES ───', price: 0, isHeader: true },
-        { name: 'Dressage Maintenance Package', price: 210 },
-        { name: 'Hunter/Jumper Show Package', price: 250 },
-        { name: 'Training Horse Package', price: 165 },
-        { name: '─── OTHER ───', price: 0, isHeader: true },
-        { name: 'Custom Service (enter manually)', price: 0 }
-      ];
+     // Services loaded from Firestore (plus a couple of UI-only rows)
+const [serviceOptions, setServiceOptions] = useState([
+  { id: "", name: "-- Select Service --", price: 0 },
+  { id: "__custom__", name: "Custom Service (enter manually)", price: 0 }
+]);
+
+useEffect(() => {
+  const loadServices = async () => {
+    if (!db || !userId) return;
+
+    const snap = await db.collection("services")
+      .where("farrierId", "==", userId)
+      .where("isActive", "==", true)
+      .get();
+
+    const list = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+
+    // Sort by category then name (optional)
+    list.sort((a,b) =>
+      String(a.category || "").localeCompare(String(b.category || "")) ||
+      String(a.name || "").localeCompare(String(b.name || ""))
+    );
+
+    // Optional: insert category headers like your old list
+    const rows = [{ id: "", name: "-- Select Service --", price: 0 }];
+    let lastCat = null;
+
+    list.forEach(svc => {
+      const cat = (svc.category || "").trim();
+      if (cat && cat !== lastCat) {
+        rows.push({ id: `__header__${cat}`, name: `─── ${cat.toUpperCase()} ───`, price: 0, isHeader: true });
+        lastCat = cat;
+      }
+      rows.push({
+        id: svc.id,
+        name: svc.name || "",
+        price: Number(svc.price || svc.defaultPrice || 0),
+        isHeader: false
+      });
+    });
+
+    rows.push({ id: "__custom__", name: "Custom Service (enter manually)", price: 0 });
+
+    setServiceOptions(rows);
+  };
+
+  loadServices();
+}, [userId]);
+
+
+useEffect(() => {
+  const loadServiceOptions = async () => {
+    if (!db) return;
+    const snap = await db.collection("services")
+      .where("farrierId", "==", userId)
+      .where("isActive", "==", true)
+      .get();
+
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    list.sort((a,b) => (a.category || "").localeCompare(b.category || "") || (a.name || "").localeCompare(b.name || ""));
+
+    setServiceOptions([{ id: "", name: "-- Select Service --", price: 0 }, ...list]);
+  };
+
+  loadServiceOptions();
+}, [userId]);
 
       const addItem = () => {
         setItems([...items, { description: '', amount: 0 }]);
@@ -4842,15 +5043,31 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         setItems(newItems);
       };
 
-      const selectService = (index, serviceName) => {
-        const service = serviceOptions.find(s => s.name === serviceName);
-        if (service && !service.isHeader && service.name !== '-- Select Service --') {
-          const newItems = [...items];
-          newItems[index].description = service.name;
-          newItems[index].amount = service.price;
-          setItems(newItems);
-        }
-      };
+     const selectService = (index, serviceName) => {
+  const service = serviceOptions.find(s => s.name === serviceName);
+
+  // Ignore headers / placeholder
+  if (!service || service.isHeader || service.name === "-- Select Service --") return;
+
+  const newItems = [...items];
+
+  if (service.id === "__custom__") {
+    // Let user type description and price manually
+    newItems[index].description = "Custom Service (enter manually)";
+    newItems[index].amount = 0;
+  } else {
+    newItems[index].description = service.name;
+    newItems[index].amount = Number(service.price || 0);
+
+    // (Optional snapshots so invoice history doesn't change when service changes)
+    newItems[index].serviceId = service.id;
+    newItems[index].serviceNameSnapshot = service.name;
+    newItems[index].unitPriceSnapshot = Number(service.price || 0);
+  }
+
+  setItems(newItems);
+};
+
 
       const removeItem = (index) => {
         setItems(items.filter((_, i) => i !== index));
