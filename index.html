@@ -935,6 +935,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
 
           // Create user account
           const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+          await seedDefaultServicesIfEmpty_(userCredential.user.uid);
           const user = userCredential.user;
           
           // Send welcome/verification email
