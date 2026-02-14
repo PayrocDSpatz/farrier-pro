@@ -2120,7 +2120,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
                               <div style={{marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e5e7eb'}}>
                                 {inv.items.map((item, idx) => (
                                   <div key={idx} style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
-                                    • {item.description} - ${parseFloat(item.amount || 0).toFixed(2)}
+                                    • {item.description}{item.horseName ? ` (${item.horseName})` : ''} - ${parseFloat(item.amount || 0).toFixed(2)}
                                   </div>
                                 ))}
                               </div>
@@ -4881,7 +4881,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [customerName, setCustomerName] = useState(prefillData?.customerName || '');
       const [customerEmail, setCustomerEmail] = useState(prefillData?.customerEmail || '');
       const [customerPhone, setCustomerPhone] = useState(prefillData?.customerPhone || '');
-      const [items, setItems] = useState([{ description: '', amount: 0 }]);
+      const [items, setItems] = useState([{ description: '', amount: 0, horseName: '' }]);
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
       const [customers, setCustomers] = useState([]);
@@ -5072,7 +5072,7 @@ useEffect(() => {
 }, [userId]);
 
       const addItem = () => {
-        setItems([...items, { description: '', amount: 0 }]);
+        setItems([...items, { description: '', amount: 0, horseName: '' }]);
       };
 
       const updateItem = (index, field, value) => {
@@ -5130,6 +5130,7 @@ useEffect(() => {
   .map(i => ({
     // display fields
     description: String(i.description || "").trim(),
+    horseName: String(i.horseName || "").trim(),
     qty: Number(i.qty || 1),
     amount: Number(i.amount || 0),
 
@@ -5473,6 +5474,21 @@ useEffect(() => {
                       }}
                     />
                   ) : null}
+
+                  <input
+                    type="text"
+                    placeholder="Horse name or comment"
+                    value={item.horseName || ''}
+                    onChange={(e) => updateItem(idx, 'horseName', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '2px solid var(--border)',
+                      borderRadius: '8px',
+                      fontSize: '1rem',
+                      marginBottom: '0.5rem'
+                    }}
+                  />
 
                   <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
                     <label style={{marginBottom: 0, fontSize: '0.9rem', fontWeight: '500'}}>Price:</label>
