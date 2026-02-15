@@ -681,7 +681,9 @@
       max-width: 600px;
       margin: 0 auto;
     }
-  </style>
+  
+.build-badge{margin-left:10px;font-size:12px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25)}
+</style>
 </head>
 <body>
   <div id="root"></div>
@@ -690,7 +692,10 @@
     const { useState, useEffect } = React;
 
 
-      /**********************
+      const BUILD_VERSION = "support-portal-v3";
+console.log("Farrier Pro build:", BUILD_VERSION);
+
+/**********************
        * INVOICE PDF / PRINT HELPERS
        * - Generates a professional PDF (jsPDF) with optional logo + payment QR
        * - Also supports opening print dialog
@@ -1403,7 +1408,7 @@ alert('Welcome! Please check your email to verify your account.');
             <div className="header-content">
               <div className="logo">
                 <span className="logo-icon">🐴</span>
-                <span>Farrier Pro</span>
+                <span>Farrier Pro</span><span className="build-badge">{BUILD_VERSION}</span>
               </div>
             </div>
           </header>
@@ -1797,7 +1802,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             <div className="header-content">
               <div className="logo">
                 <span className="logo-icon">🐴</span>
-                <span>Farrier Pro</span>
+                <span>Farrier Pro</span><span className="build-badge">{BUILD_VERSION}</span>
               </div>
               <div className="header-actions">
                 <div className="user-info">
@@ -2954,7 +2959,9 @@ function ServicesView({ userId }) {
     }
 
     function QRCodeView({ user, userProfile, connectGoogleCalendar, disconnectGoogleCalendar }) {
-      const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + farrierId;
+      // Resolve farrierId safely (stored on the user profile; fallback to auth uid)
+      const farrierId = (userProfile && (userProfile.farrierId || userProfile.id || userProfile.uid)) || (user && user.uid) || '';
+      const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + encodeURIComponent(farrierId);
       
       // Use Google Charts API for QR code as backup
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(bookingUrl)}&color=2D5016&bgcolor=FFFFFF`;
