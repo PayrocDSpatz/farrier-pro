@@ -1063,29 +1063,61 @@ async function seedDefaultServicesIfEmpty_(userId) {
       const [user, setUser] = useState(null);
       const [loading, setLoading] = useState(true);
       const [userProfile, setUserProfile] = useState(null);
+      const [supportSession, setSupportSession] = useState(null);
+      const [effectiveFarrierId, setEffectiveFarrierId] = useState(null);
+      const [isSupportMode, setIsSupportMode] = useState(false);
+
 
       useEffect(() => {
         // Check authentication state
         if (auth) {
           const unsubscribe = auth.onAuthStateChanged(async (user) => {
             if (user) {
-              setUser(user);
-              // Load user profile from Firestore
-              const profileDoc = await db.collection('farriers').doc(user.uid).get();
-              if (profileDoc.exists) {
-                setUserProfile(profileDoc.data());
-              }
-            } else {
-              setUser(null);
-              setUserProfile(null);
-            }
-            setLoading(false);
-          });
-          return () => unsubscribe();
-        } else {
-          setLoading(false);
-        }
-      }, []);
+  setUser(user);
+
+  // Default to the signed-in farrier
+  let farrierIdToUse = user.uid;
+  let supportSessionData = null;
+
+  // If a support session is present in the URL, validate it and switch context
+  if (supportSessionId) {
+    const ssDoc = await db.collection('supportSessions').doc(supportSessionId).get();
+    if (ssDoc.exists) {
+      const ss = ssDoc.data();
+
+      const now = Date.now();
+      const expired = ss.expiresAt && ss.expiresAt.toDate && ss.expiresAt.toDate().getTime() < now;
+      const ended = !!ss.endedAt;
+      const wrongUser = ss.supportAgentUid && ss.supportAgentUid !== user.uid;
+
+      if (!expired && !ended && !wrongUser && ss.targetFarrierId) {
+        supportSessionData = ss;
+        farrierIdToUse = ss.targetFarrierId;
+      }
+    }
+  }
+
+  setSupportSession(supportSessionData);
+  setIsSupportMode(!!supportSessionData);
+  setEffectiveFarrierId(farrierIdToUse);
+
+  // Load the farrier profile for the effective farrierId
+  const profileDoc = await db.collection('farriers').doc(farrierIdToUse).get();
+  if (profileDoc.exists) {
+    setUserProfile(profileDoc.data());
+  } else {
+    setUserProfile(null);
+  }
+
+} else {
+  setUser(null);
+  setUserProfile(null);
+  setSupportSession(null);
+  setEffectiveFarrierId(null);
+  setIsSupportMode(false);
+}
+setLoading(false);
+
 
       // Check if URL is for customer booking
       const urlParams = new URLSearchParams(window.location.search);
@@ -1102,15 +1134,160 @@ async function seedDefaultServicesIfEmpty_(userId) {
       // Customer booking view
       if (farrierId) {
         return <CustomerBookingView farrierId={farrierId} />;
+        // Support portal view (must be signed in)
+if (support) {
+  if (!user) return <AuthView />;
+
+  // Simple allowlist for now (fast). Replace later with custom claims.
+  const SUPPORT_ADMINS = ['your-email@domain.com']; // <-- put YOUR login email here
+  const ok = SUPPORT_ADMINS.includes((user.email || '').toLowerCase());
+
+  if (!ok) {
+    return (
+      <div className="app-container">
+        <div className="card">
+          <h2>Access denied</h2>
+          <p>This account is not allowed to access the support portal.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <SupportPortal user={user} />;
+}
+
       }
 
       // Authentication view
+            function SupportPortal({ user }) {
+  const [q, setQ] = useState('');
+  const [farriers, setFarriers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [reason, setReason] = useState('Troubleshooting');
+
+  useEffect(() => {
+    (async () => {
+      if (!db) return;
+      const snap = await db.collection('farriers').get();
+      setFarriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = farriers.filter(f => {
+    const s = (q || '').toLowerCase();
+    return (
+      (f.businessName || '').toLowerCase().includes(s) ||
+      (f.email || '').toLowerCase().includes(s) ||
+      (f.phone || '').toLowerCase().includes(s)
+    );
+  });
+
+  const startSession = async (targetFarrierId) => {
+    const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+
+    const docRef = await db.collection('supportSessions').add({
+      supportAgentUid: user.uid,
+      targetFarrierId,
+      reason,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      expiresAt: firebase.firestore.Timestamp.fromDate(expires),
+      endedAt: null
+    });
+
+    // Redirect into the normal app in support mode
+    const u = new URL(window.location.href);
+    u.searchParams.delete('support');
+    u.searchParams.set('supportSession', docRef.id);
+    window.location.href = u.toString();
+  };
+
+  return (
+    <div className="app-container">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="logo">
+            <span className="logo-icon">🛟</span>
+            <span>Support Portal</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="auth-container">
+        <div className="card">
+          <h2>Impersonate a Farrier</h2>
+
+          <div className="form-group">
+            <label>Search</label>
+            <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="business, email, phone..." />
+          </div>
+
+          <div className="form-group">
+            <label>Reason (required)</label>
+            <input value={reason} onChange={(e)=>setReason(e.target.value)} />
+          </div>
+
+          {loading ? (
+            <p>Loading…</p>
+          ) : (
+            <div style={{marginTop:'12px'}}>
+              {filtered.map(f => (
+                <div key={f.id} className="card" style={{marginBottom:'10px'}}>
+                  <div><strong>{f.businessName || '(no business name)'}</strong></div>
+                  <div style={{color:'var(--text-muted)'}}>{f.email || ''} {f.phone ? `• ${f.phone}` : ''}</div>
+                  <div style={{marginTop:'8px'}}>
+                    <button className="btn btn-primary" onClick={()=>startSession(f.id)}>
+                      Login as this Farrier
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {filtered.length === 0 && <p style={{color:'var(--text-muted)'}}>No matches.</p>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
       if (!user) {
         return <AuthView />;
       }
 
       // Farrier dashboard
-      return <FarrierDashboard user={user} userProfile={userProfile} setUserProfile={setUserProfile} />;
+     return (
+       {isSupportMode && (
+  <div style={{padding:'10px', background:'#ffefef', border:'1px solid #ffb3b3', borderRadius:'8px', marginBottom:'12px'}}>
+    <strong>SUPPORT MODE</strong>
+    {supportSession?.reason ? ` — ${supportSession.reason}` : ''}
+    <div style={{marginTop:'8px'}}>
+      <button className="btn btn-secondary" onClick={clearSupportSession}>End Support Session</button>
+    </div>
+  </div>
+)}
+
+  <FarrierDashboard
+    user={user}
+    userProfile={userProfile}
+    setUserProfile={setUserProfile}
+    farrierId={effectiveFarrierId || user.uid}
+    isSupportMode={isSupportMode}
+    supportSession={supportSession}
+    clearSupportSession={async () => {
+      if (supportSessionId && db) {
+        await db.collection('supportSessions').doc(supportSessionId).update({
+          endedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      // Remove supportSession from URL
+      const u = new URL(window.location.href);
+      u.searchParams.delete('supportSession');
+      window.location.href = u.toString();
+    }}
+  />
+);
+
     }
 
     function AuthView() {
@@ -1475,7 +1652,8 @@ async function seedDefaultServicesIfEmpty_(userId) {
       );
     }
 
-    function FarrierDashboard({ user, userProfile, setUserProfile }) {
+   function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupportMode, supportSession, clearSupportSession }) {
+
       const [tab, setTab] = useState('qrcode');
       const [showQRModal, setShowQRModal] = useState(false);
 
@@ -1496,14 +1674,14 @@ async function seedDefaultServicesIfEmpty_(userId) {
               if (response.access_token) {
                 // Save token to Firestore
                 if (db) {
-                  await db.collection('farriers').doc(user.uid).update({
+                  await db.collection('farriers').doc(farrierId).update({
                     googleCalendarConnected: true,
                     googleAccessToken: response.access_token,
                     googleTokenExpiry: Date.now() + (3600 * 1000) // 1 hour
                   });
                   
                   // Reload profile from Firestore
-                  const profileDoc = await db.collection('farriers').doc(user.uid).get();
+                  const profileDoc = await db.collection('farriers').doc(farrierId).get();
                   if (profileDoc.exists) {
                     setUserProfile(profileDoc.data());
                   }
@@ -1524,7 +1702,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
         if (confirm('Are you sure you want to disconnect Google Calendar? Future appointments will not sync to your calendar.')) {
           try {
             if (db) {
-              await db.collection('farriers').doc(user.uid).update({
+              await db.collection('farriers').doc(farrierId).update({
                 googleCalendarConnected: false,
                 googleAccessToken: firebase.firestore.FieldValue.delete(),
                 googleRefreshToken: firebase.firestore.FieldValue.delete(),
@@ -1532,7 +1710,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
               });
               
               // Reload profile from Firestore
-              const profileDoc = await db.collection('farriers').doc(user.uid).get();
+              const profileDoc = await db.collection('farriers').doc(farrierId).get();
               if (profileDoc.exists) {
                 setUserProfile(profileDoc.data());
               }
@@ -1602,12 +1780,12 @@ async function seedDefaultServicesIfEmpty_(userId) {
                 disconnectGoogleCalendar={disconnectGoogleCalendar}
               />
             )}
-            {tab === 'dashboard' && <DashboardView userId={user.uid} />}
-            {tab === 'calendar' && <CalendarView userId={user.uid} />}
-            {tab === 'appointments' && <AppointmentsView userId={user.uid} userProfile={userProfile} />}
-            {tab === 'invoices' && <InvoicesView userId={user.uid} userProfile={userProfile} />}
-            {tab === 'services' && <ServicesView userId={user.uid} />}
-            {tab === 'reports' && <ReportsView userId={user.uid} />}
+            {tab === 'dashboard' && <DashboardView userId={farrierId} />}
+            {tab === 'calendar' && <CalendarView userId={farrierId} />}
+            {tab === 'appointments' && <AppointmentsView userId={farrierId} userProfile={userProfile} />}
+            {tab === 'invoices' && <InvoicesView userId={farrierId} userProfile={userProfile} />}
+            {tab === 'services' && <ServicesView userId={farrierId} />}
+            {tab === 'reports' && <ReportsView userId={farrierId} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} />}
             {tab === 'about' && <AboutView />}
           </main>
@@ -2721,7 +2899,7 @@ function ServicesView({ userId }) {
     }
 
     function QRCodeView({ user, userProfile, connectGoogleCalendar, disconnectGoogleCalendar }) {
-      const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + user.uid;
+      const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + farrierId;
       
       // Use Google Charts API for QR code as backup
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(bookingUrl)}&color=2D5016&bgcolor=FFFFFF`;
@@ -5935,7 +6113,7 @@ useEffect(() => {
 
         try {
           if (db) {
-            await db.collection('farriers').doc(user.uid).update({
+            await db.collection('farriers').doc(farrierId).update({
               businessName: businessName,
               phone: phone,
               address: address,
@@ -6180,13 +6358,13 @@ useEffect(() => {
             <div style={{marginBottom: '1rem'}}>
               <strong>Booking URL:</strong><br/>
               <code style={{background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.5rem', wordBreak: 'break-all'}}>
-                {`${window.location.origin}?farrier=${user.uid}`}
+                {`${window.location.origin}?farrier=${farrierId}`}
               </code>
               <div style={{marginTop: '0.5rem'}}>
                 <button 
                   className="btn btn-sm"
                   onClick={() => {
-                    const url = `${window.location.origin}?farrier=${user.uid}`;
+                    const url = `${window.location.origin}?farrier=${farrierId}`;
                     navigator.clipboard.writeText(url);
                     alert('Booking URL copied to clipboard!');
                   }}
@@ -6199,12 +6377,12 @@ useEffect(() => {
                   onClick={async () => {
                     try {
                       if (db) {
-                        await db.collection('farriers').doc(user.uid).update({
-                          bookingUrl: `${window.location.origin}?farrier=${user.uid}`
+                        await db.collection('farriers').doc(farrierId).update({
+                          bookingUrl: `${window.location.origin}?farrier=${farrierId}`
                         });
                         setUserProfile({
                           ...userProfile,
-                          bookingUrl: `${window.location.origin}?farrier=${user.uid}`
+                          bookingUrl: `${window.location.origin}?farrier=${farrierId}`
                         });
                         alert('Booking URL updated successfully!');
                       }
