@@ -1749,14 +1749,14 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               if (response.access_token) {
                 // Save token to Firestore
                 if (db) {
-                  await db.collection('farriers').doc(farrierId).update({
+                  await db.collection('farriers').doc(safeFarrierId).update({
                     googleCalendarConnected: true,
                     googleAccessToken: response.access_token,
                     googleTokenExpiry: Date.now() + (3600 * 1000) // 1 hour
                   });
                   
                   // Reload profile from Firestore
-                  const profileDoc = await db.collection('farriers').doc(farrierId).get();
+                  const profileDoc = await db.collection('farriers').doc(safeFarrierId).get();
                   if (profileDoc.exists) {
                     setUserProfile(profileDoc.data());
                   }
@@ -1777,7 +1777,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         if (confirm('Are you sure you want to disconnect Google Calendar? Future appointments will not sync to your calendar.')) {
           try {
             if (db) {
-              await db.collection('farriers').doc(farrierId).update({
+              await db.collection('farriers').doc(safeFarrierId).update({
                 googleCalendarConnected: false,
                 googleAccessToken: firebase.firestore.FieldValue.delete(),
                 googleRefreshToken: firebase.firestore.FieldValue.delete(),
@@ -1785,7 +1785,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               });
               
               // Reload profile from Firestore
-              const profileDoc = await db.collection('farriers').doc(farrierId).get();
+              const profileDoc = await db.collection('farriers').doc(safeFarrierId).get();
               if (profileDoc.exists) {
                 setUserProfile(profileDoc.data());
               }
@@ -1862,7 +1862,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'invoices' && <InvoicesView userId={farrierId} userProfile={userProfile} />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
             {tab === 'reports' && <ReportsView userId={farrierId} />}
-            {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} />}
+            {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} / farrierId={farrierId}>}
             {tab === 'about' && <AboutView />}
           </main>
         </div>
@@ -2977,7 +2977,7 @@ function ServicesView({ userId }) {
     function QRCodeView({ user, userProfile, connectGoogleCalendar, disconnectGoogleCalendar }) {
       // Resolve farrierId safely (stored on the user profile; fallback to auth uid)
       const farrierId = (userProfile && (userProfile.farrierId || userProfile.id || userProfile.uid)) || (user && user.uid) || '';
-      const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + encodeURIComponent(farrierId);
+      const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + encodeURIComponent(safeFarrierId);
       
       // Use Google Charts API for QR code as backup
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(bookingUrl)}&color=2D5016&bgcolor=FFFFFF`;
@@ -3094,7 +3094,7 @@ function ServicesView({ userId }) {
       const loadFarrierInfo = async () => {
         try {
           if (db) {
-            const doc = await db.collection('farriers').doc(farrierId).get();
+            const doc = await db.collection('farriers').doc(safeFarrierId).get();
             if (doc.exists) {
               setFarrierInfo(doc.data());
             }
@@ -6145,7 +6145,9 @@ useEffect(() => {
       );
     }
 
-    function SettingsView({ user, userProfile, setUserProfile }) {
+    function SettingsView({ user, userProfile, setUserProfile, farrierId }) {
+  const safeFarrierId = String((farrierId || (userProfile && (userProfile.farrierId || userProfile.farrierID || userProfile.id || userProfile.uid)) || (user && user.uid) || "")).trim();
+
       const [businessName, setBusinessName] = useState(userProfile?.businessName || '');
       const [logoUrl, setLogoUrl] = useState(userProfile?.logoUrl || '');
       const [autoPrintPdf, setAutoPrintPdf] = useState(userProfile?.autoPrintPdf ?? true);
@@ -6191,7 +6193,7 @@ useEffect(() => {
 
         try {
           if (db) {
-            await db.collection('farriers').doc(farrierId).update({
+            await db.collection('farriers').doc(safeFarrierId).update({
               businessName: businessName,
               phone: phone,
               address: address,
@@ -6436,13 +6438,13 @@ useEffect(() => {
             <div style={{marginBottom: '1rem'}}>
               <strong>Booking URL:</strong><br/>
               <code style={{background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.5rem', wordBreak: 'break-all'}}>
-                {`${window.location.origin}?farrier=${farrierId}`}
+                {`${window.location.origin}?farrier=${safeFarrierId}`}
               </code>
               <div style={{marginTop: '0.5rem'}}>
                 <button 
                   className="btn btn-sm"
                   onClick={() => {
-                    const url = `${window.location.origin}?farrier=${farrierId}`;
+                    const url = `${window.location.origin}?farrier=${safeFarrierId}`;
                     navigator.clipboard.writeText(url);
                     alert('Booking URL copied to clipboard!');
                   }}
@@ -6455,12 +6457,12 @@ useEffect(() => {
                   onClick={async () => {
                     try {
                       if (db) {
-                        await db.collection('farriers').doc(farrierId).update({
-                          bookingUrl: `${window.location.origin}?farrier=${farrierId}`
+                        await db.collection('farriers').doc(safeFarrierId).update({
+                          bookingUrl: `${window.location.origin}?farrier=${safeFarrierId}`
                         });
                         setUserProfile({
                           ...userProfile,
-                          bookingUrl: `${window.location.origin}?farrier=${farrierId}`
+                          bookingUrl: `${window.location.origin}?farrier=${safeFarrierId}`
                         });
                         alert('Booking URL updated successfully!');
                       }
