@@ -1074,6 +1074,26 @@ async function seedDefaultServicesIfEmpty_(userId) {
   const support = urlParams.has("support");
   const supportSessionId = urlParams.get("supportSession");
 
+
+  // Support admin gate (must be outside conditional renders)
+  const [isAdmin, setIsAdmin] = useState(null);
+
+  useEffect(() => {
+    // Only check admin access when support mode is enabled and a user is signed in
+    if (!support || !user) {
+      setIsAdmin(null);
+      return;
+    }
+    (async () => {
+      try {
+        const doc = await db.collection("supportAdmins").doc(user.uid).get();
+        setIsAdmin(doc.exists && (doc.data()?.active !== false));
+      } catch (e) {
+        console.error("Admin check failed", e);
+        setIsAdmin(false);
+      }
+    })();
+  }, [support, user?.uid]);
   const clearSupportSession = async () => {
     try {
       if (supportSessionId && db) {
@@ -1169,31 +1189,20 @@ if (support) {
   if (!user) return <AuthView />;
 
   // Firestore-based admin gate (easy + no custom claims)
-  const [isAdmin, setIsAdmin] = React.useState(null);
-
-  React.useEffect(() => {
-    (async () => {
-      try {
-        const doc = await db.collection("supportAdmins").doc(user.uid).get();
-        setIsAdmin(doc.exists && (doc.data()?.active !== false));
-      } catch (e) {
-        console.error("Admin check failed", e);
-        setIsAdmin(false);
-      }
-    })();
-  }, [user?.uid]);
-
   if (isAdmin === null) {
     return (
-      <div className="app-container">
-        <div className="card"><p>Checking access…</p></div>
+      <div className="page">
+        <div className="card">
+          <h2>Checking access…</h2>
+          <p>Loading support portal…</p>
+        </div>
       </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="app-container">
+      <div className="page">
         <div className="card">
           <h2>Access denied</h2>
           <p>This account is not allowed to access the support portal.</p>
