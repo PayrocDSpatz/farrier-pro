@@ -683,8 +683,21 @@
     }
   
 .build-badge{margin-left:10px;font-size:12px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25)}
-.build-badge-top{font-size:12px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.25);}
 
+      .version-pill{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        padding:6px 10px;
+        border-radius:999px;
+        background: rgba(255,255,255,0.12);
+        border:1px solid rgba(255,255,255,0.25);
+        color:#fff;
+        font-weight:700;
+        font-size:12px;
+        letter-spacing:0.3px;
+        margin-right:10px;
+      }
 </style>
 </head>
 <body>
@@ -694,7 +707,7 @@
     const { useState, useEffect } = React;
 
 
-      const BUILD_VERSION = "v3";
+      const BUILD_VERSION = "support-portal-v3";
 console.log("Farrier Pro build:", BUILD_VERSION);
 
 /**********************
@@ -1255,126 +1268,373 @@ if (support) {
 }
 
 function AuthView() {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState('');
+      const [mode, setMode] = useState('login'); // 'login' or 'signup'
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [businessName, setBusinessName] = useState('');
+      const [phone, setPhone] = useState('');
+      const [address, setAddress] = useState('');
+      const [city, setCity] = useState('');
+      const [state, setState] = useState('');
+      const [zip, setZip] = useState('');
+      const [logoUrl, setLogoUrl] = useState('');
+      const [autoPrintPdf, setAutoPrintPdf] = useState(true);
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [successMessage, setSuccessMessage] = useState('');
 
-  const redirectToSignup = () => {
-    window.location.href = "https://farrier-pro-landing-page.vercel.app/";
-  };
+      const handleForgotPassword = async () => {
+        if (!email) {
+          setError('Please enter your email address first');
+          return;
+        }
+        
+        setError('');
+        setLoading(true);
+        
+        try {
+          if (!auth) {
+            setError('Firebase not configured. Please add your Firebase credentials.');
+            setLoading(false);
+            return;
+          }
+          await auth.sendPasswordResetEmail(email);
+          setSuccessMessage('Password reset email sent! Check your inbox.');
+          setError('');
+        } catch (err) {
+          setError(err.message);
+        }
+        setLoading(false);
+      };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-    setBusy(true);
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-    } catch (err) {
-      setError(err?.message || "Login failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        
+        try {
+          if (!auth) {
+            setError('Firebase not configured. Please add your Firebase credentials.');
+            setLoading(false);
+            return;
+          }
+          await auth.signInWithEmailAndPassword(email, password);
+        } catch (err) {
+          setError(err.message);
+        }
+        setLoading(false);
+      };
 
-  const handleGoogle = async () => {
-    setError('');
-    setBusy(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (err) {
-      setError(err?.message || "Google sign-in failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+      const handleGoogleSignIn = async () => {
+        setError('');
+        setLoading(true);
+        
+        try {
+          if (!auth) {
+            setError('Firebase not configured.');
+            setLoading(false);
+            return;
+          }
 
-  const handleReset = async () => {
-    setError('');
-    if (!email?.trim()) {
-      setError("Enter your email first, then click reset.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-      alert("Password reset email sent.");
-    } catch (err) {
-      setError(err?.message || "Password reset failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+          const provider = new firebase.auth.GoogleAuthProvider();
+          const result = await auth.signInWithPopup(provider);
+          const user = result.user;
 
-  return (
-    <div className="auth-wrap">
-      <header className="app-header">
-        <div className="brand">
-          <span className="logo">🐴</span>
-          <span className="brand-name">Farrier Pro</span>
-        </div>
-        <div className="header-actions">
-          <span className="build-badge build-badge-top">{BUILD_VERSION}</span>
-        </div>
-      </header>
-
-      <div className="auth-card">
-        <h1>Welcome Back</h1>
-        <p className="muted">Manage your farrier business with ease</p>
-
-        <div className="auth-tabs" role="tablist" aria-label="Auth">
-          <button className="auth-tab active" type="button">Login</button>
-          <button className="auth-tab" type="button" onClick={redirectToSignup}>Sign Up</button>
-        </div>
-
-        {error && <div className="alert">{error}</div>}
-
-        <form onSubmit={handleLogin} className="auth-form">
-          <label className="field">
-            <span>Email</span>
-            <input
-              type="email"
-              placeholder="you@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </label>
-
-          <label className="field">
-            <span>Password</span>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </label>
-
-          <button className="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? "Working…" : "Login"}
-          </button>
-        </form>
-
-        <div className="divider"><span>OR</span></div>
-
-        <button className="btn btn-google" type="button" onClick={handleGoogle} disabled={busy}>
-          <span className="google-g">G</span> Sign in with Google
-        </button>
-
-        <button className="link" type="button" onClick={handleReset} disabled={busy}>
-          Forgot password?
-        </button>
-      </div>
-    </div>
-  );
+          // Check if user profile exists
+          const profileDoc = await db.collection('farriers').doc(user.uid).get();
+          
+          if (!profileDoc.exists) {
+            // First time Google sign-in - create profile
+            await db.collection('farriers').doc(user.uid).set({
+              businessName: user.displayName || 'My Farrier Business',
+              email: user.email,
+              phone: '',
+              address: '',
+              city: '',
+              state: '',
+              zip: '',
+              ownerUid: user.uid,
+              farrierId: user.uid,
+              logoUrl: '',
+              autoPrintPdf: true,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              googleCalendarConnected: false,
+              bookingUrl: window.location.origin + '?farrier=' + user.uid
+            });
 }
+          
+          // User will be automatically logged in by Firebase
+        } catch (err) {
+          if (err.code !== 'auth/popup-closed-by-user') {
+            setError(err.message);
+          }
+        }
+        setLoading(false);
+      };
 
-function SupportPortal({ user }) {
+      const handleSignup = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        
+        try {
+          if (!auth) {
+            setError('Firebase not configured. Please add your Firebase credentials.');
+            setLoading(false);
+            return;
+          }
+
+          // Create user account
+          const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+          await seedDefaultServicesIfEmpty_(userCredential.user.uid);
+          const user = userCredential.user;
+          
+          // Send welcome/verification email
+          await user.sendEmailVerification();
+          
+          // Create farrier profile in Firestore
+          await db.collection('farriers').doc(user.uid).set({
+            businessName: businessName,
+            email: email,
+            phone: phone,
+            address: address,
+            city: city,
+            state: state,
+            zip: zip,
+            ownerUid: user.uid,
+            farrierId: user.uid,
+            logoUrl: logoUrl,
+            autoPrintPdf: autoPrintPdf,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            googleCalendarConnected: false,
+            bookingUrl: window.location.origin + '?farrier=' + user.uid
+          });
+alert('Welcome! Please check your email to verify your account.');
+
+        } catch (err) {
+          setError(err.message);
+        }
+        setLoading(false);
+      };
+
+      return (
+        <div className="app-container">
+          <header className="app-header">
+            <div className="header-content">
+              <div className="logo">
+                <span className="logo-icon">🐴</span>
+                <span>Farrier Pro</span>
+              </div>
+            </div>
+          </header>
+
+          <div className="auth-container">
+            <div className="auth-card">
+              <div className="auth-header">
+                <h1>Welcome Back</h1>
+                <p>Manage your farrier business with ease</p>
+              </div>
+
+              <div className="auth-tabs">
+                <button 
+                  className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
+                  onClick={() => setMode('login')}
+                >
+                  Login
+                </button>
+                <button 
+                  className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
+                  onClick={() => { window.location.href = 'https://farrier-pro-landing-page.vercel.app/'; }}
+                >
+                  Sign Up
+                </button>
+              </div>
+
+              {error && <div className="error-message">{error}</div>}
+              {successMessage && <div className="success-message">{successMessage}</div>}
+
+              <form onSubmit={mode === 'login' ? handleLogin : handleSignup}>
+                {mode === 'signup' && (
+                  <>
+                    <div className="form-group">
+                      <label>Business Name *</label>
+                      <input 
+                        type="text"
+                        required
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        placeholder="John's Farrier Services"
+                      />
+              <label style={{marginTop:'10px'}}>Logo URL (optional)</label>
+              <input
+                type="text"
+                value={logoUrl}
+                onChange={(e)=>setLogoUrl(e.target.value)}
+                placeholder="https://.../logo.png"
+              />
+
+              <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'10px'}}>
+                <input type="checkbox" checked={Boolean(autoPrintPdf)} onChange={(e)=>setAutoPrintPdf(e.target.checked)} />
+                <span>Auto-open PDF after creating an invoice</span>
+              </div>
+
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Phone Number *</label>
+                      <input 
+                        type="tel"
+                        required
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="(555) 555-5555"
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>Business Address *</label>
+                      <input 
+                        type="text"
+                        required
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="123 Main Street"
+                      />
+                    </div>
+                    
+                    <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem'}}>
+                      <div className="form-group">
+                        <label>City *</label>
+                        <input 
+                          type="text"
+                          required
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder="City"
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>State *</label>
+                        <input 
+                          type="text"
+                          required
+                          value={state}
+                          onChange={(e) => setState(e.target.value.toUpperCase())}
+                          placeholder="VA"
+                          maxLength="2"
+                          style={{textTransform: 'uppercase'}}
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label>ZIP *</label>
+                        <input 
+                          type="text"
+                          required
+                          value={zip}
+                          onChange={(e) => setZip(e.target.value)}
+                          placeholder="12345"
+                          maxLength="5"
+                          pattern="[0-9]{5}"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <div className="form-group">
+                  <label>Email</label>
+                  <input 
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Password</label>
+                  <input 
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    minLength={6}
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{width: '100%'}}
+                  disabled={loading}
+                >
+                  {loading ? <span className="spinner"></span> : (mode === 'login' ? 'Login' : 'Create Account')}
+                </button>
+
+                {/* Divider */}
+                <div style={{display: 'flex', alignItems: 'center', margin: '1.5rem 0', gap: '1rem'}}>
+                  <div style={{flex: 1, height: '1px', background: '#e0e0e0'}}></div>
+                  <span style={{color: '#666', fontSize: '0.875rem'}}>OR</span>
+                  <div style={{flex: 1, height: '1px', background: '#e0e0e0'}}></div>
+                </div>
+
+                {/* Google Sign-In Button */}
+                <button 
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  className="btn"
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    background: 'white',
+                    color: '#444',
+                    border: '1px solid #ddd',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.75rem',
+                    fontWeight: '500'
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
+                    <path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.17.282-1.709V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.335z" fill="#FBBC05"/>
+                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                  </svg>
+                  {mode === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
+                </button>
+                
+                {mode === 'login' && (
+                  <div style={{textAlign: 'center', marginTop: '1rem'}}>
+                    <button 
+                      type="button"
+                      onClick={handleForgotPassword}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--primary)',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+              </form>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+   function SupportPortal({ user }) {
   const [q, setQ] = useState('');
   const [farriers, setFarriers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1557,9 +1817,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             <div className="header-content">
               <div className="logo">
                 <span className="logo-icon">🐴</span>
-                <span>Farrier Pro</span><span className="build-badge">{BUILD_VERSION}</span>
+                <span>Farrier Pro</span>
               </div>
               <div className="header-actions">
+            <span className="version-pill">{BUILD_VERSION}</span>
                 <div className="user-info">
                   {userProfile?.businessName || user.email}
                 </div>
