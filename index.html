@@ -683,6 +683,8 @@
     }
   
 .build-badge{margin-left:10px;font-size:12px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25)}
+.build-badge-top{font-size:12px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.25);}
+
 </style>
 </head>
 <body>
@@ -692,7 +694,7 @@
     const { useState, useEffect } = React;
 
 
-      const BUILD_VERSION = "support-portal-v3";
+      const BUILD_VERSION = "v3";
 console.log("Farrier Pro build:", BUILD_VERSION);
 
 /**********************
@@ -1253,219 +1255,126 @@ if (support) {
 }
 
 function AuthView() {
-      const [mode, setMode] = useState('login'); // 'login' or 'signup'
-      const [email, setEmail] = useState('');
-      const [password, setPassword] = useState('');
-      const [businessName, setBusinessName] = useState('');
-      const [phone, setPhone] = useState('');
-      const [address, setAddress] = useState('');
-      const [city, setCity] = useState('');
-      const [state, setState] = useState('');
-      const [zip, setZip] = useState('');
-      const [logoUrl, setLogoUrl] = useState('');
-      const [autoPrintPdf, setAutoPrintPdf] = useState(true);
-      const [error, setError] = useState('');
-      const [loading, setLoading] = useState(false);
-      const [successMessage, setSuccessMessage] = useState('');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState('');
 
-      const handleForgotPassword = async () => {
-        if (!email) {
-          setError('Please enter your email address first');
-          return;
-        }
-        
-        setError('');
-        setLoading(true);
-        
-        try {
-          if (!auth) {
-            setError('Firebase not configured. Please add your Firebase credentials.');
-            setLoading(false);
-            return;
-          }
-          await auth.sendPasswordResetEmail(email);
-          setSuccessMessage('Password reset email sent! Check your inbox.');
-          setError('');
-        } catch (err) {
-          setError(err.message);
-        }
-        setLoading(false);
-      };
+  const redirectToSignup = () => {
+    window.location.href = "https://farrier-pro-landing-page.vercel.app/";
+  };
 
-      const handleLogin = async (e) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-        
-        try {
-          if (!auth) {
-            setError('Firebase not configured. Please add your Firebase credentials.');
-            setLoading(false);
-            return;
-          }
-          await auth.signInWithEmailAndPassword(email, password);
-        } catch (err) {
-          setError(err.message);
-        }
-        setLoading(false);
-      };
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (err) {
+      setError(err?.message || "Login failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
-      const handleGoogleSignIn = async () => {
-        setError('');
-        setLoading(true);
-        
-        try {
-          if (!auth) {
-            setError('Firebase not configured.');
-            setLoading(false);
-            return;
-          }
+  const handleGoogle = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      setError(err?.message || "Google sign-in failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
-          const provider = new firebase.auth.GoogleAuthProvider();
-          const result = await auth.signInWithPopup(provider);
-          const user = result.user;
+  const handleReset = async () => {
+    setError('');
+    if (!email?.trim()) {
+      setError("Enter your email first, then click reset.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      alert("Password reset email sent.");
+    } catch (err) {
+      setError(err?.message || "Password reset failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
-          // Check if user profile exists
-          const profileDoc = await db.collection('farriers').doc(user.uid).get();
-          
-          if (!profileDoc.exists) {
-            // First time Google sign-in - create profile
-            await db.collection('farriers').doc(user.uid).set({
-              businessName: user.displayName || 'My Farrier Business',
-              email: user.email,
-              phone: '',
-              address: '',
-              city: '',
-              state: '',
-              zip: '',
-              ownerUid: user.uid,
-              farrierId: user.uid,
-              logoUrl: '',
-              autoPrintPdf: true,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-              googleCalendarConnected: false,
-              bookingUrl: window.location.origin + '?farrier=' + user.uid
-            });
+  return (
+    <div className="auth-wrap">
+      <header className="app-header">
+        <div className="brand">
+          <span className="logo">🐴</span>
+          <span className="brand-name">Farrier Pro</span>
+        </div>
+        <div className="header-actions">
+          <span className="build-badge build-badge-top">{BUILD_VERSION}</span>
+        </div>
+      </header>
+
+      <div className="auth-card">
+        <h1>Welcome Back</h1>
+        <p className="muted">Manage your farrier business with ease</p>
+
+        <div className="auth-tabs" role="tablist" aria-label="Auth">
+          <button className="auth-tab active" type="button">Login</button>
+          <button className="auth-tab" type="button" onClick={redirectToSignup}>Sign Up</button>
+        </div>
+
+        {error && <div className="alert">{error}</div>}
+
+        <form onSubmit={handleLogin} className="auth-form">
+          <label className="field">
+            <span>Email</span>
+            <input
+              type="email"
+              placeholder="you@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </label>
+
+          <label className="field">
+            <span>Password</span>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </label>
+
+          <button className="btn btn-primary" type="submit" disabled={busy}>
+            {busy ? "Working…" : "Login"}
+          </button>
+        </form>
+
+        <div className="divider"><span>OR</span></div>
+
+        <button className="btn btn-google" type="button" onClick={handleGoogle} disabled={busy}>
+          <span className="google-g">G</span> Sign in with Google
+        </button>
+
+        <button className="link" type="button" onClick={handleReset} disabled={busy}>
+          Forgot password?
+        </button>
+      </div>
+    </div>
+  );
 }
-          
-          // User will be automatically logged in by Firebase
-        } catch (err) {
-          if (err.code !== 'auth/popup-closed-by-user') {
-            setError(err.message);
-          }
-        }
-        setLoading(false);
-      };
 
-      const handleSignup = async (e) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-        
-        try {
-          if (!auth) {
-            setError('Firebase not configured. Please add your Firebase credentials.');
-            setLoading(false);
-            return;
-          }
-
-          // Create user account
-          const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-          await seedDefaultServicesIfEmpty_(userCredential.user.uid);
-          const user = userCredential.user;
-          
-          // Send welcome/verification email
-          await user.sendEmailVerification();
-          
-          // Create farrier profile in Firestore
-          await db.collection('farriers').doc(user.uid).set({
-            businessName: businessName,
-            email: email,
-            phone: phone,
-            address: address,
-            city: city,
-            state: state,
-            zip: zip,
-            ownerUid: user.uid,
-            farrierId: user.uid,
-            logoUrl: logoUrl,
-            autoPrintPdf: autoPrintPdf,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            googleCalendarConnected: false,
-            bookingUrl: window.location.origin + '?farrier=' + user.uid
-          });
-alert('Welcome! Please check your email to verify your account.');
-
-        } catch (err) {
-          setError(err.message);
-        }
-        setLoading(false);
-      };
-
-      return (
-        <div className="app-container">
-          <header className="app-header">
-            <div className="header-content">
-              <div className="logo">
-                <span className="logo-icon">🐴</span>
-                <span>Farrier Pro</span><span className="build-badge">{BUILD_VERSION}</span>
-              </div>
-            </div>
-          </header>
-
-          <div className="auth-container">
-            <div className="auth-card">
-              <div className="auth-header">
-                <h1>Welcome Back</h1>
-                <p>Manage your farrier business with ease</p>
-              </div>
-
-              <div className="auth-tabs">
-                <button 
-                  className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
-                  onClick={() => setMode('login')}
-                >
-                  Login
-                </button>
-                <button 
-                  className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
-                  onClick={() => setMode('signup')}
-                ><div class="auth-card">
-  <h1>Welcome Back</h1>
-  <p>Manage your farrier business with ease</p>
-
-  <div class="auth-tabs">
-    <button class="active">Login</button>
-    <button onclick="window.location.href='https://farrier-pro-landing-page.vercel.app/'">
-      Sign Up
-    </button>
-  </div>
-
-  <form id="loginForm">
-    <label>Email</label>
-    <input type="email" id="loginEmail" placeholder="your@email.com" required />
-
-    <label>Password</label>
-    <input type="password" id="loginPassword" placeholder="••••••••" required />
-
-    <button type="submit" class="primary-btn">
-      Login
-    </button>
-  </form>
-
-  <div class="divider">OR</div>
-
-  <button id="googleLoginBtn" class="google-btn">
-    Sign in with Google
-  </button>
-
-  <div class="forgot-link">
-    <a href="#">Forgot password?</a>
-  </div>
-</div>
-
-
-   function SupportPortal({ user }) {
+function SupportPortal({ user }) {
   const [q, setQ] = useState('');
   const [farriers, setFarriers] = useState([]);
   const [loading, setLoading] = useState(true);
