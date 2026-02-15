@@ -2975,6 +2975,7 @@ function ServicesView({ userId }) {
     }
 
     function QRCodeView({ user, userProfile, connectGoogleCalendar, disconnectGoogleCalendar }) {
+  const safeFarrierId = (typeof farrierId !== 'undefined' && farrierId) || (userProfile && (userProfile.farrierId || userProfile.ownerUid || userProfile.uid)) || (user && user.uid) || '';
       // Resolve farrierId safely (stored on the user profile; fallback to auth uid)
       const farrierId = (userProfile && (userProfile.farrierId || userProfile.id || userProfile.uid)) || (user && user.uid) || '';
       const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + encodeURIComponent(safeFarrierId);
