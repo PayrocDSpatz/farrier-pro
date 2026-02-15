@@ -1165,34 +1165,45 @@ async function seedDefaultServicesIfEmpty_(userId) {
   }
 
   // Support portal view
-  if (support) {
-    if (!user) return <AuthView />;
+if (support) {
+  if (!user) return <AuthView />;
 
-    // TODO: Replace with Firebase custom claims. For now, allowlist by email.
-    const SUPPORT_ADMINS = [
-      // "you@example.com"
-    ].map(e => String(e).toLowerCase());
+  // Firestore-based admin gate (easy + no custom claims)
+  const [isAdmin, setIsAdmin] = React.useState(null);
 
-    const ok = SUPPORT_ADMINS.length === 0
-      ? false
-      : SUPPORT_ADMINS.includes(String(user.email || "").toLowerCase());
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const doc = await db.collection("supportAdmins").doc(user.uid).get();
+        setIsAdmin(doc.exists && (doc.data()?.active !== false));
+      } catch (e) {
+        console.error("Admin check failed", e);
+        setIsAdmin(false);
+      }
+    })();
+  }, [user?.uid]);
 
-    if (!ok) {
-      return (
-        <div className="app-container">
-          <div className="card">
-            <h2>Access denied</h2>
-            <p>This account is not allowed to access the support portal.</p>
-            <p style={{marginTop: "0.75rem", color: "var(--text-muted)"}}>
-              Add your email to SUPPORT_ADMINS in <code>App()</code>.
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    return <SupportPortal user={user} />;
+  if (isAdmin === null) {
+    return (
+      <div className="app-container">
+        <div className="card"><p>Checking access…</p></div>
+      </div>
+    );
   }
+
+  if (!isAdmin) {
+    return (
+      <div className="app-container">
+        <div className="card">
+          <h2>Access denied</h2>
+          <p>This account is not allowed to access the support portal.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <SupportPortal user={user} />;
+}
 
   // Authentication view
   if (!user) {
