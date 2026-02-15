@@ -1862,7 +1862,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'invoices' && <InvoicesView userId={farrierId} userProfile={userProfile} />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
             {tab === 'reports' && <ReportsView userId={farrierId} />}
-            {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} / farrierId={farrierId}>}
+            {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
             {tab === 'about' && <AboutView />}
           </main>
         </div>
