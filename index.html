@@ -1430,194 +1430,40 @@ alert('Welcome! Please check your email to verify your account.');
                 <button 
                   className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
                   onClick={() => setMode('signup')}
-                >
-                  Sign Up
-                </button>
-              </div>
+                ><div class="auth-card">
+  <h1>Welcome Back</h1>
+  <p>Manage your farrier business with ease</p>
 
-              {error && <div className="error-message">{error}</div>}
-              {successMessage && <div className="success-message">{successMessage}</div>}
+  <div class="auth-tabs">
+    <button class="active">Login</button>
+    <button onclick="window.location.href='https://farrier-pro-landing-page.vercel.app/'">
+      Sign Up
+    </button>
+  </div>
 
-              <form onSubmit={mode === 'login' ? handleLogin : handleSignup}>
-                {mode === 'signup' && (
-                  <>
-                    <div className="form-group">
-                      <label>Business Name *</label>
-                      <input 
-                        type="text"
-                        required
-                        value={businessName}
-                        onChange={(e) => setBusinessName(e.target.value)}
-                        placeholder="John's Farrier Services"
-                      />
-              <label style={{marginTop:'10px'}}>Logo URL (optional)</label>
-              <input
-                type="text"
-                value={logoUrl}
-                onChange={(e)=>setLogoUrl(e.target.value)}
-                placeholder="https://.../logo.png"
-              />
+  <form id="loginForm">
+    <label>Email</label>
+    <input type="email" id="loginEmail" placeholder="your@email.com" required />
 
-              <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'10px'}}>
-                <input type="checkbox" checked={Boolean(autoPrintPdf)} onChange={(e)=>setAutoPrintPdf(e.target.checked)} />
-                <span>Auto-open PDF after creating an invoice</span>
-              </div>
+    <label>Password</label>
+    <input type="password" id="loginPassword" placeholder="••••••••" required />
 
-                    </div>
-                    
-                    <div className="form-group">
-                      <label>Phone Number *</label>
-                      <input 
-                        type="tel"
-                        required
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="(555) 555-5555"
-                      />
-                    </div>
-                    
-                    <div className="form-group">
-                      <label>Business Address *</label>
-                      <input 
-                        type="text"
-                        required
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        placeholder="123 Main Street"
-                      />
-                    </div>
-                    
-                    <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem'}}>
-                      <div className="form-group">
-                        <label>City *</label>
-                        <input 
-                          type="text"
-                          required
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          placeholder="City"
-                        />
-                      </div>
-                      
-                      <div className="form-group">
-                        <label>State *</label>
-                        <input 
-                          type="text"
-                          required
-                          value={state}
-                          onChange={(e) => setState(e.target.value.toUpperCase())}
-                          placeholder="VA"
-                          maxLength="2"
-                          style={{textTransform: 'uppercase'}}
-                        />
-                      </div>
-                      
-                      <div className="form-group">
-                        <label>ZIP *</label>
-                        <input 
-                          type="text"
-                          required
-                          value={zip}
-                          onChange={(e) => setZip(e.target.value)}
-                          placeholder="12345"
-                          maxLength="5"
-                          pattern="[0-9]{5}"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
+    <button type="submit" class="primary-btn">
+      Login
+    </button>
+  </form>
 
-                <div className="form-group">
-                  <label>Email</label>
-                  <input 
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                  />
-                </div>
+  <div class="divider">OR</div>
 
-                <div className="form-group">
-                  <label>Password</label>
-                  <input 
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    minLength={6}
-                  />
-                </div>
+  <button id="googleLoginBtn" class="google-btn">
+    Sign in with Google
+  </button>
 
-                <button 
-                  type="submit" 
-                  className="btn btn-primary" 
-                  style={{width: '100%'}}
-                  disabled={loading}
-                >
-                  {loading ? <span className="spinner"></span> : (mode === 'login' ? 'Login' : 'Create Account')}
-                </button>
+  <div class="forgot-link">
+    <a href="#">Forgot password?</a>
+  </div>
+</div>
 
-                {/* Divider */}
-                <div style={{display: 'flex', alignItems: 'center', margin: '1.5rem 0', gap: '1rem'}}>
-                  <div style={{flex: 1, height: '1px', background: '#e0e0e0'}}></div>
-                  <span style={{color: '#666', fontSize: '0.875rem'}}>OR</span>
-                  <div style={{flex: 1, height: '1px', background: '#e0e0e0'}}></div>
-                </div>
-
-                {/* Google Sign-In Button */}
-                <button 
-                  type="button"
-                  onClick={handleGoogleSignIn}
-                  className="btn"
-                  disabled={loading}
-                  style={{
-                    width: '100%',
-                    background: 'white',
-                    color: '#444',
-                    border: '1px solid #ddd',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.75rem',
-                    fontWeight: '500'
-                  }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
-                    <path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.17.282-1.709V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.335z" fill="#FBBC05"/>
-                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-                  </svg>
-                  {mode === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
-                </button>
-                
-                {mode === 'login' && (
-                  <div style={{textAlign: 'center', marginTop: '1rem'}}>
-                    <button 
-                      type="button"
-                      onClick={handleForgotPassword}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--primary)',
-                        textDecoration: 'underline',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                )}
-              </form>
-            </div>
-          </div>
-        </div>
-      );
-    }
 
    function SupportPortal({ user }) {
   const [q, setQ] = useState('');
