@@ -1060,237 +1060,174 @@ async function seedDefaultServicesIfEmpty_(userId) {
     const CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar";
 
     function App() {
-      const [user, setUser] = useState(null);
-      const [loading, setLoading] = useState(true);
-      const [userProfile, setUserProfile] = useState(null);
-      const [supportSession, setSupportSession] = useState(null);
-      const [effectiveFarrierId, setEffectiveFarrierId] = useState(null);
-      const [isSupportMode, setIsSupportMode] = useState(false);
-
-
-      useEffect(() => {
-        // Check authentication state
-        if (auth) {
-          const unsubscribe = auth.onAuthStateChanged(async (user) => {
-            if (user) {
-  setUser(user);
-
-  // Default to the signed-in farrier
-  let farrierIdToUse = user.uid;
-  let supportSessionData = null;
-
-  // If a support session is present in the URL, validate it and switch context
-  if (supportSessionId) {
-    const ssDoc = await db.collection('supportSessions').doc(supportSessionId).get();
-    if (ssDoc.exists) {
-      const ss = ssDoc.data();
-
-      const now = Date.now();
-      const expired = ss.expiresAt && ss.expiresAt.toDate && ss.expiresAt.toDate().getTime() < now;
-      const ended = !!ss.endedAt;
-      const wrongUser = ss.supportAgentUid && ss.supportAgentUid !== user.uid;
-
-      if (!expired && !ended && !wrongUser && ss.targetFarrierId) {
-        supportSessionData = ss;
-        farrierIdToUse = ss.targetFarrierId;
-      }
-    }
-  }
-
-  setSupportSession(supportSessionData);
-  setIsSupportMode(!!supportSessionData);
-  setEffectiveFarrierId(farrierIdToUse);
-
-  // Load the farrier profile for the effective farrierId
-  const profileDoc = await db.collection('farriers').doc(farrierIdToUse).get();
-  if (profileDoc.exists) {
-    setUserProfile(profileDoc.data());
-  } else {
-    setUserProfile(null);
-  }
-
-} else {
-  setUser(null);
-  setUserProfile(null);
-  setSupportSession(null);
-  setEffectiveFarrierId(null);
-  setIsSupportMode(false);
-}
-setLoading(false);
-
-
-      // Check if URL is for customer booking
-      const urlParams = new URLSearchParams(window.location.search);
-      const farrierId = urlParams.get('farrier');
-
-      if (loading) {
-        return (
-          <div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
-            <div className="spinner"></div>
-          </div>
-        );
-      }
-
-      // Customer booking view
-      if (farrierId) {
-        return <CustomerBookingView farrierId={farrierId} />;
-        // Support portal view (must be signed in)
-if (support) {
-  if (!user) return <AuthView />;
-
-  // Simple allowlist for now (fast). Replace later with custom claims.
-  const SUPPORT_ADMINS = ['your-email@domain.com']; // <-- put YOUR login email here
-  const ok = SUPPORT_ADMINS.includes((user.email || '').toLowerCase());
-
-  if (!ok) {
-    return (
-      <div className="app-container">
-        <div className="card">
-          <h2>Access denied</h2>
-          <p>This account is not allowed to access the support portal.</p>
-        </div>
-      </div>
-    );
-  }
-
-  return <SupportPortal user={user} />;
-}
-
-      }
-
-      // Authentication view
-            function SupportPortal({ user }) {
-  const [q, setQ] = useState('');
-  const [farriers, setFarriers] = useState([]);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [reason, setReason] = useState('Troubleshooting');
+  const [userProfile, setUserProfile] = useState(null);
 
-  useEffect(() => {
-    (async () => {
-      if (!db) return;
-      const snap = await db.collection('farriers').get();
-      setFarriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    })();
-  }, []);
+  const [supportSession, setSupportSession] = useState(null);
+  const [effectiveFarrierId, setEffectiveFarrierId] = useState(null);
+  const [isSupportMode, setIsSupportMode] = useState(false);
 
-  const filtered = farriers.filter(f => {
-    const s = (q || '').toLowerCase();
-    return (
-      (f.businessName || '').toLowerCase().includes(s) ||
-      (f.email || '').toLowerCase().includes(s) ||
-      (f.phone || '').toLowerCase().includes(s)
-    );
-  });
+  // URL params (must be defined outside hooks)
+  const urlParams = new URLSearchParams(window.location.search);
+  const farrierIdParam = urlParams.get("farrier");
+  const support = urlParams.has("support");
+  const supportSessionId = urlParams.get("supportSession");
 
-  const startSession = async (targetFarrierId) => {
-    const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+  const clearSupportSession = async () => {
+    try {
+      if (supportSessionId && db) {
+        await db.collection("supportSessions").doc(supportSessionId).update({
+          endedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      console.error("Failed to end support session:", e);
+    }
 
-    const docRef = await db.collection('supportSessions').add({
-      supportAgentUid: user.uid,
-      targetFarrierId,
-      reason,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      expiresAt: firebase.firestore.Timestamp.fromDate(expires),
-      endedAt: null
-    });
-
-    // Redirect into the normal app in support mode
     const u = new URL(window.location.href);
-    u.searchParams.delete('support');
-    u.searchParams.set('supportSession', docRef.id);
+    u.searchParams.delete("supportSession");
     window.location.href = u.toString();
   };
 
-  return (
-    <div className="app-container">
-      <header className="app-header">
-        <div className="header-content">
-          <div className="logo">
-            <span className="logo-icon">🛟</span>
-            <span>Support Portal</span>
-          </div>
-        </div>
-      </header>
+  useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
 
-      <div className="auth-container">
-        <div className="card">
-          <h2>Impersonate a Farrier</h2>
+    const unsubscribe = auth.onAuthStateChanged(async (u) => {
+      try {
+        if (!u) {
+          setUser(null);
+          setUserProfile(null);
+          setSupportSession(null);
+          setEffectiveFarrierId(null);
+          setIsSupportMode(false);
+          return;
+        }
 
-          <div className="form-group">
-            <label>Search</label>
-            <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="business, email, phone..." />
-          </div>
+        setUser(u);
 
-          <div className="form-group">
-            <label>Reason (required)</label>
-            <input value={reason} onChange={(e)=>setReason(e.target.value)} />
-          </div>
+        // Default to the signed-in farrier
+        let farrierIdToUse = u.uid;
+        let supportSessionData = null;
 
-          {loading ? (
-            <p>Loading…</p>
-          ) : (
-            <div style={{marginTop:'12px'}}>
-              {filtered.map(f => (
-                <div key={f.id} className="card" style={{marginBottom:'10px'}}>
-                  <div><strong>{f.businessName || '(no business name)'}</strong></div>
-                  <div style={{color:'var(--text-muted)'}}>{f.email || ''} {f.phone ? `• ${f.phone}` : ''}</div>
-                  <div style={{marginTop:'8px'}}>
-                    <button className="btn btn-primary" onClick={()=>startSession(f.id)}>
-                      Login as this Farrier
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {filtered.length === 0 && <p style={{color:'var(--text-muted)'}}>No matches.</p>}
-            </div>
-          )}
-        </div>
+        // If a support session is present, validate it and switch context
+        if (supportSessionId && db) {
+          const ssDoc = await db.collection("supportSessions").doc(supportSessionId).get();
+          if (ssDoc.exists) {
+            const ss = ssDoc.data();
+            const now = Date.now();
+            const expired = ss.expiresAt?.toDate && ss.expiresAt.toDate().getTime() < now;
+            const ended = !!ss.endedAt;
+            const wrongUser = ss.supportAgentUid && ss.supportAgentUid !== u.uid;
+
+            if (!expired && !ended && !wrongUser && ss.targetFarrierId) {
+              supportSessionData = ss;
+              farrierIdToUse = ss.targetFarrierId;
+            }
+          }
+        }
+
+        setSupportSession(supportSessionData);
+        setIsSupportMode(!!supportSessionData);
+        setEffectiveFarrierId(farrierIdToUse);
+
+        // Load profile for effective farrier
+        if (db) {
+          const profileDoc = await db.collection("farriers").doc(farrierIdToUse).get();
+          setUserProfile(profileDoc.exists ? profileDoc.data() : null);
+        } else {
+          setUserProfile(null);
+        }
+      } catch (e) {
+        console.error("Auth/profile load failed:", e);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [supportSessionId]);
+
+  if (loading) {
+    return (
+      <div style={{display: "flex", justifyContent: "center", alignItems: "center", height: "100vh"}}>
+        <div className="spinner"></div>
       </div>
-    </div>
+    );
+  }
+
+  // Customer booking view
+  if (farrierIdParam) {
+    return <CustomerBookingView farrierId={farrierIdParam} />;
+  }
+
+  // Support portal view
+  if (support) {
+    if (!user) return <AuthView />;
+
+    // TODO: Replace with Firebase custom claims. For now, allowlist by email.
+    const SUPPORT_ADMINS = [
+      // "you@example.com"
+    ].map(e => String(e).toLowerCase());
+
+    const ok = SUPPORT_ADMINS.length === 0
+      ? false
+      : SUPPORT_ADMINS.includes(String(user.email || "").toLowerCase());
+
+    if (!ok) {
+      return (
+        <div className="app-container">
+          <div className="card">
+            <h2>Access denied</h2>
+            <p>This account is not allowed to access the support portal.</p>
+            <p style={{marginTop: "0.75rem", color: "var(--text-muted)"}}>
+              Add your email to SUPPORT_ADMINS in <code>App()</code>.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return <SupportPortal user={user} />;
+  }
+
+  // Authentication view
+  if (!user) {
+    return <AuthView />;
+  }
+
+  // Farrier dashboard (+ support banner)
+  return (
+    <>
+      {isSupportMode && (
+        <div style={{padding:"10px", background:"#ffefef", border:"1px solid #ffb3b3", borderRadius:"8px", margin:"12px"}}>
+          <strong>SUPPORT MODE</strong>
+          {supportSession?.reason ? ` — ${supportSession.reason}` : ""}
+          <div style={{marginTop:"8px"}}>
+            <button className="btn btn-secondary" onClick={clearSupportSession}>
+              End Support Session
+            </button>
+          </div>
+        </div>
+      )}
+
+      <FarrierDashboard
+        user={user}
+        userProfile={userProfile}
+        setUserProfile={setUserProfile}
+        farrierId={effectiveFarrierId || user.uid}
+        isSupportMode={isSupportMode}
+        supportSession={supportSession}
+        clearSupportSession={clearSupportSession}
+      />
+    </>
   );
 }
 
-      if (!user) {
-        return <AuthView />;
-      }
-
-      // Farrier dashboard
-     return (
-       {isSupportMode && (
-  <div style={{padding:'10px', background:'#ffefef', border:'1px solid #ffb3b3', borderRadius:'8px', marginBottom:'12px'}}>
-    <strong>SUPPORT MODE</strong>
-    {supportSession?.reason ? ` — ${supportSession.reason}` : ''}
-    <div style={{marginTop:'8px'}}>
-      <button className="btn btn-secondary" onClick={clearSupportSession}>End Support Session</button>
-    </div>
-  </div>
-)}
-
-  <FarrierDashboard
-    user={user}
-    userProfile={userProfile}
-    setUserProfile={setUserProfile}
-    farrierId={effectiveFarrierId || user.uid}
-    isSupportMode={isSupportMode}
-    supportSession={supportSession}
-    clearSupportSession={async () => {
-      if (supportSessionId && db) {
-        await db.collection('supportSessions').doc(supportSessionId).update({
-          endedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-      }
-      // Remove supportSession from URL
-      const u = new URL(window.location.href);
-      u.searchParams.delete('supportSession');
-      window.location.href = u.toString();
-    }}
-  />
-);
-
-    }
-
-    function AuthView() {
+function AuthView() {
       const [mode, setMode] = useState('login'); // 'login' or 'signup'
       const [email, setEmail] = useState('');
       const [password, setPassword] = useState('');
@@ -1300,6 +1237,8 @@ if (support) {
       const [city, setCity] = useState('');
       const [state, setState] = useState('');
       const [zip, setZip] = useState('');
+      const [logoUrl, setLogoUrl] = useState('');
+      const [autoPrintPdf, setAutoPrintPdf] = useState(true);
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
       const [successMessage, setSuccessMessage] = useState('');
@@ -1374,11 +1313,15 @@ if (support) {
               city: '',
               state: '',
               zip: '',
+              ownerUid: user.uid,
+              farrierId: user.uid,
+              logoUrl: '',
+              autoPrintPdf: true,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
               googleCalendarConnected: false,
               bookingUrl: window.location.origin + '?farrier=' + user.uid
             });
-          }
+}
           
           // User will be automatically logged in by Firebase
         } catch (err) {
@@ -1418,16 +1361,15 @@ if (support) {
             city: city,
             state: state,
             zip: zip,
-              logoUrl: logoUrl,
-              autoPrintPdf: autoPrintPdf,
-              logoUrl: logoUrl,
-              autoPrintPdf: autoPrintPdf,
+            ownerUid: user.uid,
+            farrierId: user.uid,
+            logoUrl: logoUrl,
+            autoPrintPdf: autoPrintPdf,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             googleCalendarConnected: false,
             bookingUrl: window.location.origin + '?farrier=' + user.uid
           });
-          
-          alert('Welcome! Please check your email to verify your account.');
+alert('Welcome! Please check your email to verify your account.');
 
         } catch (err) {
           setError(err.message);
@@ -1652,7 +1594,100 @@ if (support) {
       );
     }
 
-   function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupportMode, supportSession, clearSupportSession }) {
+   function SupportPortal({ user }) {
+  const [q, setQ] = useState('');
+  const [farriers, setFarriers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [reason, setReason] = useState('Troubleshooting');
+
+  useEffect(() => {
+    (async () => {
+      if (!db) return;
+      const snap = await db.collection('farriers').get();
+      setFarriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = farriers.filter(f => {
+    const s = (q || '').toLowerCase();
+    return (
+      (f.businessName || '').toLowerCase().includes(s) ||
+      (f.email || '').toLowerCase().includes(s) ||
+      (f.phone || '').toLowerCase().includes(s)
+    );
+  });
+
+  const startSession = async (targetFarrierId) => {
+    const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+
+    const docRef = await db.collection('supportSessions').add({
+      supportAgentUid: user.uid,
+      targetFarrierId,
+      reason,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      expiresAt: firebase.firestore.Timestamp.fromDate(expires),
+      endedAt: null
+    });
+
+    // Redirect into the normal app in support mode
+    const u = new URL(window.location.href);
+    u.searchParams.delete('support');
+    u.searchParams.set('supportSession', docRef.id);
+    window.location.href = u.toString();
+  };
+
+  return (
+    <div className="app-container">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="logo">
+            <span className="logo-icon">🛟</span>
+            <span>Support Portal</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="auth-container">
+        <div className="card">
+          <h2>Impersonate a Farrier</h2>
+
+          <div className="form-group">
+            <label>Search</label>
+            <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="business, email, phone..." />
+          </div>
+
+          <div className="form-group">
+            <label>Reason (required)</label>
+            <input value={reason} onChange={(e)=>setReason(e.target.value)} />
+          </div>
+
+          {loading ? (
+            <p>Loading…</p>
+          ) : (
+            <div style={{marginTop:'12px'}}>
+              {filtered.map(f => (
+                <div key={f.id} className="card" style={{marginBottom:'10px'}}>
+                  <div><strong>{f.businessName || '(no business name)'}</strong></div>
+                  <div style={{color:'var(--text-muted)'}}>{f.email || ''} {f.phone ? `• ${f.phone}` : ''}</div>
+                  <div style={{marginTop:'8px'}}>
+                    <button className="btn btn-primary" onClick={()=>startSession(f.id)}>
+                      Login as this Farrier
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {filtered.length === 0 && <p style={{color:'var(--text-muted)'}}>No matches.</p>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupportMode, supportSession, clearSupportSession }) {
 
       const [tab, setTab] = useState('qrcode');
       const [showQRModal, setShowQRModal] = useState(false);
