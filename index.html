@@ -6184,6 +6184,20 @@ useEffect(() => {
         userProfile?.availability || defaultAvailability
       );
 
+
+      // Keep form fields in sync when userProfile loads/changes
+      useEffect(() => {
+        if (!userProfile) return;
+        setBusinessName(userProfile.businessName || '');
+        setLogoUrl(userProfile.logoUrl || '');
+        setAutoPrintPdf(userProfile.autoPrintPdf ?? true);
+        setPhone(userProfile.phone || '');
+        setAddress(userProfile.address || '');
+        setCity(userProfile.city || '');
+        setState(userProfile.state || '');
+        setZip(userProfile.zip || '');
+        setAvailability(userProfile.availability || defaultAvailability);
+      }, [userProfile]);
       const updateDayAvailability = (day, field, value) => {
         setAvailability({
           ...availability,
