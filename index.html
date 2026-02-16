@@ -1452,7 +1452,7 @@ function AuthView() {
                 </button>
                 <button 
                   className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
-                  onClick={() => { window.location.href = 'https://farrier-pro-landing-page.vercel.app/'; }}
+                  onClick={() => setMode('signup')}
                 >
                   Sign Up
                 </button>
