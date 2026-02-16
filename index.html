@@ -1376,58 +1376,52 @@ function AuthView() {
         e.preventDefault();
         setError('');
         setLoading(true);
-        
+
         try {
           if (!auth) {
             setError('Firebase not configured. Please add your Firebase credentials.');
             setLoading(false);
             return;
           }
+          if (!db) {
+            setError('Firestore not configured. Please add your Firebase credentials.');
+            setLoading(false);
+            return;
+          }
 
-      // 1. Create Firebase user
-const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-const user = userCredential.user;
+          // 1) Create Firebase Auth user
+          const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+          const user = userCredential.user;
 
-// 2. Create farrier document
-await db.collection('farriers').doc(user.uid).set({
-  businessName: businessName,
-  email: email,
-  phone: phone,
-  address: address,
-  city: city,
-  state: state,
-  zip: zip,
-  ownerUid: user.uid,
-  farrierId: user.uid,
-  logoUrl: logoUrl || '',
-  autoPrintPdf: true,
-  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-  googleCalendarConnected: false,
-  bookingUrl: window.location.origin + '?farrier=' + user.uid
-}, { merge: true });
+          // 2) Send verification email (non-blocking if it fails)
+          try { await user.sendEmailVerification(); } catch (e) {}
 
-// 3. THEN seed services (outside the object)
-await seedDefaultServicesIfEmpty_(user.uid);
-
-            email: email,
-            phone: phone,
-            address: address,
-            city: city,
-            state: state,
-            zip: zip,
+          // 3) Create/merge farrier profile doc
+          await db.collection('farriers').doc(user.uid).set({
+            businessName: businessName || 'My Farrier Business',
+            email: email || user.email || '',
+            phone: phone || '',
+            address: address || '',
+            city: city || '',
+            state: (state || '').toUpperCase(),
+            zip: zip || '',
             ownerUid: user.uid,
             farrierId: user.uid,
-            logoUrl: logoUrl,
-            autoPrintPdf: autoPrintPdf,
+            logoUrl: logoUrl || '',
+            autoPrintPdf: autoPrintPdf ?? true,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             googleCalendarConnected: false,
             bookingUrl: window.location.origin + '?farrier=' + user.uid
-          });
-alert('Welcome! Please check your email to verify your account.');
+          }, { merge: true });
 
+          // 4) Seed default services (if empty)
+          try { await seedDefaultServicesIfEmpty_(user.uid); } catch (e) {}
+
+          alert('Welcome! Please check your email to verify your account.');
         } catch (err) {
-          setError(err.message);
+          setError(err?.message || String(err));
         }
+
         setLoading(false);
       };
 
