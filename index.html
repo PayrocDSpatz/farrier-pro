@@ -1384,31 +1384,31 @@ function AuthView() {
             return;
           }
 
-        // Create user account
+      // 1. Create Firebase user
 const userCredential = await auth.createUserWithEmailAndPassword(email, password);
 const user = userCredential.user;
 
-// Create farrier profile FIRST
+// 2. Create farrier document
 await db.collection('farriers').doc(user.uid).set({
-  businessName,
-  email,
-  phone,
-  address,
-  city,
-  state,
-  zip,
+  businessName: businessName,
+  email: email,
+  phone: phone,
+  address: address,
+  city: city,
+  state: state,
+  zip: zip,
   ownerUid: user.uid,
   farrierId: user.uid,
-  logoUrl,
-  autoPrintPdf,
+  logoUrl: logoUrl || '',
+  autoPrintPdf: true,
   createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   googleCalendarConnected: false,
   bookingUrl: window.location.origin + '?farrier=' + user.uid
-});
+}, { merge: true });
 
-// THEN seed services
+// 3. THEN seed services (outside the object)
 await seedDefaultServicesIfEmpty_(user.uid);
-            businessName: businessName,
+
             email: email,
             phone: phone,
             address: address,
