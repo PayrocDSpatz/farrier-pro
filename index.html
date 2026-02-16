@@ -1022,7 +1022,7 @@ console.log("Farrier Pro build:", BUILD_VERSION);
 async function seedDefaultServicesIfEmpty_(userId) {
   if (!db || !userId) return;
 
-  const userRef = db.collection("users").doc(userId);
+ const userRef = db.collection("farriers").doc(userId);
   const userSnap = await userRef.get();
   const userData = userSnap.exists ? userSnap.data() : null;
 
