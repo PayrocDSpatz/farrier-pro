@@ -1384,16 +1384,30 @@ function AuthView() {
             return;
           }
 
-          // Create user account
-          const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-          await seedDefaultServicesIfEmpty_(userCredential.user.uid);
-          const user = userCredential.user;
-          
-          // Send welcome/verification email
-          await user.sendEmailVerification();
-          
-          // Create farrier profile in Firestore
-          await db.collection('farriers').doc(user.uid).set({
+        // Create user account
+const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+const user = userCredential.user;
+
+// Create farrier profile FIRST
+await db.collection('farriers').doc(user.uid).set({
+  businessName,
+  email,
+  phone,
+  address,
+  city,
+  state,
+  zip,
+  ownerUid: user.uid,
+  farrierId: user.uid,
+  logoUrl,
+  autoPrintPdf,
+  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  googleCalendarConnected: false,
+  bookingUrl: window.location.origin + '?farrier=' + user.uid
+});
+
+// THEN seed services
+await seedDefaultServicesIfEmpty_(user.uid);
             businessName: businessName,
             email: email,
             phone: phone,
