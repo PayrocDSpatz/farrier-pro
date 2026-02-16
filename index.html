@@ -4120,7 +4120,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           await db.collection('appointments').doc(appointmentId).update({
             status: newStatus,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
+          }, { merge: true });
           
           console.log('✅ Status updated in Firebase');
           
@@ -6194,7 +6194,11 @@ useEffect(() => {
 
         try {
           if (db) {
-            await db.collection('farriers').doc(safeFarrierId).update({
+            if (!safeFarrierId) {
+              throw new Error('Missing farrier id');
+            }
+            // Use merge-safe set so we never wipe other fields (ex: Google Calendar tokens)
+            await db.collection('farriers').doc(safeFarrierId).set({
               businessName: businessName,
               phone: phone,
               address: address,
@@ -6205,19 +6209,21 @@ useEffect(() => {
               autoPrintPdf: autoPrintPdf,
               availability: availability,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            }, { merge: true });
 
             // Update local state
-            setUserProfile({
-              ...userProfile,
+            setUserProfile(prev => ({
+              ...(prev || {}),
               businessName,
               phone,
               address,
               city,
               state,
               zip,
+              logoUrl,
+              autoPrintPdf,
               availability
-            });
+            }));
 
             setSuccessMessage('Profile updated successfully!');
           }
@@ -6458,7 +6464,8 @@ useEffect(() => {
                   onClick={async () => {
                     try {
                       if (db) {
-                        await db.collection('farriers').doc(safeFarrierId).update({
+                        // Use merge-safe set so we never wipe other fields (ex: Google Calendar tokens)
+            await db.collection('farriers').doc(safeFarrierId).set({
                           bookingUrl: `${window.location.origin}?farrier=${safeFarrierId}`
                         });
                         setUserProfile({
