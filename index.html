@@ -3069,95 +3069,48 @@ function ServicesView({ userId }) {
       );
     }
 
-   function CustomerBookingView({ farrierId }) {
-  const [step, setStep] = useState('landing');
-  const [farrierInfo, setFarrierInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
+    function CustomerBookingView({ farrierId }) {
+      const [step, setStep] = useState('landing');
+      const [farrierInfo, setFarrierInfo] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [formData, setFormData] = useState({
+        name: '',
+        phone: '',
+        email: '',
+        services: [], // Multiple services
+        numberOfHorses: '',
+        address: '',
+        city: '',
+        state: '',
+        zip: '',
+        comments: '',
+        date: '',
+        time: ''
+      });
 
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    services: [],
-    numberOfHorses: '',
-    address: '',
-    city: '',
-    state: '',
-    zip: '',
-    comments: '',
-    date: '',
-    time: ''
-  });
+      useEffect(() => {
+        loadFarrierInfo();
+      }, []);
 
-  useEffect(() => {
-    const loadFarrierInfo = async () => {
-      try {
-        if (db && farrierId) {
-          const doc = await db.collection('farriers').doc(farrierId).get();
-
-          if (doc.exists) {
-            setFarrierInfo(doc.data());
+      const loadFarrierInfo = async () => {
+        try {
+          if (db) {
+            const doc = await db.collection('farriers').doc(safeFarrierId).get();
+            if (doc.exists) {
+              setFarrierInfo(doc.data());
+            }
           } else {
-            setFarrierInfo(null);
+            // Demo mode
+            setFarrierInfo({
+              businessName: "Demo Farrier Services",
+              email: "demo@farrier.com"
+            });
           }
-        } else if (!db) {
-          // Demo fallback
-          setFarrierInfo({
-            businessName: "Demo Farrier Services",
-            email: "demo@farrier.com"
-          });
+        } catch (error) {
+          console.error('Error loading farrier info:', error);
         }
-      } catch (error) {
-        console.error("Error loading farrier info:", error);
-        setFarrierInfo(null);
-      } finally {
         setLoading(false);
-      }
-    };
-
-    loadFarrierInfo();
-  }, [db, farrierId]);
-
-  if (loading) {
-    return (
-      <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh'}}>
-        <div className="spinner"></div>
-      </div>
-    );
-  }
-
-  if (!farrierInfo) {
-    return (
-      <div className="app-container">
-        <div className="main-content">
-          <div className="error-message">
-            Farrier not found. Please check your booking link.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-container">
-      <header className="app-header">
-        <div className="header-content">
-          <div className="logo">
-            <span className="logo-icon">🐴</span>
-            <span>{farrierInfo.businessName}</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="main-content">
-        <div className="hero">
-          <h1>🐴 {farrierInfo.businessName}</h1>
-          <p>Professional hoof care for your horses. Book your appointment below.</p>
-        </div>
-      </main>
-    </div>
-  );
-}
+      };
 
       const handleSubmit = async (e) => {
         e.preventDefault();
