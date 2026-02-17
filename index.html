@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
   <!-- Authorize.Net integration via backend functions -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>signup
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   
   <!-- Firebase SDK -->
@@ -1444,12 +1444,12 @@ function AuthView() {
               </div>
 
               <div className="auth-tabs">
-                <button 
-                  className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
-                  onClick={() => setMode('login')}
-                >
-                  Login
-                </button>
+               <button 
+  className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
+  onClick={() => setMode('signup')}
+>
+  Sign Up
+</button>
                 <button 
                   className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
                   onClick={() => { window.location.href = 'https://farrier-pro-landing-page.vercel.app/'; }}
