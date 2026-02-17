@@ -1452,7 +1452,7 @@ function AuthView() {
                 </button>
                 <button 
                   className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
-                  onClick={() => setMode('signup')}
+                  onClick={() => { window.location.href = 'https://farrier-pro-landing-page.vercel.app/'; }}
                 >
                   Sign Up
                 </button>
@@ -3580,40 +3580,121 @@ function ServicesView({ userId }) {
     }
 
     function DashboardView({ userId }) {
-      const kpis = [
-        { label: 'Appointments This Month', value: '24', change: '+12%', positive: true },
-        { label: 'Total Revenue', value: '$4,800', change: '+18%', positive: true },
-        { label: 'Outstanding Invoices', value: '$650', change: '-5%', positive: true },
-        { label: 'This Week', value: '6', change: 'Upcoming', positive: true }
-      ];
+  const [stats, setStats] = useState({
+    monthAppointments: 0,
+    totalRevenue: 0,
+    outstandingInvoices: 0,
+    upcomingWeek: 0,
+  });
+  const [loading, setLoading] = useState(true);
 
-      return (
-        <div>
-          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Dashboard Overview</h1>
-          
-          <div className="dashboard-grid">
-            {kpis.map((kpi, idx) => (
-              <div key={idx} className="stat-card">
-                <div className="stat-label">{kpi.label}</div>
-                <div className="stat-value">{kpi.value}</div>
-                <div className={`stat-change ${kpi.positive ? 'positive' : ''}`}>
-                  {kpi.change}
-                </div>
-              </div>
-            ))}
-          </div>
+  useEffect(() => {
+    loadStats();
+  }, [userId]);
 
-          <div className="card">
-            <h2>Recent Activity</h2>
-            <p style={{color: 'var(--text-muted)'}}>
-              Your appointments and bookings will appear here once customers start booking through your QR code!
-            </p>
-          </div>
-        </div>
-      );
+  const loadStats = async () => {
+    try {
+      if (!db || !userId) {
+        setStats({ monthAppointments: 0, totalRevenue: 0, outstandingInvoices: 0, upcomingWeek: 0 });
+        setLoading(false);
+        return;
+      }
+
+      // ---- Appointments ----
+      let monthAppointments = 0;
+      let upcomingWeek = 0;
+
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+
+      const apptSnap = await db.collection('appointments')
+        .where('farrierId', '==', userId)
+        .get();
+
+      apptSnap.forEach(doc => {
+        const a = doc.data() || {};
+        const dStr = a.requestedDate || a.date || "";
+        if (!dStr) return;
+
+        // expected "YYYY-MM-DD"
+        const parts = String(dStr).split('-').map(Number);
+        if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return;
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+
+        if (d >= monthStart && d <= monthEnd) monthAppointments++;
+        if (d >= new Date(now.getFullYear(), now.getMonth(), now.getDate()) && d < weekEnd) upcomingWeek++;
+      });
+
+      // ---- Invoices / Revenue (optional) ----
+      // If you haven't built invoices yet, these will remain 0.
+      let totalRevenue = 0;
+      let outstandingInvoices = 0;
+      try {
+        const invSnap = await db.collection('invoices')
+          .where('farrierId', '==', userId)
+          .get();
+
+        invSnap.forEach(doc => {
+          const inv = doc.data() || {};
+          const amount = Number(inv.amount || inv.total || inv.totalAmount || 0) || 0;
+          const status = String(inv.status || '').toLowerCase();
+
+          if (status === 'paid' || status === 'settled') totalRevenue += amount;
+          else outstandingInvoices += amount;
+        });
+      } catch (e) {
+        // invoices collection may not exist yet - that's fine
+      }
+
+      setStats({
+        monthAppointments,
+        totalRevenue,
+        outstandingInvoices,
+        upcomingWeek,
+      });
+    } catch (err) {
+      console.error('❌ Error loading dashboard stats:', err);
+      setStats({ monthAppointments: 0, totalRevenue: 0, outstandingInvoices: 0, upcomingWeek: 0 });
     }
+    setLoading(false);
+  };
 
-    function CalendarView({ userId }) {
+  const kpis = [
+    { label: 'Appointments This Month', value: loading ? '…' : String(stats.monthAppointments), change: 'Live', positive: true },
+    { label: 'Total Revenue', value: loading ? '…' : `$${stats.totalRevenue.toFixed(2)}`, change: 'Paid invoices', positive: true },
+    { label: 'Outstanding Invoices', value: loading ? '…' : `$${stats.outstandingInvoices.toFixed(2)}`, change: 'Unpaid', positive: true },
+    { label: 'This Week', value: loading ? '…' : String(stats.upcomingWeek), change: 'Upcoming', positive: true },
+  ];
+
+  return (
+    <div>
+      <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Dashboard Overview</h1>
+
+      <div className="dashboard-grid">
+        {kpis.map((kpi, idx) => (
+          <div key={idx} className="stat-card">
+            <div className="stat-label">{kpi.label}</div>
+            <div className="stat-value">{kpi.value}</div>
+            <div className={`stat-change ${kpi.positive ? 'positive' : ''}`}>
+              {kpi.change}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <h2>Recent Activity</h2>
+        <p style={{color: 'var(--text-muted)'}}>
+          Your real appointments are pulled from Firestore (appointments where farrierId = your userId).
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CalendarView({ userId }) {
       const [currentDate, setCurrentDate] = useState(new Date());
       const [appointments, setAppointments] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -6184,20 +6265,6 @@ useEffect(() => {
         userProfile?.availability || defaultAvailability
       );
 
-
-      // Keep form fields in sync when userProfile loads/changes
-      useEffect(() => {
-        if (!userProfile) return;
-        setBusinessName(userProfile.businessName || '');
-        setLogoUrl(userProfile.logoUrl || '');
-        setAutoPrintPdf(userProfile.autoPrintPdf ?? true);
-        setPhone(userProfile.phone || '');
-        setAddress(userProfile.address || '');
-        setCity(userProfile.city || '');
-        setState(userProfile.state || '');
-        setZip(userProfile.zip || '');
-        setAvailability(userProfile.availability || defaultAvailability);
-      }, [userProfile]);
       const updateDayAvailability = (day, field, value) => {
         setAvailability({
           ...availability,
