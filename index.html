@@ -1451,11 +1451,12 @@ function AuthView() {
                   Login
                 </button>
                 <button 
-                  className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
-                  onClick={() => { window.location.href = 'https://farrier-pro-landing-page.vercel.app/'; }}
-                >
-                  Sign Up
-                </button>
+  className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
+  onClick={() => setMode('signup')}
+>
+  Sign Up
+</button>
+
               </div>
 
               {error && <div className="error-message">{error}</div>}
