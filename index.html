@@ -1093,6 +1093,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
   const farrierIdParam = urlParams.get("farrier");
   const support = urlParams.has("support");
   const supportSessionId = urlParams.get("supportSession");
+  const finishSignup = urlParams.get("finishSignup") === "1";
 
 
   // Support admin gate (must be outside conditional renders)
@@ -1233,6 +1234,18 @@ if (support) {
 
   return <SupportPortal user={user} />;
 }
+
+  // Finish signup (post-billing activation)
+  if (finishSignup) {
+    if (user) {
+      // Already signed in; take them to dashboard.
+      const u = new URL(window.location.href);
+      u.searchParams.delete("finishSignup");
+      window.location.href = u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : "");
+      return null;
+    }
+    return <FinishSignupView />;
+  }
 
   // Authentication view
   if (!user) {
@@ -1450,9 +1463,13 @@ function AuthView() {
                 >
                   Login
                 </button>
-                <button 
-  className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
-  onClick={() => setMode('signup')}
+                
+<button 
+  className="auth-tab"
+  onClick={() => {
+    const returnUrl = encodeURIComponent(`${window.location.origin}/?finishSignup=1`);
+    window.location.href = `https://farrier-pro-landing-page.vercel.app/signup?returnUrl=${returnUrl}`;
+  }}
 >
   Sign Up
 </button>
@@ -1462,7 +1479,7 @@ function AuthView() {
               {error && <div className="error-message">{error}</div>}
               {successMessage && <div className="success-message">{successMessage}</div>}
 
-              <form onSubmit={mode === 'login' ? handleLogin : handleSignup}>
+              <form onSubmit={handleLogin}>
                 {mode === 'signup' && (
                   <>
                     <div className="form-group">
@@ -1642,6 +1659,238 @@ function AuthView() {
         </div>
       );
     }
+    function FinishSignupView() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const leadId = urlParams.get("leadId") || urlParams.get("lead") || urlParams.get("lid");
+      const subscriptionId = urlParams.get("sub") || urlParams.get("subscriptionId");
+      const emailFromUrl = urlParams.get("email") || "";
+
+      const [loading, setLoading] = useState(true);
+      const [lead, setLead] = useState(null);
+      const [email, setEmail] = useState(emailFromUrl);
+      const [businessName, setBusinessName] = useState("");
+      const [phone, setPhone] = useState("");
+      const [address, setAddress] = useState("");
+      const [city, setCity] = useState("");
+      const [state, setState] = useState("");
+      const [zip, setZip] = useState("");
+
+      const [password, setPassword] = useState("");
+      const [confirmPassword, setConfirmPassword] = useState("");
+      const [error, setError] = useState("");
+      const [successMessage, setSuccessMessage] = useState("");
+
+      useEffect(() => {
+        (async () => {
+          try {
+            if (leadId && db) {
+              const doc = await db.collection("leads").doc(leadId).get();
+              if (doc.exists) {
+                const d = doc.data() || {};
+                setLead(d);
+                if (!emailFromUrl && d.email) setEmail(d.email);
+                setBusinessName(d.businessName || d.company || d.name || "");
+                setPhone(d.phone || "");
+                setAddress(d.address || "");
+                setCity(d.city || "");
+                setState(d.state || "");
+                setZip(d.zip || "");
+              }
+            }
+          } catch (e) {
+            console.error("Failed to load lead", e);
+          } finally {
+            setLoading(false);
+          }
+        })();
+      }, []);
+
+      const cleanupUrl = () => {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("finishSignup");
+        u.searchParams.delete("leadId");
+        u.searchParams.delete("lead");
+        u.searchParams.delete("lid");
+        u.searchParams.delete("sub");
+        u.searchParams.delete("subscriptionId");
+        u.searchParams.delete("email");
+        window.history.replaceState({}, "", u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : ""));
+      };
+
+      const handleComplete = async (e) => {
+        e.preventDefault();
+        setError("");
+        setSuccessMessage("");
+
+        if (!email) return setError("Email is required.");
+        if (!subscriptionId && !leadId) {
+          // We can still proceed, but warn: the account might not be tied to billing.
+          console.warn("Finish signup without subscription/lead reference");
+        }
+
+        if (!password || password.length < 8) return setError("Password must be at least 8 characters.");
+        if (password !== confirmPassword) return setError("Passwords do not match.");
+
+        try {
+          if (!auth || !db) throw new Error("Firebase is not initialized.");
+
+          // Create Auth user
+          const cred = await auth.createUserWithEmailAndPassword(email, password);
+          const uid = cred.user.uid;
+
+          // Create / update farrier profile (doc id = uid)
+          const farrierDoc = {
+            email,
+            businessName: businessName || "My Farrier Business",
+            phone: phone || "",
+            address: address || "",
+            city: city || "",
+            state: state || "",
+            zip: zip || "",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            subscriptionId: subscriptionId || "",
+            leadId: leadId || "",
+            status: "active"
+          };
+
+          await db.collection("farriers").doc(uid).set(farrierDoc, { merge: true });
+
+          // Link lead -> farrierId (optional)
+          if (leadId) {
+            try {
+              await db.collection("leads").doc(leadId).set({
+                farrierId: uid,
+                subscriptionId: subscriptionId || "",
+                activatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+            } catch (e) {
+              console.warn("Could not update lead with farrierId", e);
+            }
+          }
+
+          // Seed default services
+          try { await seedDefaultServicesIfEmpty_(uid); } catch (e) {}
+
+          setSuccessMessage("Account created! Redirecting to your dashboard…");
+
+          cleanupUrl();
+          setTimeout(() => {
+            window.location.href = window.location.origin + window.location.pathname;
+          }, 800);
+        } catch (err) {
+          console.error(err);
+          const msg = (err && err.message) ? err.message : "Signup failed.";
+          setError(msg);
+        }
+      };
+
+      if (loading) {
+        return (
+          <div style={{display: "flex", justifyContent: "center", alignItems: "center", height: "100vh"}}>
+            <div className="spinner"></div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="app-container">
+          <header className="app-header">
+            <div className="header-content">
+              <div className="logo">
+                <span className="logo-icon">🐴</span>
+                <span>Farrier Pro</span>
+              </div>
+            </div>
+          </header>
+
+          <div className="auth-container">
+            <div className="auth-card">
+              <div className="auth-header">
+                <h1>Complete Your Account</h1>
+                <p>Create your login to access the Farrier Pro dashboard.</p>
+              </div>
+
+              {error && <div className="error-message">{error}</div>}
+              {successMessage && <div className="success-message">{successMessage}</div>}
+
+              <form onSubmit={handleComplete}>
+                <div className="form-group">
+                  <label>Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@business.com"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Business Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="John's Farrier Services"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Password *</label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Create a password"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Confirm Password *</label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter password"
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{width:"100%", marginTop:"8px"}}>
+                  Create Account
+                </button>
+              </form>
+
+              <div style={{marginTop:"14px", fontSize:"13px", color:"var(--text-muted)"}}>
+                {subscriptionId ? (
+                  <div><strong>Subscription:</strong> {subscriptionId}</div>
+                ) : (
+                  <div>Tip: if you came from checkout, your subscription will be attached automatically.</div>
+                )}
+                {leadId ? (
+                  <div><strong>Lead:</strong> {leadId}</div>
+                ) : null}
+              </div>
+
+              <div style={{marginTop:"16px", textAlign:"center"}}>
+                <a
+                  href={window.location.origin}
+                  style={{color:"var(--primary)", textDecoration:"none", fontWeight:600}}
+                  onClick={(e) => { e.preventDefault(); cleanupUrl(); window.location.href = window.location.origin; }}
+                >
+                  Back to Login
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+
 
    function SupportPortal({ user }) {
   const [q, setQ] = useState('');
