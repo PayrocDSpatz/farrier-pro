@@ -1019,7 +1019,7 @@ console.log("Farrier Pro build:", BUILD_VERSION);
     } catch (error) {
       console.log("Firebase not configured yet - using demo mode");
     }
-async async function seedDefaultServicesIfEmpty_(userId) {
+async function seedDefaultServicesIfEmpty_(userId) {
   if (!db || !userId) return;
 
  const userRef = db.collection("farriers").doc(userId);
