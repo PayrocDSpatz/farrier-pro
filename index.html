@@ -1019,7 +1019,7 @@ console.log("Farrier Pro build:", BUILD_VERSION);
     } catch (error) {
       console.log("Firebase not configured yet - using demo mode");
     }
-async function seedDefaultServicesIfEmpty_(userId) {
+async async function seedDefaultServicesIfEmpty_(userId) {
   if (!db || !userId) return;
 
  const userRef = db.collection("farriers").doc(userId);
@@ -1293,7 +1293,25 @@ function AuthView() {
       const [logoUrl, setLogoUrl] = useState('');
       const [autoPrintPdf, setAutoPrintPdf] = useState(true);
       const [error, setError] = useState('');
-      const [loading, setLoading] = useState(false);
+      
+      // Keep form fields in sync when userProfile loads/changes
+      useEffect(() => {
+        if (!userProfile) return;
+        setBusinessName(userProfile.businessName || '');
+        setLogoUrl(userProfile.logoUrl || '');
+        setAutoPrintPdf(userProfile.autoPrintPdf ?? true);
+        setPhone(userProfile.phone || '');
+        setAddress(userProfile.address || '');
+        setCity(userProfile.city || '');
+        setState(userProfile.state || '');
+        setZip(userProfile.zip || '');
+
+        // Availability
+        if (userProfile.availability) {
+          setAvailability(userProfile.availability);
+        }
+      }, [userProfile]);
+const [loading, setLoading] = useState(false);
       const [successMessage, setSuccessMessage] = useState('');
 
       const handleForgotPassword = async () => {
