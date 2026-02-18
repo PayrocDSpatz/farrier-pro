@@ -1294,23 +1294,8 @@ function AuthView() {
       const [autoPrintPdf, setAutoPrintPdf] = useState(true);
       const [error, setError] = useState('');
       
-      // Keep form fields in sync when userProfile loads/changes
-      useEffect(() => {
-        if (!userProfile) return;
-        setBusinessName(userProfile.businessName || '');
-        setLogoUrl(userProfile.logoUrl || '');
-        setAutoPrintPdf(userProfile.autoPrintPdf ?? true);
-        setPhone(userProfile.phone || '');
-        setAddress(userProfile.address || '');
-        setCity(userProfile.city || '');
-        setState(userProfile.state || '');
-        setZip(userProfile.zip || '');
-
-        // Availability
-        if (userProfile.availability) {
-          setAvailability(userProfile.availability);
-        }
-      }, [userProfile]);
+      
+      // (removed) userProfile sync belongs in SettingsView
 const [loading, setLoading] = useState(false);
       const [successMessage, setSuccessMessage] = useState('');
 
