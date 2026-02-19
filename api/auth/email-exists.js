@@ -1,47 +1,59 @@
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") {
-    return res.status(405).json({ success: false, message: "Method not allowed" });
-  }
-
+module.exports = async (req, res) => {
   try {
-    const apiKey = process.env.FIREBASE_WEB_API_KEY;
-    if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY env var");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    // Safely handle body whether it's already an object or a string
-    const body =
-      req.body && typeof req.body === "object"
-        ? req.body
-        : JSON.parse(req.body || "{}");
+    if (req.method === "OPTIONS") return res.status(204).end();
+    if (req.method !== "POST") return res.status(405).json({ success: false, message: "Method not allowed" });
+
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        message: "Missing FIREBASE_WEB_API_KEY env var (set it in this Vercel project, then redeploy)",
+      });
+    }
+
+    // Robust body handling
+    let body = req.body;
+    if (typeof body === "string") {
+      try { body = JSON.parse(body); } catch { body = {}; }
+    }
+    body = body || {};
 
     const email = String(body.email || "").trim().toLowerCase();
     if (!email) return res.status(400).json({ success: false, message: "Missing email" });
 
     const url = `https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${apiKey}`;
 
+    // Use global fetch if available (Node 18+). If not, this will throw and we'll report it.
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        identifier: email,
-        continueUri: "https://localhost", // required field; any valid URL works
-      }),
+      body: JSON.stringify({ identifier: email, continueUri: "https://localhost" }),
     });
 
     const data = await r.json().catch(() => ({}));
 
     if (!r.ok) {
-      const msg = data?.error?.message || "unknown_error";
-      return res.status(200).json({ success: false, exists: null, error: msg });
+      return res.status(200).json({
+        success: false,
+        exists: null,
+        error: data?.error?.message || "unknown_error",
+        debug: { status: r.status },
+      });
     }
 
-    // This is the key field we want:
-    const exists = Boolean(data?.registered);
-
-    return res.status(200).json({ success: true, exists });
+    return res.status(200).json({ success: true, exists: Boolean(data?.registered) });
   } catch (e) {
-    return res.status
+    return res.status(500).json({
+      success: false,
+      message: e?.message || "Function crashed",
+      hint:
+        String(e?.message || "").includes("fetch is not defined")
+          ? "Your runtime lacks global fetch. Set Node.js runtime to 18/20 or add a fetch polyfill."
+          : "Check Vercel function logs for stack trace.",
+    });
+  }
+};
