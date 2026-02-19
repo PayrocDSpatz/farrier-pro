@@ -1034,7 +1034,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
     .get();
 
   if (!existing.empty) {
-    await userRef.set({ servicesSeeded: true }, { merge: true });
+    await userRef.set({ servicesSeeded: true });
     return;
   }
 
@@ -1070,11 +1070,42 @@ async function seedDefaultServicesIfEmpty_(userId) {
     });
   });
 
-  batch.set(userRef, { servicesSeeded: true }, { merge: true });
-
+  batch.set(userRef, { servicesSeeded: true });
   await batch.commit();
   console.log("✅ Default services seeded");
 }
+
+// Ensures the farrier profile doc exists and surfaces permission/config errors clearly
+async function ensureFarrierProfile_(uid, profile) {
+  if (!db || !uid) throw new Error("Firestore is not initialized.");
+  const ref = db.collection("farriers").doc(uid);
+  const now = firebase.firestore.FieldValue.serverTimestamp();
+  try {
+    await ref.set({
+      ownerUid: uid,
+      farrierId: uid,
+      bookingUrl: window.location.origin + "/?farrier=" + uid,
+      googleCalendarConnected: false,
+      autoPrintPdf: true,
+      logoUrl: "",
+      ...profile,
+      updatedAt: now,
+    });
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new Error("Farrier profile was not created. This is usually a Firestore Rules/Permissions issue.");
+    }
+    return snap.data();
+  } catch (e) {
+    const code = e?.code || "";
+    if (code === "permission-denied") {
+      throw new Error("Firestore permission denied while creating your profile. Check Firestore Rules for collection 'farriers'.");
+    }
+    throw e;
+  }
+}
+
+
     // Google Calendar API Configuration
     const GOOGLE_CLIENT_ID = "458461432563-pkncm66du9pipuihdrbrhfrsuggo7loh.apps.googleusercontent.com";
     const CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar";
@@ -1361,7 +1392,7 @@ const [loading, setLoading] = useState(false);
           
           if (!profileDoc.exists) {
             // First time Google sign-in - create profile
-            await db.collection('farriers').doc(user.uid).set({
+            await ensureFarrierProfile_(user.uid, {
               businessName: user.displayName || 'My Farrier Business',
               email: user.email,
               phone: '',
@@ -1413,7 +1444,7 @@ const [loading, setLoading] = useState(false);
           try { await user.sendEmailVerification(); } catch (e) {}
 
           // 3) Create/merge farrier profile doc
-          await db.collection('farriers').doc(user.uid).set({
+          await ensureFarrierProfile_(user.uid, {
             businessName: businessName || 'My Farrier Business',
             email: email || user.email || '',
             phone: phone || '',
@@ -1428,7 +1459,7 @@ const [loading, setLoading] = useState(false);
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             googleCalendarConnected: false,
             bookingUrl: window.location.origin + '?farrier=' + user.uid
-          }, { merge: true });
+            });
 
           // 4) Seed default services (if empty)
           try { await seedDefaultServicesIfEmpty_(user.uid); } catch (e) {}
@@ -1765,7 +1796,7 @@ const cred = await auth.createUserWithEmailAndPassword(email, password);
           };
 
           try {
-            await db.collection("farriers").doc(uid).set(farrierDoc, { merge: true });
+            await ensureFarrierProfile_(uid, farrierDoc);
           } catch (e) {
             console.error("❌ Failed to write farrier profile (Firestore rules?)", e);
             throw new Error(e?.message || "Could not save profile to Firestore (check rules).");
@@ -1777,7 +1808,7 @@ const cred = await auth.createUserWithEmailAndPassword(email, password);
                 farrierId: uid,
                 subscriptionId: subscriptionId || "",
                 activatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-              }, { merge: true });
+              });
             } catch (e) {
               console.warn("Could not update lead with farrierId", e);
             }
@@ -4485,8 +4516,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           await db.collection('appointments').doc(appointmentId).update({
             status: newStatus,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
-          
+          });
           console.log('✅ Status updated in Firebase');
           
           const appointment = appointments.find(apt => apt.id === appointmentId);
@@ -6563,7 +6593,7 @@ useEffect(() => {
               throw new Error('Missing farrier id');
             }
             // Use merge-safe set so we never wipe other fields (ex: Google Calendar tokens)
-            await db.collection('farriers').doc(safeFarrierId).set({
+            await ensureFarrierProfile_(safeFarrierId, {
               businessName: businessName,
               phone: phone,
               address: address,
@@ -6574,7 +6604,7 @@ useEffect(() => {
               autoPrintPdf: autoPrintPdf,
               availability: availability,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+            });
 
             // Update local state
             setUserProfile(prev => ({
@@ -6830,10 +6860,8 @@ useEffect(() => {
                     try {
                       if (db) {
                         // Use merge-safe set so we never wipe other fields (ex: Google Calendar tokens)
-            await db.collection('farriers').doc(safeFarrierId).set({
-                          bookingUrl: `${window.location.origin}?farrier=${safeFarrierId}`
-                        });
-                        setUserProfile({
+            await ensureFarrierProfile_(safeFarrierId, { bookingUrl: `${window.location.origin}/?farrier=${safeFarrierId}` });
+setUserProfile({
                           ...userProfile,
                           bookingUrl: `${window.location.origin}?farrier=${safeFarrierId}`
                         });
