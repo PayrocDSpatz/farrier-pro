@@ -1435,17 +1435,7 @@ const [loading, setLoading] = useState(false);
 
           alert('Welcome! Please check your email to verify your account.');
         } catch (err) {
-          const code = err?.code || "";
-          if (code === "auth/email-already-in-use") {
-            setError("That email already has an account. Click Login (or use “Forgot password”).");
-            setMode("login");
-          } else if (code === "auth/weak-password") {
-            setError("Password is too weak. Please use at least 8 characters.");
-          } else if (code === "auth/invalid-email") {
-            setError("That email address doesn't look valid.");
-          } else {
-            setError(err?.message || String(err));
-          }
+          setError(err?.message || String(err));
         }
 
         setLoading(false);
@@ -1748,24 +1738,30 @@ const [loading, setLoading] = useState(false);
           if (!auth || !db) throw new Error("Firebase is not initialized.");
 
           // Create Auth user
-          // 🔎 Prevent duplicate account creation
-          const cred = await auth.createUserWithEmailAndPassword(email, password);
+const cred = await auth.createUserWithEmailAndPassword(email, password);
           const uid = cred.user.uid;
 
           // Create / update farrier profile (doc id = uid)
           const farrierDoc = {
-            email,
+            email: email || cred.user.email || "",
             businessName: businessName || "My Farrier Business",
             phone: phone || "",
             address: address || "",
             city: city || "",
-            state: state || "",
+            state: (state || "").toUpperCase(),
             zip: zip || "",
+            ownerUid: uid,
+            farrierId: uid,
+            logoUrl: "",
+            autoPrintPdf: true,
+            googleCalendarConnected: false,
+            bookingUrl: window.location.origin + '?farrier=' + uid,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             subscriptionId: subscriptionId || "",
             leadId: leadId || "",
-            status: "active"
+            status: "active",
+            servicesSeeded: false
           };
 
           await db.collection("farriers").doc(uid).set(farrierDoc, { merge: true });
@@ -1794,16 +1790,8 @@ const [loading, setLoading] = useState(false);
           }, 800);
         } catch (err) {
           console.error(err);
-          const code = err?.code || "";
-          if (code === "auth/email-already-in-use") {
-            setError("That email already has an account. Please log in (or use “Forgot password”).");
-          } else if (code === "auth/weak-password") {
-            setError("Password is too weak. Please use at least 8 characters.");
-          } else if (code === "auth/invalid-email") {
-            setError("That email address doesn't look valid.");
-          } else {
-            setError(err?.message || "Signup failed.");
-          }
+          const msg = (err && err.message) ? err.message : "Signup failed.";
+          setError(msg);
         }
       };
 
