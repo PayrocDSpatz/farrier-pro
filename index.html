@@ -1435,7 +1435,17 @@ const [loading, setLoading] = useState(false);
 
           alert('Welcome! Please check your email to verify your account.');
         } catch (err) {
-          setError(err?.message || String(err));
+          const code = err?.code || "";
+          if (code === "auth/email-already-in-use") {
+            setError("That email already has an account. Click Login (or use “Forgot password”).");
+            setMode("login");
+          } else if (code === "auth/weak-password") {
+            setError("Password is too weak. Please use at least 8 characters.");
+          } else if (code === "auth/invalid-email") {
+            setError("That email address doesn't look valid.");
+          } else {
+            setError(err?.message || String(err));
+          }
         }
 
         setLoading(false);
@@ -1739,18 +1749,6 @@ const [loading, setLoading] = useState(false);
 
           // Create Auth user
           // 🔎 Prevent duplicate account creation
-const check = await fetch("/api/auth/email-exists", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ email }),
-});
-
-const checkResult = await check.json();
-
-if (checkResult.success && checkResult.exists) {
-  setError("This email already has an account. Please log in instead.");
-  return;
-}
           const cred = await auth.createUserWithEmailAndPassword(email, password);
           const uid = cred.user.uid;
 
@@ -1796,8 +1794,16 @@ if (checkResult.success && checkResult.exists) {
           }, 800);
         } catch (err) {
           console.error(err);
-          const msg = (err && err.message) ? err.message : "Signup failed.";
-          setError(msg);
+          const code = err?.code || "";
+          if (code === "auth/email-already-in-use") {
+            setError("That email already has an account. Please log in (or use “Forgot password”).");
+          } else if (code === "auth/weak-password") {
+            setError("Password is too weak. Please use at least 8 characters.");
+          } else if (code === "auth/invalid-email") {
+            setError("That email address doesn't look valid.");
+          } else {
+            setError(err?.message || "Signup failed.");
+          }
         }
       };
 
