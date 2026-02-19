@@ -1738,6 +1738,19 @@ const [loading, setLoading] = useState(false);
           if (!auth || !db) throw new Error("Firebase is not initialized.");
 
           // Create Auth user
+          // 🔎 Prevent duplicate account creation
+const check = await fetch("/api/auth/email-exists", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email }),
+});
+
+const checkResult = await check.json();
+
+if (checkResult.success && checkResult.exists) {
+  setError("This email already has an account. Please log in instead.");
+  return;
+}
           const cred = await auth.createUserWithEmailAndPassword(email, password);
           const uid = cred.user.uid;
 
