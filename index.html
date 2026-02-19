@@ -1124,7 +1124,7 @@ async function ensureFarrierProfile_(uid, profile) {
   const farrierIdParam = urlParams.get("farrier");
   const support = urlParams.has("support");
   const supportSessionId = urlParams.get("supportSession");
-  const finishSignup = urlParams.get("finishSignup") === "1";
+  const finishSignup = urlParams.get("finishSignup") === "1" || urlParams.has("leadId") || urlParams.has("lead") || urlParams.has("lid");
 
 
   // Support admin gate (must be outside conditional renders)
