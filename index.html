@@ -1124,12 +1124,7 @@ async function ensureFarrierProfile_(uid, profile) {
   const farrierIdParam = urlParams.get("farrier");
   const support = urlParams.has("support");
   const supportSessionId = urlParams.get("supportSession");
-  const explicitFinish = urlParams.get("finishSignup") === "1";
-const hasLeadParam = urlParams.has("leadId") || urlParams.has("lead") || urlParams.has("lid");
-
-// Only treat lead params as finish-signup when NOT logged in
-const finishSignup = explicitFinish || (!user && hasLeadParam);
-
+  const finishSignup = urlParams.get("finishSignup") === "1" || urlParams.has("leadId") || urlParams.has("lead") || urlParams.has("lid");
 
 
   // Support admin gate (must be outside conditional renders)
@@ -1214,8 +1209,35 @@ const finishSignup = explicitFinish || (!user && hasLeadParam);
         // Load profile for effective farrier
         if (db) {
           const profileDoc = await db.collection("farriers").doc(farrierIdToUse).get();
-          setUserProfile(profileDoc.exists ? profileDoc.data() : null);
-        } else {
+
+          // If the user can authenticate but has no profile doc, create one now.
+          if (!profileDoc.exists) {
+            try {
+              const baseProfile = {
+                email: user?.email || "",
+                businessName: user?.displayName || "My Farrier Business",
+                ownerUid: farrierIdToUse,
+                farrierId: farrierIdToUse,
+                bookingUrl: window.location.origin + "/?farrier=" + farrierIdToUse,
+                googleCalendarConnected: false,
+                autoPrintPdf: true,
+                logoUrl: "",
+                status: "active",
+                servicesSeeded: false,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              };
+              await ensureFarrierProfile_(farrierIdToUse, baseProfile);
+              const createdSnap = await db.collection("farriers").doc(farrierIdToUse).get();
+              setUserProfile(createdSnap.exists ? createdSnap.data() : baseProfile);
+            } catch (e) {
+              console.error("❌ Could not auto-create missing farrier profile doc", e);
+              setUserProfile(null);
+            }
+          } else {
+            setUserProfile(profileDoc.data());
+          }
+} else {
           setUserProfile(null);
         }
       } catch (e) {
@@ -1275,16 +1297,10 @@ if (support) {
   if (finishSignup) {
     if (user) {
       // Already signed in; take them to dashboard.
-  const u = new URL(window.location.href);
-
-// Strip everything that can re-trigger finish signup
-["finishSignup","leadId","lead","lid","subscriptionId","sub","email","from"].forEach(p => u.searchParams.delete(p));
-
-// Use replace so browser history can't re-trigger the loop
-const next = u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : "");
-window.location.replace(next);
-return null;
-
+      const u = new URL(window.location.href);
+      u.searchParams.delete("finishSignup");
+      window.location.href = u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : "");
+      return null;
     }
     return <FinishSignupView />;
   }
