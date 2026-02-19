@@ -1,43 +1,61 @@
-import admin from "firebase-admin";
-
-function initFirebaseAdmin() {
-  if (admin.apps.length) return;
-
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw) throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_JSON env var");
-
-  const serviceAccount = JSON.parse(raw);
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-}
-
 export default async function handler(req, res) {
-  // Basic CORS (safe for same-domain; helpful for local dev)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ success: false, message: "Method not allowed" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ success: false, message: "Method not allowed" });
+  }
 
   try {
-    initFirebaseAdmin();
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) throw new Error("Missing FIREBASE_WEB_API_KEY env var");
 
-    const { email } = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const email = String(body.email || "").trim().toLowerCase();
     if (!email) return res.status(400).json({ success: false, message: "Missing email" });
 
-    try {
-      await admin.auth().getUserByEmail(String(email).trim().toLowerCase());
+    // Use Identity Toolkit "signInWithPassword" to infer existence:
+    // - EMAIL_NOT_FOUND => does not exist
+    // - INVALID_PASSWORD => exists (email is real but password wrong)
+    // - TOO_MANY_ATTEMPTS_TRY_LATER => treat as exists/unknown (rate limit)
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password: "__dummy_password__never_correct__",
+        returnSecureToken: false,
+      }),
+    });
+
+    const data = await r.json().catch(() => ({}));
+
+    if (r.ok) {
+      // This would be unexpected with a dummy password, but handle anyway.
       return res.status(200).json({ success: true, exists: true });
-    } catch (err) {
-      // Firebase throws auth/user-not-found when it doesn't exist
-      if (err?.code === "auth/user-not-found") {
-        return res.status(200).json({ success: true, exists: false });
-      }
-      throw err;
     }
+
+    const msg = data?.error?.message || "";
+
+    if (msg === "EMAIL_NOT_FOUND") {
+      return res.status(200).json({ success: true, exists: false });
+    }
+
+    if (msg === "INVALID_PASSWORD") {
+      return res.status(200).json({ success: true, exists: true });
+    }
+
+    if (msg === "TOO_MANY_ATTEMPTS_TRY_LATER") {
+      // Safer UX: assume exists (or block signup briefly) to avoid duplicates
+      return res.status(200).json({ success: true, exists: true, note: "rate_limited" });
+    }
+
+    // Any other error: return details for debugging
+    return res.status(200).json({ success: false, exists: null, error: msg || "unknown_error" });
   } catch (e) {
     return res.status(500).json({ success: false, message: e?.message || "Server error" });
   }
