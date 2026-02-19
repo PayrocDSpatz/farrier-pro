@@ -1124,7 +1124,12 @@ async function ensureFarrierProfile_(uid, profile) {
   const farrierIdParam = urlParams.get("farrier");
   const support = urlParams.has("support");
   const supportSessionId = urlParams.get("supportSession");
-  const finishSignup = urlParams.get("finishSignup") === "1" || urlParams.has("leadId") || urlParams.has("lead") || urlParams.has("lid");
+  const explicitFinish = urlParams.get("finishSignup") === "1";
+const hasLeadParam = urlParams.has("leadId") || urlParams.has("lead") || urlParams.has("lid");
+
+// Only treat lead params as finish-signup when NOT logged in
+const finishSignup = explicitFinish || (!user && hasLeadParam);
+
 
 
   // Support admin gate (must be outside conditional renders)
@@ -1270,10 +1275,16 @@ if (support) {
   if (finishSignup) {
     if (user) {
       // Already signed in; take them to dashboard.
-      const u = new URL(window.location.href);
-      u.searchParams.delete("finishSignup");
-      window.location.href = u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : "");
-      return null;
+  const u = new URL(window.location.href);
+
+// Strip everything that can re-trigger finish signup
+["finishSignup","leadId","lead","lid","subscriptionId","sub","email","from"].forEach(p => u.searchParams.delete(p));
+
+// Use replace so browser history can't re-trigger the loop
+const next = u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : "");
+window.location.replace(next);
+return null;
+
     }
     return <FinishSignupView />;
   }
