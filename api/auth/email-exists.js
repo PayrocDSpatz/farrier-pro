@@ -38,22 +38,12 @@ module.exports = async (req, res) => {
 
     if (!r.ok) {
       return res.status(200).json({
-        success: false,
-        exists: null,
-        error: data?.error?.message || "unknown_error",
-        debug: { status: r.status },
-      });
-    }
-
-    return res.status(200).json({ success: true, exists: Boolean(data?.registered) });
-  } catch (e) {
-    return res.status(500).json({
-      success: false,
-      message: e?.message || "Function crashed",
-      hint:
-        String(e?.message || "").includes("fetch is not defined")
-          ? "Your runtime lacks global fetch. Set Node.js runtime to 18/20 or add a fetch polyfill."
-          : "Check Vercel function logs for stack trace.",
-    });
+  success: true,
+  exists: Boolean(data?.registered),
+  debug: {
+    receivedEmail: email,
+    apiKeyPrefix: apiKey.slice(0, 10),
+    firebaseResponseKeys: Object.keys(data || {}),
+    registeredRaw: data?.registered
   }
-};
+});
