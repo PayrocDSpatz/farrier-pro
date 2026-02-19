@@ -14,14 +14,21 @@ module.exports = async (req, res) => {
       return res.status(500).json({ success: false, message: "Missing FIREBASE_WEB_API_KEY env var" });
     }
 
+    // Parse body safely
     let body = req.body;
     if (typeof body === "string") {
-      try { body = JSON.parse(body); } catch { body = {}; }
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
     }
     body = body || {};
 
     const email = String(body.email || "").trim().toLowerCase();
-    if (!email) return res.status(400).json({ success: false, message: "Missing email" });
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Missing email" });
+    }
 
     const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
 
@@ -31,14 +38,13 @@ module.exports = async (req, res) => {
       body: JSON.stringify({
         email,
         password: "__definitely_not_the_real_password__",
-        returnSecureToken: false
+        returnSecureToken: false,
       }),
     });
 
     const data = await r.json().catch(() => ({}));
     const msg = data?.error?.message || "";
 
-    // Interpret results
     if (msg === "EMAIL_NOT_FOUND") {
       return res.status(200).json({ success: true, exists: false });
     }
@@ -47,10 +53,8 @@ module.exports = async (req, res) => {
       return res.status(200).json({ success: true, exists: true });
     }
 
-    // If sign-in method disabled, you may see OPERATION_NOT_ALLOWED
-    if (msg === "OPERATION_NOT_ALLOWED") {
-      return res.status(200).json({ success: false, exists: null, error: msg, hint: "Enable Email/Password provider in Firebase Auth." });
-    }
-
-    // Fallback: return error for visibility
-    return res.status(200).json({ success: false, exists: null, error: msg || "unknown_error" });_
+    return res.status(200).json({ success: false, exists: null, error: msg || "unknown_error" });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e?.message || "Function crashed" });
+  }
+};
