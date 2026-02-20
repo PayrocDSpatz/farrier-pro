@@ -6630,8 +6630,6 @@ useEffect(() => {
               throw new Error('Missing farrier id');
             }
             // Use merge-safe set so we never wipe other fields (ex: Google Calendar tokens)
-            console.log("🚨 FINAL farrierDoc being saved", JSON.stringify(farrierDoc, null, 2));
-            console.log("🚨 leadSnapData", leadSnapData);
             await ensureFarrierProfile_(safeFarrierId, {
               businessName: businessName,
               phone: phone,
