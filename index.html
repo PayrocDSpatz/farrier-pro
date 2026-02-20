@@ -1223,8 +1223,7 @@ async function ensureFarrierProfile_(uid, profile) {
                 autoPrintPdf: true,
                 logoUrl: "",
                 status: "active",
-                servicesSeeded: false,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
               };
               await ensureFarrierProfile_(farrierIdToUse, baseProfile);
@@ -1299,7 +1298,7 @@ if (finishSignup) {
     const u = new URL(window.location.href);
 
     // remove ALL finish-signup params so we don't loop
-    ["finishSignup","leadId","lead","lid","sub","subscriptionId","email","from"].forEach(k =>
+    ["finishSignup","leadId","lead","lid","sub","subscriptionId","email","from","phone","businessName"].forEach(k =>
       u.searchParams.delete(k)
     );
 
@@ -1734,18 +1733,22 @@ try {
   const leadId = urlParams.get("leadId") || urlParams.get("lead") || urlParams.get("lid");
   const subscriptionId = urlParams.get("sub") || urlParams.get("subscriptionId") || "";
   const emailFromUrl = urlParams.get("email") || "";
+  const phoneFromUrl = urlParams.get("phone") || "";
+  const businessNameFromUrl = urlParams.get("businessName") || "";
 
   const [loading, setLoading] = useState(true);
   const [lead, setLead] = useState(null);
 
   const [email, setEmail] = useState(emailFromUrl);
-  const [businessName, setBusinessName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [businessName, setBusinessName] = useState(businessNameFromUrl);
+  const [phone, setPhone] = useState(phoneFromUrl);
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
 
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -1776,6 +1779,8 @@ try {
         if (!emailFromUrl && d.email) setEmail(d.email);
         setBusinessName(prev => prev || (d.businessName || d.company || d.name || ""));
         setPhone(prev => prev || (d.phone || ""));
+        setFirstName(prev => prev || (d.firstName || ""));
+        setLastName(prev => prev || (d.lastName || ""));
 
         setAddress(prev => prev || (ba.address || ""));
         setCity(prev => prev || (ba.city || ""));
@@ -1824,6 +1829,8 @@ const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingA
   status: "active",
 
   businessName: businessName || (leadSnapData && leadSnapData.businessName) || "My Farrier Business",
+  firstName: firstName || (leadSnapData && leadSnapData.firstName) || "",
+  lastName: lastName || (leadSnapData && leadSnapData.lastName) || "",
   email: email || cred.user.email || "",
 
   phone: phone || (leadSnapData && leadSnapData.phone) || "",
@@ -1841,11 +1848,13 @@ const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingA
   subscriptionId: subscriptionId || "",
   leadId: leadId || "",
 
-  servicesSeeded: false,
   createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
 };
 
+
+      // ✅ Write the farrier profile to Firestore
+      await ensureFarrierProfile_(uid, farrierDoc);
 
       // Link the lead to the new farrier (merge so we don't overwrite lead fields)
       if (leadId) {
@@ -1917,7 +1926,32 @@ const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingA
 
             <div className="form-group">
               <label>Business Name *</label>
-              <input type="text" required value={businessName} onChange={(e)=>setBusinessName(e.target.value)} />
+              <input type="text" required value={businessName} onChange={(e)=>setBusinessName(e.target.value)} placeholder="John's Farrier Services" />
+            </div>
+
+            <div className="form-group">
+              <label>Phone Number *</label>
+              <input type="tel" required value={phone} onChange={(e)=>setPhone(e.target.value)} placeholder="(555) 555-5555" />
+            </div>
+
+            <div className="form-group">
+              <label>Business Address *</label>
+              <input type="text" required value={address} onChange={(e)=>setAddress(e.target.value)} placeholder="123 Main Street" />
+            </div>
+
+            <div style={{display:'grid', gridTemplateColumns:'2fr 1fr 1fr', gap:'0.75rem'}}>
+              <div className="form-group">
+                <label>City *</label>
+                <input type="text" required value={city} onChange={(e)=>setCity(e.target.value)} placeholder="City" />
+              </div>
+              <div className="form-group">
+                <label>State *</label>
+                <input type="text" required value={state} onChange={(e)=>setState(e.target.value.toUpperCase())} placeholder="FL" maxLength="2" style={{textTransform:'uppercase'}} />
+              </div>
+              <div className="form-group">
+                <label>ZIP *</label>
+                <input type="text" required value={zip} onChange={(e)=>setZip(e.target.value)} placeholder="12345" maxLength="5" pattern="[0-9]{5}" />
+              </div>
             </div>
 
             <div className="form-group">
