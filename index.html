@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8">address
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Farrier Pro - Multi-User Platform</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
@@ -1757,37 +1757,26 @@ try {
               const doc = await db.collection("leads").doc(leadId).get();
               if (doc.exists) {
                 const d = doc.data() || {};
-                const bi = d.billingInfo || d.billing || {};
-                const addr = bi.address || d.address || d.billingAddress || {};
-                setLead(d);
-                if (!emailFromUrl && d.email) setEmail(d.email);
-                setBusinessName(prev => prev || (d.businessName || d.company || d.name || bi.businessName || ""));
-                setPhone(prev => prev || (d.phone || bi.phone || bi.phoneNumber || ""));
-                setAddress(prev => prev || (d.address || addr.street || addr.line1 || ""));
-                setCity(prev => prev || (d.city || addr.city || ""));
-                setState(prev => prev || (d.state || addr.state || ""));
-                setZip(prev => prev || (d.zip || addr.zip || addr.postalCode || ""));
-              }
-            }
-          } catch (e) {
-            console.error("Failed to load lead", e);
-          } finally {
-            setLoading(false);
-          }
-        })();
-      }, []);
+const ba = lead?.billingAddress || {};
 
-      const cleanupUrl = () => {
-        const u = new URL(window.location.href);
-        u.searchParams.delete("finishSignup");
-        u.searchParams.delete("leadId");
-        u.searchParams.delete("lead");
-        u.searchParams.delete("lid");
-        u.searchParams.delete("sub");
-        u.searchParams.delete("subscriptionId");
-        u.searchParams.delete("email");
-        window.history.replaceState({}, "", u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : ""));
-      };
+await db.collection("farriers").doc(uid).set({
+  ownerUid: uid,
+  farrierId: uid,
+  businessName: businessName || "",
+  email: email || "",
+  phone: phone || lead?.phone || "",
+  address: address || ba.address || "",
+  city: city || ba.city || "",
+  state: state || ba.state || "",
+  zip: zip || ba.zip || "",
+  status: "active",
+  autoPrintPdf: true,
+  googleCalendarConnected: false,
+  logoUrl: "",
+  bookingUrl: window.location.origin + "/?farrier=" + uid,
+  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+});
 
       const handleComplete = async (e) => {
         e.preventDefault();
