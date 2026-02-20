@@ -1730,255 +1730,226 @@ try {
       );
     }
     function FinishSignupView() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const leadId = urlParams.get("leadId") || urlParams.get("lead") || urlParams.get("lid");
-      const subscriptionId = urlParams.get("sub") || urlParams.get("subscriptionId");
-      const emailFromUrl = urlParams.get("email") || "";
+  const urlParams = new URLSearchParams(window.location.search);
+  const leadId = urlParams.get("leadId") || urlParams.get("lead") || urlParams.get("lid");
+  const subscriptionId = urlParams.get("sub") || urlParams.get("subscriptionId") || "";
+  const emailFromUrl = urlParams.get("email") || "";
 
-      const [loading, setLoading] = useState(true);
-      const [lead, setLead] = useState(null);
-      const [email, setEmail] = useState(emailFromUrl);
-      const [businessName, setBusinessName] = useState("");
-      const [phone, setPhone] = useState("");
-      const [address, setAddress] = useState("");
-      const [city, setCity] = useState("");
-      const [state, setState] = useState("");
-      const [zip, setZip] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [lead, setLead] = useState(null);
 
-      const [password, setPassword] = useState("");
-      const [confirmPassword, setConfirmPassword] = useState("");
-      const [error, setError] = useState("");
-      const [successMessage, setSuccessMessage] = useState("");
+  const [email, setEmail] = useState(emailFromUrl);
+  const [businessName, setBusinessName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zip, setZip] = useState("");
 
-      useEffect(() => {
-        (async () => {
-          try {
-            if (leadId && db) {
-              const doc = await db.collection("leads").doc(leadId).get();
-              if (doc.exists) {
-                const d = doc.data() || {};
-const ba = lead?.billingAddress || {};
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-await db.collection("farriers").doc(uid).set({
-  ownerUid: uid,
-  farrierId: uid,
-  businessName: businessName || "",
-  email: email || "",
-  phone: phone || lead?.phone || "",
-  address: address || ba.address || "",
-  city: city || ba.city || "",
-  state: state || ba.state || "",
-  zip: zip || ba.zip || "",
-  status: "active",
-  autoPrintPdf: true,
-  googleCalendarConnected: false,
-  logoUrl: "",
-  bookingUrl: window.location.origin + "/?farrier=" + uid,
-  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-});
+  const cleanupUrl = () => {
+    const u = new URL(window.location.href);
+    ["finishSignup","leadId","lead","lid","sub","subscriptionId","email","from"].forEach(k =>
+      u.searchParams.delete(k)
+    );
+    window.history.replaceState({}, document.title, u.toString());
+  };
 
-      const handleComplete = async (e) => {
-        e.preventDefault();
-        setError("");
-        setSuccessMessage("");
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!db || !leadId) return;
 
-        if (!email) return setError("Email is required.");
-        if (!subscriptionId && !leadId) {
-          // We can still proceed, but warn: the account might not be tied to billing.
-          console.warn("Finish signup without subscription/lead reference");
-        }
+        const snap = await db.collection("leads").doc(leadId).get();
+        if (!snap.exists) return;
 
-        if (!password || password.length < 8) return setError("Password must be at least 8 characters.");
-        if (password !== confirmPassword) return setError("Passwords do not match.");
+        const d = snap.data() || {};
+        const ba = d.billingAddress || {};
 
-        try {
-          if (!auth || !db) throw new Error("Firebase is not initialized.");
+        setLead(d);
 
-          // Create Auth user
-        const cred = await auth.createUserWithEmailAndPassword(email, password);
-          try {
-          await cred.user.updateProfile({ displayName: businessName || "" });
-        } catch (e) {
-          console.warn("Could not set displayName", e);
-}
-          const uid = cred.user.uid;
+        // Only fill if user hasn't started typing yet
+        if (!emailFromUrl && d.email) setEmail(d.email);
+        setBusinessName(prev => prev || (d.businessName || d.company || d.name || ""));
+        setPhone(prev => prev || (d.phone || ""));
 
-          // Create / update farrier profile (doc id = uid)
-          const farrierDoc = {
-            email: email || cred.user.email || "",
-            businessName: businessName || "My Farrier Business",
-            phone: phone || "",
-            address: address || "",
-            city: city || "",
-            state: (state || "").toUpperCase(),
-            zip: zip || "",
-            ownerUid: uid,
-            farrierId: uid,
-            logoUrl: logoUrl || "",
-            autoPrintPdf: (typeof autoPrintPdf === "boolean") ? autoPrintPdf : true,
-            googleCalendarConnected: false,
-            bookingUrl: window.location.origin + "?farrier=" + uid,
-            subscriptionId: subscriptionId || "",
-            leadId: leadId || "",
-            status: "active",
-            servicesSeeded: false,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          };
+        setAddress(prev => prev || (ba.address || ""));
+        setCity(prev => prev || (ba.city || ""));
+        setState(prev => prev || (ba.state || ""));
+        setZip(prev => prev || (ba.zip || ""));
+      } catch (e) {
+        console.error("Failed to load lead", e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [leadId]);
 
-          try {
-            await ensureFarrierProfile_(uid, farrierDoc);
-          } catch (e) {
-            console.error("❌ Failed to write farrier profile (Firestore rules?)", e);
-            throw new Error(e?.message || "Could not save profile to Firestore (check rules).");
-          }
-// Link lead -> farrierId (optional)
-          if (leadId) {
-            try {
-              await db.collection("leads").doc(leadId).set({
-                farrierId: uid,
-                subscriptionId: subscriptionId || "",
-                activatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-              });
-            } catch (e) {
-              console.warn("Could not update lead with farrierId", e);
-            }
-          }
+  const handleComplete = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccessMessage("");
 
-          // Seed default services
-          try { await seedDefaultServicesIfEmpty_(uid); } catch (e) {}
+    if (!email) return setError("Email is required.");
+    if (!password || password.length < 8) return setError("Password must be at least 8 characters.");
+    if (password !== confirmPassword) return setError("Passwords do not match.");
 
-          setSuccessMessage("Account created! Redirecting to your dashboard…");
+    try {
+      if (!auth || !db) throw new Error("Firebase is not initialized.");
 
-          cleanupUrl();
-          setTimeout(() => {
-            window.location.href = window.location.origin + window.location.pathname;
-          }, 800);
-        } catch (err) {
-          console.error("Signup/finishSignup error:", err);
-          const code = err?.code || "";
-          if (code === "auth/email-already-in-use") {
-            setError("This email already has an account. Please log in instead.");
-            return;
-          }
-          if (code === "auth/weak-password") {
-            setError("Password is too weak. Please use at least 6 characters.");
-            return;
-          }
-          if ((err?.message || "").toLowerCase().includes("insufficient permissions")) {
-            setError("Account created, but Farrier profile could not be saved (Firestore rules blocked the write).");
-            return;
-          }
-          setError(err?.message || "Signup failed.");
-        }
-      };
+      const cred = await auth.createUserWithEmailAndPassword(email, password);
+      const uid = cred.user.uid;
 
-      if (loading) {
-        return (
-          <div style={{display: "flex", justifyContent: "center", alignItems: "center", height: "100vh"}}>
-            <div className="spinner"></div>
-          </div>
-        );
+      // Set display name so other fallbacks work
+      try {
+        await cred.user.updateProfile({ displayName: businessName || "" });
+      } catch (e) {
+        console.warn("Could not set displayName", e);
       }
 
-      return (
-        <div className="app-container">
-          <header className="app-header">
-            <div className="header-content">
-              <div className="logo">
-                <span className="logo-icon">🐴</span>
-                <span>Farrier Pro</span>
-              </div>
-            </div>
-          </header>
+      const ba = (lead && lead.billingAddress) ? lead.billingAddress : {};
 
-          <div className="auth-container">
-            <div className="auth-card">
-              <div className="auth-header">
-                <h1>Complete Your Account</h1>
-                <p>Create your login to access the Farrier Pro dashboard.</p>
-              </div>
+      // Build farrier profile using form first, then lead fallbacks
+      const farrierDoc = {
+        ownerUid: uid,
+        farrierId: uid,
+        status: "active",
 
-              {error && <div className="error-message">{error}</div>}
-              {successMessage && <div className="success-message">{successMessage}</div>}
+        businessName: businessName || (lead && lead.businessName) || "My Farrier Business",
+        email: email || cred.user.email || "",
+        phone: phone || (lead && lead.phone) || "",
 
-              <form onSubmit={handleComplete}>
-                <div className="form-group">
-                  <label>Email *</label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@business.com"
-                  />
-                </div>
+        address: address || ba.address || "",
+        city: city || ba.city || "",
+        state: ((state || ba.state || "") + "").toUpperCase(),
+        zip: zip || ba.zip || "",
 
-                <div className="form-group">
-                  <label>Business Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="John's Farrier Services"
-                  />
-                </div>
+        bookingUrl: window.location.origin + "/?farrier=" + uid,
+        googleCalendarConnected: false,
+        autoPrintPdf: true,
+        logoUrl: "",
 
-                <div className="form-group">
-                  <label>Password *</label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Create a password"
-                  />
-                </div>
+        subscriptionId: subscriptionId || "",
+        leadId: leadId || "",
 
-                <div className="form-group">
-                  <label>Confirm Password *</label>
-                  <input
-                    type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Re-enter password"
-                  />
-                </div>
+        servicesSeeded: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      };
 
-                <button type="submit" className="btn btn-primary" style={{width:"100%", marginTop:"8px"}}>
-                  Create Account
-                </button>
-              </form>
+      await ensureFarrierProfile_(uid, farrierDoc);
 
-              <div style={{marginTop:"14px", fontSize:"13px", color:"var(--text-muted)"}}>
-                {subscriptionId ? (
-                  <div><strong>Subscription:</strong> {subscriptionId}</div>
-                ) : (
-                  <div>Tip: if you came from checkout, your subscription will be attached automatically.</div>
-                )}
-                {leadId ? (
-                  <div><strong>Lead:</strong> {leadId}</div>
-                ) : null}
-              </div>
+      // Link the lead to the new farrier (merge so we don't overwrite lead fields)
+      if (leadId) {
+        try {
+          await db.collection("leads").doc(leadId).set({
+            farrierId: uid,
+            subscriptionId: subscriptionId || "",
+            activatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        } catch (e) {
+          console.warn("Could not update lead with farrierId", e);
+        }
+      }
 
-              <div style={{marginTop:"16px", textAlign:"center"}}>
-                <a
-                  href={window.location.origin}
-                  style={{color:"var(--primary)", textDecoration:"none", fontWeight:600}}
-                  onClick={(e) => { e.preventDefault(); cleanupUrl(); window.location.href = window.location.origin; }}
-                >
-                  Back to Login
-                </a>
-              </div>
-            </div>
+      // Seed default services
+      try { await seedDefaultServicesIfEmpty_(uid); } catch (e) {}
+
+      setSuccessMessage("Account created! Redirecting to your dashboard…");
+      cleanupUrl();
+      setTimeout(() => {
+        window.location.href = window.location.origin + window.location.pathname;
+      }, 800);
+
+    } catch (err) {
+      console.error("Finish signup error:", err);
+      const code = err?.code || "";
+
+      if (code === "auth/email-already-in-use") return setError("This email already has an account. Please log in instead.");
+      if (code === "auth/weak-password") return setError("Password is too weak.");
+
+      setError(err?.message || "Signup failed.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{display: "flex", justifyContent: "center", alignItems: "center", height: "100vh"}}>
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-container">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="logo">
+            <span className="logo-icon">🐴</span>
+            <span>Farrier Pro</span>
           </div>
         </div>
-      );
-    }
+      </header>
 
+      <div className="auth-container">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h1>Complete Your Account</h1>
+            <p>Create your login to access the Farrier Pro dashboard.</p>
+          </div>
+
+          {error && <div className="error-message">{error}</div>}
+          {successMessage && <div className="success-message">{successMessage}</div>}
+
+          <form onSubmit={handleComplete}>
+            <div className="form-group">
+              <label>Email *</label>
+              <input type="email" required value={email} onChange={(e)=>setEmail(e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label>Business Name *</label>
+              <input type="text" required value={businessName} onChange={(e)=>setBusinessName(e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label>Password *</label>
+              <input type="password" required value={password} onChange={(e)=>setPassword(e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label>Confirm Password *</label>
+              <input type="password" required value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} />
+            </div>
+
+            <button type="submit" className="btn btn-primary" style={{width:"100%", marginTop:"8px"}}>
+              Create Account
+            </button>
+          </form>
+
+          <div style={{marginTop:"14px", fontSize:"13px", color:"var(--text-muted)"}}>
+            {subscriptionId ? <div><strong>Subscription:</strong> {subscriptionId}</div> : null}
+            {leadId ? <div><strong>Lead:</strong> {leadId}</div> : null}
+          </div>
+
+          <div style={{marginTop:"16px", textAlign:"center"}}>
+            <a
+              href={window.location.origin}
+              style={{color:"var(--primary)", textDecoration:"none", fontWeight:600}}
+              onClick={(e) => { e.preventDefault(); cleanupUrl(); window.location.href = window.location.origin; }}
+            >
+              Back to Login
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 
    function SupportPortal({ user }) {
