@@ -1073,7 +1073,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
   batch.set(userRef, { servicesSeeded: true }, { merge: true });
   await batch.commit();
   console.log("✅ Default services seeded");
-}
+
 console.log("🚨 FINAL farrierDoc being saved", JSON.stringify(farrierDoc, null, 2));
 console.log("🚨 leadSnapData", leadSnapData);
 // Ensures the farrier profile doc exists and surfaces permission/config errors clearly
