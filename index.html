@@ -708,7 +708,7 @@
 
 
       const BUILD_VERSION = "support-portal-v3";
-console.log("Farrier Pro build:", BUILD_VERSION);
+("Farrier Pro build:", BUILD_VERSION);
 
 /**********************
        * INVOICE PDF / PRINT HELPERS
@@ -1017,7 +1017,7 @@ console.log("Farrier Pro build:", BUILD_VERSION);
       auth = firebase.auth();
       db = firebase.firestore();
     } catch (error) {
-      console.log("Firebase not configured yet - using demo mode");
+      ("Firebase not configured yet - using demo mode");
     }
 async function seedDefaultServicesIfEmpty_(userId) {
   if (!db || !userId) return;
@@ -1073,9 +1073,8 @@ async function seedDefaultServicesIfEmpty_(userId) {
   batch.set(userRef, { servicesSeeded: true }, { merge: true });
   await batch.commit();
   console.log("✅ Default services seeded");
+}
 
-console.log("🚨 FINAL farrierDoc being saved", JSON.stringify(farrierDoc, null, 2));
-console.log("🚨 leadSnapData", leadSnapData);
 // Ensures the farrier profile doc exists and surfaces permission/config errors clearly
 async function ensureFarrierProfile_(uid, profile) {
   if (!db || !uid) throw new Error("Firestore is not initialized.");
@@ -6601,6 +6600,8 @@ useEffect(() => {
               throw new Error('Missing farrier id');
             }
             // Use merge-safe set so we never wipe other fields (ex: Google Calendar tokens)
+            console.log("🚨 FINAL farrierDoc being saved", JSON.stringify(farrierDoc, null, 2));
+            console.log("🚨 leadSnapData", leadSnapData);
             await ensureFarrierProfile_(safeFarrierId, {
               businessName: businessName,
               phone: phone,
