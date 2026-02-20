@@ -1757,14 +1757,16 @@ try {
               const doc = await db.collection("leads").doc(leadId).get();
               if (doc.exists) {
                 const d = doc.data() || {};
+                const bi = d.billingInfo || d.billing || {};
+                const addr = bi.address || d.address || d.billingAddress || {};
                 setLead(d);
                 if (!emailFromUrl && d.email) setEmail(d.email);
-                setBusinessName(d.businessName || d.company || d.name || "");
-                setPhone(d.phone || "");
-                setAddress(d.address || "");
-                setCity(d.city || "");
-                setState(d.state || "");
-                setZip(d.zip || "");
+                setBusinessName(prev => prev || (d.businessName || d.company || d.name || bi.businessName || ""));
+                setPhone(prev => prev || (d.phone || bi.phone || bi.phoneNumber || ""));
+                setAddress(prev => prev || (d.address || addr.street || addr.line1 || ""));
+                setCity(prev => prev || (d.city || addr.city || ""));
+                setState(prev => prev || (d.state || addr.state || ""));
+                setZip(prev => prev || (d.zip || addr.zip || addr.postalCode || ""));
               }
             }
           } catch (e) {
@@ -1805,7 +1807,12 @@ try {
           if (!auth || !db) throw new Error("Firebase is not initialized.");
 
           // Create Auth user
-const cred = await auth.createUserWithEmailAndPassword(email, password);
+        const cred = await auth.createUserWithEmailAndPassword(email, password);
+          try {
+          await cred.user.updateProfile({ displayName: businessName || "" });
+        } catch (e) {
+          console.warn("Could not set displayName", e);
+}
           const uid = cred.user.uid;
 
           // Create / update farrier profile (doc id = uid)
