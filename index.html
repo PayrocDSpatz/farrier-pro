@@ -1214,8 +1214,8 @@ async function ensureFarrierProfile_(uid, profile) {
           if (!profileDoc.exists) {
             try {
               const baseProfile = {
-                email: user?.email || "",
-                businessName: user?.displayName || "My Farrier Business",
+                email: u?.email || "",
+                businessName: u?.displayName || "My Farrier Business",
                 ownerUid: farrierIdToUse,
                 farrierId: farrierIdToUse,
                 bookingUrl: window.location.origin + "/?farrier=" + farrierIdToUse,
@@ -1469,8 +1469,12 @@ const [loading, setLoading] = useState(false);
           }
 
           // 1) Create Firebase Auth user
-          const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-          const user = userCredential.user;
+          // Set Auth displayName so the app has a reliable businessName fallback
+try {
+  await cred.user.updateProfile({ displayName: businessName || "" });
+} catch (e) {
+  console.warn("Could not set displayName", e);
+}
 
           // 2) Send verification email (non-blocking if it fails)
           try { await user.sendEmailVerification(); } catch (e) {}
