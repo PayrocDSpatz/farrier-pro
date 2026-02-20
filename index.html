@@ -1090,7 +1090,7 @@ async function ensureFarrierProfile_(uid, profile) {
       logoUrl: "",
       ...profile,
       updatedAt: now,
-    });
+    }, { merge: true });
     const snap = await ref.get();
     if (!snap.exists) {
       throw new Error("Farrier profile was not created. This is usually a Firestore Rules/Permissions issue.");
