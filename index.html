@@ -1074,7 +1074,8 @@ async function seedDefaultServicesIfEmpty_(userId) {
   await batch.commit();
   console.log("✅ Default services seeded");
 }
-
+console.log("🚨 FINAL farrierDoc being saved", JSON.stringify(farrierDoc, null, 2));
+console.log("🚨 leadSnapData", leadSnapData);
 // Ensures the farrier profile doc exists and surfaces permission/config errors clearly
 async function ensureFarrierProfile_(uid, profile) {
   if (!db || !uid) throw new Error("Firestore is not initialized.");
@@ -1804,56 +1805,47 @@ try {
       const cred = await auth.createUserWithEmailAndPassword(email, password);
       const uid = cred.user.uid;
      
-// 🔥 FETCH LEAD FRESH AT SUBMIT TIME
-let leadData = lead;
-
-if ((!leadData || !leadData.billingAddress) && leadId && db) {
+// ✅ Always fetch the lead fresh right before creating farrierDoc (no reliance on React state)
+let leadSnapData = null;
+if (leadId && db) {
   try {
     const snap = await db.collection("leads").doc(leadId).get();
-    leadData = snap.exists ? (snap.data() || null) : null;
+    leadSnapData = snap.exists ? (snap.data() || null) : null;
   } catch (e) {
-    console.warn("Could not fetch lead at submit-time", e);
+    console.warn("Could not fetch lead during signup submit", e);
   }
 }
 
-
-
-      // Set display name so other fallbacks work
-      try {
-        await cred.user.updateProfile({ displayName: businessName || "" });
-      } catch (e) {
-        console.warn("Could not set displayName", e);
-      }
-
-      const ba = (lead && lead.billingAddress) ? lead.billingAddress : {};
+const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingAddress : {};
 
       // Build farrier profile using form first, then lead fallbacks
-      const farrierDoc = {
-        ownerUid: uid,
-        farrierId: uid,
-        status: "active",
+     const farrierDoc = {
+  ownerUid: uid,
+  farrierId: uid,
+  status: "active",
 
-        businessName: businessName || (leadData && leadData.businessName) || "My Farrier Business",
-        email: email || cred.user.email || "",
-        phone: phone || (leadData && leadData.phone) || "",
+  businessName: businessName || (leadSnapData && leadSnapData.businessName) || "My Farrier Business",
+  email: email || cred.user.email || "",
 
-        address: address || ba.address || "",
-        city: city || ba.city || "",
-        state: ((state || ba.state || "") + "").toUpperCase(),
-        zip: zip || ba.zip || "",
+  phone: phone || (leadSnapData && leadSnapData.phone) || "",
 
-        bookingUrl: window.location.origin + "/?farrier=" + uid,
-        googleCalendarConnected: false,
-        autoPrintPdf: true,
-        logoUrl: "",
+  address: address || ba.address || "",
+  city: city || ba.city || "",
+  state: ((state || ba.state || "") + "").toUpperCase(),
+  zip: zip || ba.zip || "",
 
-        subscriptionId: subscriptionId || "",
-        leadId: leadId || "",
+  bookingUrl: window.location.origin + "/?farrier=" + uid,
+  googleCalendarConnected: false,
+  autoPrintPdf: true,
+  logoUrl: "",
 
-        servicesSeeded: false,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      };
+  subscriptionId: subscriptionId || "",
+  leadId: leadId || "",
+
+  servicesSeeded: false,
+  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+};
 
 
       // Link the lead to the new farrier (merge so we don't overwrite lead fields)
