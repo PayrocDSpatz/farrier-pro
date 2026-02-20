@@ -6230,18 +6230,18 @@ useEffect(() => {
               paymentUrl: '',
               createdAt: new Date()
             };
-            onCreated(createdInvoice);
-} else {
+                      onCreated(createdInvoice);
+          } else {
             console.error('❌ Database not initialized');
             setError('Database not available');
           }
-        } catch (err) {
-          console.error('❌ Error creating invoice:', err);
-          setError('Error creating invoice. Please try again.');
-        }
-
-        setLoading(false);
-      };
+       } catch (err) {
+  console.error('❌ Error creating invoice:', err);
+  setError('Error creating invoice. Please try again.');
+} finally {
+  setLoading(false);
+}
+};
 
       const sendInvoice = () => {
         const message = `Hi ${customerName}! Your invoice for $${total.toFixed(2)} is ready. Pay here: ${paymentUrl}`;
