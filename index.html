@@ -1294,18 +1294,13 @@ if (support) {
 }
 
  // Finish signup (post-billing activation)
+// ✅ Always show FinishSignupView for new signups — never skip it due to a cached auth session.
+// If someone is already logged in, sign them out silently so the new account can be created.
 if (finishSignup) {
   if (user) {
-    const u = new URL(window.location.href);
-
-    // remove ALL finish-signup params so we don't loop
-    ["finishSignup","leadId","lead","lid","sub","subscriptionId","email","from","phone","businessName"].forEach(k =>
-      u.searchParams.delete(k)
-    );
-
-    window.location.href =
-      u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : "");
-    return null;
+    // Sign out the cached session so the new farrier can create their account fresh
+    auth.signOut().catch(() => {});
+    return null; // briefly null while signOut triggers onAuthStateChanged → user becomes null → re-render shows FinishSignupView
   }
   return <FinishSignupView />;
 }
