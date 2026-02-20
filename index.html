@@ -1833,9 +1833,9 @@ if ((!leadData || !leadData.billingAddress) && leadId && db) {
         farrierId: uid,
         status: "active",
 
-        businessName: businessName || (lead && lead.businessName) || "My Farrier Business",
+        businessName: businessName || (leadData && leadData.businessName) || "My Farrier Business",
         email: email || cred.user.email || "",
-        phone: phone || (lead && lead.phone) || "",
+        phone: phone || (leadData && leadData.phone) || "",
 
         address: address || ba.address || "",
         city: city || ba.city || "",
