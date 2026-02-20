@@ -1034,7 +1034,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
     .get();
 
   if (!existing.empty) {
-    await userRef.set({ servicesSeeded: true });
+    await userRef.set({ servicesSeeded: true }, { merge: true });
     return;
   }
 
@@ -1070,7 +1070,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
     });
   });
 
-  batch.set(userRef, { servicesSeeded: true });
+  batch.set(userRef, { servicesSeeded: true }, { merge: true });
   await batch.commit();
   console.log("✅ Default services seeded");
 }
@@ -1293,17 +1293,22 @@ if (support) {
   return <SupportPortal user={user} />;
 }
 
-  // Finish signup (post-billing activation)
-  if (finishSignup) {
-    if (user) {
-      // Already signed in; take them to dashboard.
-      const u = new URL(window.location.href);
-      u.searchParams.delete("finishSignup");
-      window.location.href = u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : "");
-      return null;
-    }
-    return <FinishSignupView />;
+ // Finish signup (post-billing activation)
+if (finishSignup) {
+  if (user) {
+    const u = new URL(window.location.href);
+
+    // remove ALL finish-signup params so we don't loop
+    ["finishSignup","leadId","lead","lid","sub","subscriptionId","email","from"].forEach(k =>
+      u.searchParams.delete(k)
+    );
+
+    window.location.href =
+      u.origin + u.pathname + (u.searchParams.toString() ? `?${u.searchParams.toString()}` : "");
+    return null;
   }
+  return <FinishSignupView />;
+}
 
   // Authentication view
   if (!user) {
