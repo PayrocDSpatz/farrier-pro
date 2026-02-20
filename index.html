@@ -1803,6 +1803,22 @@ try {
 
       const cred = await auth.createUserWithEmailAndPassword(email, password);
       const uid = cred.user.uid;
+     
+// 🔥 FETCH LEAD FRESH AT SUBMIT TIME
+let leadData = lead;
+
+if ((!leadData || !leadData.billingAddress) && leadId && db) {
+  try {
+    const snap = await db.collection("leads").doc(leadId).get();
+    leadData = snap.exists ? (snap.data() || null) : null;
+  } catch (e) {
+    console.warn("Could not fetch lead at submit-time", e);
+  }
+}
+
+const ba = (leadData && leadData.billingAddress)
+  ? leadData.billingAddress
+  : {};
 
       // Set display name so other fallbacks work
       try {
@@ -1840,10 +1856,7 @@ try {
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       };
-console.log("🧾 lead at submit:", lead);
-console.log("🧾 ba at submit:", ba);
-console.log("🧾 farrierDoc at submit:", farrierDoc);
-      await ensureFarrierProfile_(uid, farrierDoc);
+
 
       // Link the lead to the new farrier (merge so we don't overwrite lead fields)
       if (leadId) {
