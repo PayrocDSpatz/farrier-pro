@@ -2174,7 +2174,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 <span className="logo-icon">🐴</span>
                 <div style={{display:'flex',flexDirection:'column',lineHeight:'1.1'}}>
                   <span>FarriTech</span>
-                  <span style={{fontSize:'0.7rem',color:'var(--text-muted)',fontWeight:'400'}}>{BUILD_VERSION}</span>
+                  <span style={{fontSize:'0.7rem',color:'#ffffff',fontWeight:'400'}}>{BUILD_VERSION}</span>
                 </div>
               </div>
               <div className="header-actions">
@@ -4095,13 +4095,6 @@ function CalendarView({ userId }) {
               counts[date] = { confirmed: 0, pending: 0, total: 0 };
             }
             counts[date].total++;
-            const confirmedCount = appointments.filter(
-  (apt) => (apt.status || 'pending').toLowerCase() === 'confirmed'
-).length;
-
-const pendingCount = appointments.filter(
-  (apt) => (apt.status || 'pending').toLowerCase() !== 'confirmed'
-).length;
             // Handle status - if not set or 'pending', treat as pending
             const status = apt.status || 'pending';
             
@@ -4265,7 +4258,7 @@ const pendingCount = appointments.filter(
                 fontSize: '0.75rem',
                 fontWeight: '600'
               }}>
-                ✓ {confirmedCount}
+                ✓ {appointments.filter(a => (a.status || 'pending').toLowerCase() === 'confirmed').length}
               </div>
               <span style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Confirmed</span>
             </div>
@@ -4279,7 +4272,7 @@ const pendingCount = appointments.filter(
                 fontSize: '0.75rem',
                 fontWeight: '600'
               }}>
-                ⏳ {pendingCount}
+                ⏳ {appointments.filter(a => (a.status || 'pending').toLowerCase() !== 'confirmed').length}
               </div>
               <span style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Pending</span>
             </div>
