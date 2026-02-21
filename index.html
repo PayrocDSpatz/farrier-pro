@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">address
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Farrier Pro - Multi-User Platform</title>
+  <title>FarriTech - Advanced Farrier Solutions</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
@@ -30,18 +30,18 @@
     }
 
     :root {
-      --primary: #2D5016;
-      --primary-light: #4A7C2A;
-      --secondary: #D4A574;
-      --accent: #E8773D;
-      --bg: #F5F1E8;
-      --surface: #FFFFFF;
-      --text: #1A1A1A;
-      --text-muted: #666666;
-      --success: #4A7C2A;
-      --warning: #E8773D;
-      --error: #C53030;
-      --border: #E0D8C8;
+      --primary: #2683FB;
+      --primary-light: #46C5FF;
+      --secondary: #8F9DAF;
+      --accent: #46C5FF;
+      --bg: #0D1320;
+      --surface: #131E2E;
+      --text: #E8F0FE;
+      --text-muted: #8F9DAF;
+      --success: #2683FB;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --border: #1E2D42;
     }
 
     body {
@@ -709,7 +709,7 @@
 
 
       const BUILD_VERSION = "support-portal-v3";
-("Farrier Pro build:", BUILD_VERSION);
+("FarriTech build:", BUILD_VERSION);
 
 /**********************
        * INVOICE PDF / PRINT HELPERS
@@ -760,7 +760,7 @@
         const { jsPDF } = window.jspdf;
 
         const profile = farrierProfile || {};
-        const businessName = safeText_(profile.businessName) || "Farrier Pro";
+        const businessName = safeText_(profile.businessName) || "FarriTech";
         const bizPhone = safeText_(profile.phone);
         const bizEmail = safeText_(profile.email || ""); // optional
         const bizAddr = [safeText_(profile.address), safeText_(profile.city), safeText_(profile.state), safeText_(profile.zip)]
@@ -1509,7 +1509,7 @@ try {
             <div className="header-content">
               <div className="logo">
                 <span className="logo-icon">🐴</span>
-                <span>Farrier Pro</span>
+                <span>FarriTech</span>
               </div>
             </div>
           </header>
@@ -1899,7 +1899,7 @@ const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingA
         <div className="header-content">
           <div className="logo">
             <span className="logo-icon">🐴</span>
-            <span>Farrier Pro</span>
+            <span>FarriTech</span>
           </div>
         </div>
       </header>
@@ -1908,7 +1908,7 @@ const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingA
         <div className="auth-card">
           <div className="auth-header">
             <h1>Complete Your Account</h1>
-            <p>Create your login to access the Farrier Pro dashboard.</p>
+            <p>Create your login to access the FarriTech dashboard.</p>
           </div>
 
           {error && <div className="error-message">{error}</div>}
@@ -2169,7 +2169,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             <div className="header-content">
               <div className="logo">
                 <span className="logo-icon">🐴</span>
-                <span>Farrier Pro</span>
+                <span>FarriTech</span>
               </div>
               <div className="header-actions">
             <span className="version-pill">{BUILD_VERSION}</span>
@@ -2496,7 +2496,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   <div style={{fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: '500'}}>
                     Total Revenue
                   </div>
-                  <div style={{fontSize: '2rem', fontWeight: '700', color: '#16a34a'}}>
+                  <div style={{fontSize: '2rem', fontWeight: '700', color: '#2683FB'}}>
                     ${totalRevenue.toFixed(2)}
                   </div>
                 </div>
@@ -2631,7 +2631,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       }}
                     >
                       <span style={{color: 'var(--text-muted)'}}>✅ Paid</span>
-                      <span style={{fontSize: '1.25rem', fontWeight: '600', color: '#16a34a'}}>{paidInvoices}</span>
+                      <span style={{fontSize: '1.25rem', fontWeight: '600', color: '#2683FB'}}>{paidInvoices}</span>
                     </div>
                     <div 
                       style={{
@@ -2667,7 +2667,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                         <div 
                           style={{
                             width: `${(paidInvoices / totalInvoices) * 100}%`,
-                            background: '#16a34a',
+                            background: '#2683FB',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -2739,7 +2739,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   </div>
                   <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem'}}>
                     {[
-                      { label: 'Current', sublabel: '0-30 days', data: aging.current, color: '#22c55e' },
+                      { label: 'Current', sublabel: '0-30 days', data: aging.current, color: '#46C5FF' },
                       { label: '30 Days', sublabel: '31-60 days', data: aging.days30, color: '#eab308' },
                       { label: '60 Days', sublabel: '61-90 days', data: aging.days60, color: '#f97316' },
                       { label: '90 Days', sublabel: '91-120 days', data: aging.days90, color: '#ef4444' },
@@ -2830,11 +2830,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       padding: '1rem',
                       background: totalOutstanding > 500 ? '#fef2f2' : '#f0fdf4',
                       borderRadius: '8px',
-                      borderLeft: `4px solid ${totalOutstanding > 500 ? '#ef4444' : '#22c55e'}`
+                      borderLeft: `4px solid ${totalOutstanding > 500 ? '#ef4444' : '#46C5FF'}`
                     }}>
                       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                         <span style={{fontWeight: '600', color: 'var(--text)'}}>Total Outstanding:</span>
-                        <span style={{fontSize: '1.5rem', fontWeight: '700', color: totalOutstanding > 500 ? '#ef4444' : '#22c55e'}}>
+                        <span style={{fontSize: '1.5rem', fontWeight: '700', color: totalOutstanding > 500 ? '#ef4444' : '#46C5FF'}}>
                           ${totalOutstanding.toFixed(2)}
                         </span>
                       </div>
@@ -2889,7 +2889,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                               <div style={{fontWeight: '600'}}>{name}</div>
                               <div style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>Rank #{i + 1} • {customerInvoices.length} invoice{customerInvoices.length !== 1 ? 's' : ''}</div>
                             </div>
-                            <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#16a34a'}}>
+                            <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#2683FB'}}>
                               ${total.toFixed(2)}
                             </div>
                           </div>
@@ -2952,7 +2952,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                               <div style={{fontWeight: '600', fontSize: '0.9rem'}}>{service}</div>
                               <div style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>Rank #{i + 1} • {serviceInvoices.length} invoice{serviceInvoices.length !== 1 ? 's' : ''}</div>
                             </div>
-                            <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#16a34a'}}>
+                            <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#2683FB'}}>
                               ${revenue.toFixed(2)}
                             </div>
                           </div>
@@ -3009,7 +3009,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                                 <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>{inv.customerName}</div>
                               </div>
                               <div style={{textAlign: 'right'}}>
-                                <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#16a34a'}}>
+                                <div style={{fontSize: '1.25rem', fontWeight: '700', color: '#2683FB'}}>
                                   ${inv.total?.toFixed(2)}
                                 </div>
                                 <span className={`badge badge-${inv.status === 'paid' ? 'success' : 'warning'}`}>
@@ -3207,21 +3207,21 @@ function ServicesView({ userId }) {
       return (
         <div>
           <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>
-            About Farrier Pro
+            About FarriTech
           </h1>
 
           <div className="card">
             <div style={{textAlign: 'center', padding: '2rem'}}>
               <div style={{fontSize: '4rem', marginBottom: '1rem'}}>🐴</div>
               <h2 style={{fontSize: '2rem', marginBottom: '0.5rem', color: 'var(--primary)'}}>
-                Farrier Pro
+                FarriTech
               </h2>
               <p style={{fontSize: '1.25rem', color: 'var(--text-muted)', marginBottom: '2rem'}}>
-                Professional Farrier Management Platform
+                Advanced Farrier Solutions
               </p>
               
               <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #2683FB 0%, #46C5FF 100%)',
                 color: 'white',
                 padding: '1.5rem',
                 borderRadius: '8px',
@@ -3314,7 +3314,7 @@ function ServicesView({ userId }) {
                 fontSize: '0.875rem'
               }}>
                 <p style={{marginBottom: '0.5rem'}}>
-                  © 2026 Farrier Pro. All rights reserved.
+                  © 2026 FarriTech. All rights reserved.
                 </p>
                 <p style={{fontSize: '0.75rem'}}>
                   Built with ❤️ for professional farriers
@@ -4771,7 +4771,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       {!apt.invoiced && (
                         <button 
                           className="btn btn-sm"
-                          style={{background: '#2563eb', color: 'white'}}
+                          style={{background: '#2683FB', color: 'white'}}
                           onClick={() => handleCreateInvoiceFromAppointment(apt)}
                         >
                           💰 Create Invoice
@@ -4980,7 +4980,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
             <div style={{padding: '1.5rem', maxHeight: '70vh', overflowY: 'auto'}}>
               <div style={{marginBottom: '1rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px'}}>
-                <div style={{fontWeight: '600', color: '#0369a1'}}>Customer: {appointment.customerName}</div>
+                <div style={{fontWeight: '600', color: '#46C5FF'}}>Customer: {appointment.customerName}</div>
                 <div style={{fontSize: '0.875rem', color: '#64748b'}}>Email: {appointment.email || 'Not provided'}</div>
               </div>
 
@@ -5433,13 +5433,13 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                   onClick={exportToExcel}
                   className="btn btn-sm"
                   style={{
-                    background: '#16a34a',
+                    background: '#2683FB',
                     color: 'white',
                     fontWeight: '600',
                     marginLeft: 'auto'
                   }}
                   onMouseOver={(e) => e.target.style.background = '#15803d'}
-                  onMouseOut={(e) => e.target.style.background = '#16a34a'}
+                  onMouseOut={(e) => e.target.style.background = '#2683FB'}
                 >
                   📊 Export to Excel
                 </button>
@@ -5745,7 +5745,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 customerEmail: invoice.customerEmail || 'customer@example.com',
                 customerName: invoice.customerName,
                 invoiceNumber: invoice.invoiceNumber,
-                description: `Farrier Pro Invoice #${invoice.invoiceNumber}`
+                description: `FarriTech Invoice #${invoice.invoiceNumber}`
               },
               invoiceData: {
                 invoiceId: invoice.id,
@@ -6272,10 +6272,10 @@ useEffect(() => {
                 border: '2px solid #0ea5e9',
                 borderRadius: '8px'
               }}>
-                <div style={{fontSize: '0.875rem', fontWeight: '600', color: '#0369a1', marginBottom: '0.5rem'}}>
+                <div style={{fontSize: '0.875rem', fontWeight: '600', color: '#46C5FF', marginBottom: '0.5rem'}}>
                   📋 Invoice from Appointment
                 </div>
-                <div style={{fontSize: '0.875rem', color: '#0369a1'}}>
+                <div style={{fontSize: '0.875rem', color: '#46C5FF'}}>
                   Customer info pre-filled from appointment booking
                 </div>
               </div>
@@ -6329,7 +6329,7 @@ useEffect(() => {
                 <div style={{
                   fontSize: '0.9rem',
                   fontWeight: '600',
-                  color: '#0369a1',
+                  color: '#46C5FF',
                   marginBottom: '0.75rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -6346,7 +6346,7 @@ useEffect(() => {
                     <div style={{
                       fontSize: '1.5rem',
                       fontWeight: 'bold',
-                      color: selectedCustomerInfo.balance > 0 ? '#dc2626' : '#16a34a'
+                      color: selectedCustomerInfo.balance > 0 ? '#dc2626' : '#2683FB'
                     }}>
                       ${selectedCustomerInfo.balance.toFixed(2)}
                     </div>
@@ -6361,7 +6361,7 @@ useEffect(() => {
                     <div style={{fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem'}}>
                       Total Paid
                     </div>
-                    <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#16a34a'}}>
+                    <div style={{fontSize: '1.5rem', fontWeight: 'bold', color: '#2683FB'}}>
                       ${selectedCustomerInfo.totalPaid.toFixed(2)}
                     </div>
                     <div style={{fontSize: '0.7rem', color: '#64748b'}}>
@@ -6381,7 +6381,7 @@ useEffect(() => {
                     </div>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                       <div>
-                        <div style={{fontSize: '0.85rem', fontWeight: '600', color: '#0369a1'}}>
+                        <div style={{fontSize: '0.85rem', fontWeight: '600', color: '#46C5FF'}}>
                           {selectedCustomerInfo.lastInvoice.invoiceNumber}
                         </div>
                         <div style={{fontSize: '0.75rem', color: '#64748b'}}>
@@ -6393,7 +6393,7 @@ useEffect(() => {
                         </div>
                       </div>
                       <div style={{textAlign: 'right'}}>
-                        <div style={{fontSize: '1rem', fontWeight: 'bold', color: '#0369a1'}}>
+                        <div style={{fontSize: '1rem', fontWeight: 'bold', color: '#46C5FF'}}>
                           ${selectedCustomerInfo.lastInvoice.total?.toFixed(2)}
                         </div>
                         <span style={{
