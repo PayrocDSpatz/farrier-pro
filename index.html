@@ -88,9 +88,7 @@
     }
 
     .logo-icon {
-      height: 48px;
-      width: auto;
-      object-fit: contain;
+      font-size: 2rem;
     }
 
     .header-actions {
@@ -709,29 +707,6 @@
         letter-spacing:0.3px;
         margin-right:10px;
       }
-
-    /* Splash Screen */
-    .splash-screen {
-      position: fixed;
-      inset: 0;
-      background: #ffffff;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-      transition: opacity 0.8s ease;
-    }
-    .splash-screen.fading {
-      opacity: 0;
-    }
-    .splash-logo {
-      animation: splashPulse 1.2s ease-in-out infinite alternate;
-    }
-    @keyframes splashPulse {
-      from { transform: scale(1); }
-      to   { transform: scale(1.05); }
-    }
 </style>
 </head>
 <body>
@@ -1148,14 +1123,7 @@ async function ensureFarrierProfile_(uid, profile) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState(null);
-  const [showSplash, setShowSplash] = React.useState(true);
-  const [splashFading, setSplashFading] = React.useState(false);
 
-  React.useEffect(() => {
-    const fadeTimer = setTimeout(() => setSplashFading(true), 1600);
-    const removeTimer = setTimeout(() => setShowSplash(false), 2400);
-    return () => { clearTimeout(fadeTimer); clearTimeout(removeTimer); };
-  }, []);
 
   const [supportSession, setSupportSession] = useState(null);
   const [effectiveFarrierId, setEffectiveFarrierId] = useState(null);
@@ -1290,19 +1258,6 @@ async function ensureFarrierProfile_(uid, profile) {
 
     return () => unsubscribe();
   }, [supportSessionId]);
-
-  if (showSplash) {
-    return (
-      <div className={"splash-screen" + (splashFading ? " fading" : "")}>
-        <img
-          src="/farritch_logo_darkgrey_farri.png"
-          alt="FarriTech"
-          className="splash-logo"
-          style={{width: "260px", height: "auto"}}
-        />
-      </div>
-    );
-  }
 
   if (loading) {
     return (
@@ -1560,7 +1515,7 @@ return (
           <header className="app-header">
             <div className="header-content">
               <div className="logo">
-                <img src="/farritch_logo_darkgrey_farri.png" alt="FarriTech" style="height:48px;width:auto;object-fit:contain;" />
+                <span className="logo-icon">🐴</span>
                 <span>FarriTech</span>
               </div>
             </div>
@@ -1946,7 +1901,7 @@ const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingA
       <header className="app-header">
         <div className="header-content">
           <div className="logo">
-            <img src="/farritch_logo_darkgrey_farri.png" alt="FarriTech" style="height:48px;width:auto;object-fit:contain;" />
+            <span className="logo-icon">🐴</span>
             <span>FarriTech</span>
           </div>
         </div>
@@ -2082,7 +2037,7 @@ const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingA
       <header className="app-header">
         <div className="header-content">
           <div className="logo">
-            <img src="/farritch_logo_darkgrey_farri.png" alt="FarriTech" style="height:48px;width:auto;object-fit:contain;" />
+            <span className="logo-icon">🐴</span>
             <span>Support Portal</span>
           </div>
         </div>
@@ -2216,7 +2171,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           <header className="app-header">
             <div className="header-content">
               <div className="logo">
-                <img src="/farritch_logo_darkgrey_farri.png" alt="FarriTech" style="height:48px;width:auto;object-fit:contain;" />
+                <span className="logo-icon">🐴</span>
                 <span>FarriTech</span>
               </div>
               <div className="header-actions">
@@ -3260,7 +3215,7 @@ function ServicesView({ userId }) {
 
           <div className="card">
             <div style={{textAlign: 'center', padding: '2rem'}}>
-              <div style={{marginBottom: '1rem'}}><img src="/farritch_logo_darkgrey_farri.png" alt="FarriTech" style="height:80px;width:auto;object-fit:contain;" /></div>
+              <div style={{fontSize: '4rem', marginBottom: '1rem'}}>🐴</div>
               <h2 style={{fontSize: '2rem', marginBottom: '0.5rem', color: 'var(--primary)'}}>
                 FarriTech
               </h2>
@@ -3676,7 +3631,7 @@ function ServicesView({ userId }) {
           <header className="app-header">
             <div className="header-content">
               <div className="logo">
-                <img src="/farritch_logo_darkgrey_farri.png" alt="FarriTech" style="height:48px;width:auto;object-fit:contain;" />
+                <span className="logo-icon">🐴</span>
                 <span>{farrierInfo.businessName}</span>
               </div>
               <a 
@@ -3788,7 +3743,7 @@ function ServicesView({ userId }) {
             ) : (
               <div style={{textAlign: 'center'}}>
                 <div className="hero">
-                  <div style={{display:"flex",alignItems:"center",gap:"0.75rem"}}><img src="/farritch_logo_darkgrey_farri.png" alt="FarriTech" style="height:48px;width:auto;object-fit:contain;" /><h1>{farrierInfo.businessName}</h1></div>
+                  <h1>🐴 {farrierInfo.businessName}</h1>
                   <p>Professional hoof care for your horses. Book your appointment below.</p>
                 </div>
 
