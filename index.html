@@ -1508,50 +1508,8 @@ const [loading, setLoading] = useState(false);
 
   setLoading(false);
 };
-            return;
-          }
 
-          // 1) Create Firebase Auth user
-          // Set Auth displayName so the app has a reliable businessName fallback
-try {
-  await cred.user.updateProfile({ displayName: businessName || "" });
-} catch (e) {
-  console.warn("Could not set displayName", e);
-}
-
-          // 2) Send verification email (non-blocking if it fails)
-          try { await user.sendEmailVerification(); } catch (e) {}
-
-          // 3) Create/merge farrier profile doc
-          await ensureFarrierProfile_(user.uid, {
-            businessName: businessName || 'My Farrier Business',
-            email: email || user.email || '',
-            phone: phone || '',
-            address: address || '',
-            city: city || '',
-            state: (state || '').toUpperCase(),
-            zip: zip || '',
-            ownerUid: user.uid,
-            farrierId: user.uid,
-            logoUrl: logoUrl || '',
-            autoPrintPdf: autoPrintPdf ?? true,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            googleCalendarConnected: false,
-            bookingUrl: window.location.origin + '?farrier=' + user.uid
-            });
-
-          // 4) Seed default services (if empty)
-          try { await seedDefaultServicesIfEmpty_(user.uid); } catch (e) {}
-
-          alert('Welcome! Please check your email to verify your account.');
-        } catch (err) {
-          setError(err?.message || String(err));
-        }
-
-        setLoading(false);
-      };
-
-      return (
+return (
         <div className="app-container">
           <header className="app-header">
             <div className="header-content">
