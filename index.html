@@ -1454,7 +1454,7 @@ const [loading, setLoading] = useState(false);
         setLoading(false);
       };
 
-     const handleSignup = async (e) => {
+    const handleSignup = async (e) => {
   e.preventDefault();
   setError('');
   setLoading(true);
@@ -1466,18 +1466,21 @@ const [loading, setLoading] = useState(false);
       return;
     }
 
-    // 1️⃣ Create auth user
+    // 1) Create Firebase Auth user
     const cred = await auth.createUserWithEmailAndPassword(email, password);
     const user = cred.user;
 
-    // 2️⃣ Set display name
+    // 2) Set display name (optional)
     try {
       await user.updateProfile({ displayName: businessName || "" });
     } catch (e) {
       console.warn("Could not set displayName", e);
     }
 
-    // 3️⃣ Create farrier profile
+    // 3) Send verification email (optional)
+    try { await user.sendEmailVerification(); } catch (e) {}
+
+    // 4) Create/merge farrier profile doc
     await ensureFarrierProfile_(user.uid, {
       businessName: businessName || 'My Farrier Business',
       email: email || user.email || '',
@@ -1495,11 +1498,10 @@ const [loading, setLoading] = useState(false);
       bookingUrl: window.location.origin + '?farrier=' + user.uid
     });
 
-    // 4️⃣ Seed services
+    // 5) Seed default services (if empty)
     try { await seedDefaultServicesIfEmpty_(user.uid); } catch (e) {}
 
     alert('Welcome! Please check your email to verify your account.');
-
   } catch (err) {
     setError(err?.message || String(err));
   }
