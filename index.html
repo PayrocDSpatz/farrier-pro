@@ -1739,6 +1739,10 @@ try {
   const emailFromUrl = urlParams.get("email") || "";
   const phoneFromUrl = urlParams.get("phone") || "";
   const businessNameFromUrl = urlParams.get("businessName") || "";
+  const addressFromUrl = urlParams.get("address") || "";
+  const cityFromUrl = urlParams.get("city") || "";
+  const stateFromUrl = urlParams.get("state") || "";
+  const zipFromUrl = urlParams.get("zip") || "";
 
   const [loading, setLoading] = useState(true);
   const [lead, setLead] = useState(null);
@@ -1746,10 +1750,10 @@ try {
   const [email, setEmail] = useState(emailFromUrl);
   const [businessName, setBusinessName] = useState(businessNameFromUrl);
   const [phone, setPhone] = useState(phoneFromUrl);
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zip, setZip] = useState("");
+  const [address, setAddress] = useState(addressFromUrl);
+  const [city, setCity] = useState(cityFromUrl);
+  const [state, setState] = useState(stateFromUrl);
+  const [zip, setZip] = useState(zipFromUrl);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -1760,7 +1764,7 @@ try {
 
   const cleanupUrl = () => {
     const u = new URL(window.location.href);
-    ["finishSignup","leadId","lead","lid","sub","subscriptionId","email","from"].forEach(k =>
+    ["finishSignup","leadId","lead","lid","sub","subscriptionId","email","from","phone","businessName","address","city","state","zip"].forEach(k =>
       u.searchParams.delete(k)
     );
     window.history.replaceState({}, document.title, u.toString());
