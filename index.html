@@ -4100,13 +4100,6 @@ function CalendarView({ userId }) {
               counts[date] = { confirmed: 0, pending: 0, total: 0 };
             }
             counts[date].total++;
-            const confirmedCount = appointments.filter(
-  (apt) => (apt.status || 'pending').toLowerCase() === 'confirmed'
-).length;
-
-const pendingCount = appointments.filter(
-  (apt) => (apt.status || 'pending').toLowerCase() !== 'confirmed'
-).length;
             // Handle status - if not set or 'pending', treat as pending
             const status = apt.status || 'pending';
             
