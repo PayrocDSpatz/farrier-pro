@@ -1859,7 +1859,13 @@ const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingA
   updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
 };
 
+console.log("AUTH UID:", auth.currentUser?.uid);
+console.log("WRITING DOC ID:", farrierIdYouAreUsing);
+      console.log("AUTH UID:", auth.currentUser?.uid);
+console.log("WRITING DOC ID (uid param):", uid);
+console.log("WRITING DOC ID (farrierDoc.farrierId):", farrierDoc?.farrierId);
 
+      
       // ✅ Write the farrier profile to Firestore
       await ensureFarrierProfile_(uid, farrierDoc);
 
