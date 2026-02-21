@@ -1818,7 +1818,7 @@ return (
       // ✅ Wait until Firebase auth state is actually established (prevents auth.currentUser being undefined)
 await new Promise((resolve) => {
   const unsub = auth.onAuthStateChanged((u) => {
-    if (u) { unsub(); resolve(); }
+    if (u) { unsub(); resolve(u); }
   });
 });
 
@@ -1827,7 +1827,7 @@ await auth.currentUser.getIdToken(true);
       uid = auth.currentUser.uid;
 
 // Use the authenticated UID from the live session
-const uid = auth.currentUser.uid;
+
      
 // ✅ Always fetch the lead fresh right before creating farrierDoc (no reliance on React state)
 let leadSnapData = null;
