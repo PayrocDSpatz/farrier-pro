@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Dark background circle -->
+  <circle cx="32" cy="32" r="32" fill="#0D1320"/>
+  <!-- Horseshoe shape -->
+  <path d="M32 10 C18 10 10 20 10 30 C10 42 18 50 26 50 L26 42 C22 42 18 38 18 30 C18 24 24 18 32 18 C40 18 46 24 46 30 C46 38 42 42 38 42 L38 50 C46 50 54 42 54 30 C54 20 46 10 32 10Z" fill="#2683FB"/>
+  <!-- Horseshoe nail holes -->
+  <circle cx="22" cy="44" r="2.5" fill="#46C5FF"/>
+  <circle cx="42" cy="44" r="2.5" fill="#46C5FF"/>
+  <circle cx="14" cy="28" r="2.5" fill="#46C5FF"/>
+  <circle cx="50" cy="28" r="2.5" fill="#46C5FF"/>
+  <!-- Circuit dot accent -->
+  <circle cx="32" cy="32" r="4" fill="#46C5FF"/>
+</svg>
