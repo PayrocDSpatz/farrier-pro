@@ -34,14 +34,14 @@
       --primary-light: #46C5FF;
       --secondary: #8F9DAF;
       --accent: #46C5FF;
-      --bg: #0D1320;
-      --surface: #131E2E;
-      --text: #E8F0FE;
-      --text-muted: #8F9DAF;
+      --bg: #F4F6F9;
+      --surface: #FFFFFF;
+      --text: #1A2332;
+      --text-muted: #6B7A8D;
       --success: #2683FB;
       --warning: #f59e0b;
       --error: #ef4444;
-      --border: #1E2D42;
+      --border: #DDE3EC;
     }
 
     body {
@@ -568,9 +568,15 @@
       white-space: nowrap;
     }
 
+    .tab:hover {
+      color: var(--primary-light);
+      border-bottom-color: var(--primary-light);
+    }
+
     .tab.active {
       color: var(--primary);
       border-bottom-color: var(--primary);
+      text-shadow: 0 0 12px rgba(38, 131, 251, 0.4);
     }
 
     /* Time Slots */
