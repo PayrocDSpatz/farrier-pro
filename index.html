@@ -6588,6 +6588,8 @@ useEffect(() => {
   const safeFarrierId = String((farrierId || (userProfile && (userProfile.farrierId || userProfile.farrierID || userProfile.id || userProfile.uid)) || (user && user.uid) || "")).trim();
 
       const [businessName, setBusinessName] = useState(userProfile?.businessName || '');
+      const [firstName, setFirstName] = useState(userProfile?.firstName || '');
+      const [lastName, setLastName] = useState(userProfile?.lastName || '');
       const [logoUrl, setLogoUrl] = useState(userProfile?.logoUrl || '');
       const [autoPrintPdf, setAutoPrintPdf] = useState(userProfile?.autoPrintPdf ?? true);
       const [phone, setPhone] = useState(userProfile?.phone || '');
@@ -6638,6 +6640,8 @@ useEffect(() => {
             // Use merge-safe set so we never wipe other fields (ex: Google Calendar tokens)
             await ensureFarrierProfile_(safeFarrierId, {
               businessName: businessName,
+              firstName: firstName,
+              lastName: lastName,
               phone: phone,
               address: address,
               city: city,
@@ -6653,6 +6657,8 @@ useEffect(() => {
             setUserProfile(prev => ({
               ...(prev || {}),
               businessName,
+              firstName,
+              lastName,
               phone,
               address,
               city,
@@ -6694,6 +6700,29 @@ useEffect(() => {
                   onChange={(e) => setBusinessName(e.target.value)}
                   placeholder="John's Farrier Services"
                 />
+              </div>
+
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem'}}>
+                <div className="form-group">
+                  <label>First Name *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="John"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Last Name *</label>
+                  <input 
+                    type="text"
+                    required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Smith"
+                  />
+                </div>
               </div>
 
               <div className="form-group">
