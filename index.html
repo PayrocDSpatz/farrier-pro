@@ -4263,7 +4263,7 @@ function CalendarView({ userId }) {
                 fontSize: '0.75rem',
                 fontWeight: '600'
               }}>
-                ✓ {confirmedCount}
+                ✓ {appointments.filter(apt => (apt.status || 'pending').toLowerCase() === 'confirmed').length}
               </div>
               <span style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Confirmed</span>
             </div>
@@ -4277,7 +4277,7 @@ function CalendarView({ userId }) {
                 fontSize: '0.75rem',
                 fontWeight: '600'
               }}>
-                ⏳ {pendingCount}
+                ⏳ {appointments.filter(apt => (apt.status || 'pending').toLowerCase() === 'pending').length}
               </div>
               <span style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Pending</span>
             </div>
