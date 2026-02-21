@@ -1814,7 +1814,20 @@ return (
       if (!auth || !db) throw new Error("Firebase is not initialized.");
 
       const cred = await auth.createUserWithEmailAndPassword(email, password);
-      const uid = cred.user.uid;
+      let uid = cred.user.uid;
+      // ✅ Wait until Firebase auth state is actually established (prevents auth.currentUser being undefined)
+await new Promise((resolve) => {
+  const unsub = auth.onAuthStateChanged((u) => {
+    if (u) { unsub(); resolve(); }
+  });
+});
+
+// Force token refresh so Firestore sees request.auth
+await auth.currentUser.getIdToken(true);
+      uid = auth.currentUser.uid;
+
+// Use the authenticated UID from the live session
+const uid = auth.currentUser.uid;
      
 // ✅ Always fetch the lead fresh right before creating farrierDoc (no reliance on React state)
 let leadSnapData = null;
