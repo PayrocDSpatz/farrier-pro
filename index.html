@@ -4074,18 +4074,7 @@ function CalendarView({ userId }) {
                   data.requestedTime = `${timeParts[0]}:${timeParts[1]}`;
                 }
               }
-              // Normalize status safely
-const normalizedStatus = (apt) =>
-  (apt.status || 'pending').toLowerCase();
-
-// Dynamic counts
-const confirmedCount = appointments.filter(
-  (a) => normalizedStatus(a) === 'confirmed'
-).length;
-
-const pendingCount = appointments.filter(
-  (a) => normalizedStatus(a) === 'pending'
-).length;
+          
               return {
                 id: doc.id,
                 ...data
@@ -4111,7 +4100,13 @@ const pendingCount = appointments.filter(
               counts[date] = { confirmed: 0, pending: 0, total: 0 };
             }
             counts[date].total++;
-            
+            const confirmedCount = appointments.filter(
+  (apt) => (apt.status || 'pending').toLowerCase() === 'confirmed'
+).length;
+
+const pendingCount = appointments.filter(
+  (apt) => (apt.status || 'pending').toLowerCase() !== 'confirmed'
+).length;
             // Handle status - if not set or 'pending', treat as pending
             const status = apt.status || 'pending';
             
