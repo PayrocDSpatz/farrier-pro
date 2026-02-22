@@ -1217,7 +1217,7 @@ async function ensureFarrierProfile_(uid, profile) {
         setEffectiveFarrierId(farrierIdToUse);
 
         // Load profile for effective farrier
-        if (db) {
+       if (db && !finishSignup) {
           const profileDoc = await db.collection("farriers").doc(farrierIdToUse).get();
 
           // If the user can authenticate but has no profile doc, create one now.
