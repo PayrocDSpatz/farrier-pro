@@ -722,6 +722,7 @@
     function CustomerDashboard({ user }) {
       const [invoices, setInvoices] = useState([]);
       const [customerProfile, setCustomerProfile] = useState(null);
+      const [farrierBusinessName, setFarrierBusinessName] = useState("");
       const [loading, setLoading] = useState(true);
       const [selectedInvoice, setSelectedInvoice] = useState(null);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -752,6 +753,19 @@
               .get();
 
             console.log('📊 Found', invoicesSnapshot.docs.length, 'invoices');
+
+            // Load farrier business name from first invoice's farrierId
+            if (invoicesSnapshot.docs.length > 0) {
+              const firstFarrierId = invoicesSnapshot.docs[0].data().farrierId;
+              if (firstFarrierId) {
+                try {
+                  const farrierDoc = await db.collection('farriers').doc(firstFarrierId).get();
+                  if (farrierDoc.exists) {
+                    setFarrierBusinessName(farrierDoc.data().businessName || '');
+                  }
+                } catch(e) {}
+              }
+            }
 
             const invoiceData = invoicesSnapshot.docs.map(doc => {
               const data = doc.data();
@@ -893,7 +907,7 @@
             <div className="header-content">
               <div className="logo">
                 <span className="logo-icon">🐴</span>
-                <span>FarriTech</span>
+                <span>{farrierBusinessName || 'FarriTech'}</span>
               </div>
               <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
                 <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>
