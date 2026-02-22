@@ -878,7 +878,10 @@
       const [loading, setLoading] = useState(true);
       const [selectedInvoice, setSelectedInvoice] = useState(null);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
-      const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, ytd, unpaid
+      const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, ytd, unpaid, custom
+      const [customStart, setCustomStart] = useState('');
+      const [customEnd, setCustomEnd] = useState('');
+      const [showCustomPicker, setShowCustomPicker] = useState(false);
 
       useEffect(() => {
         loadData();
@@ -1036,6 +1039,14 @@
             
             case 'ytd':
               return invoiceYear === currentYear;
+
+            case 'custom':
+              if (!customStart && !customEnd) return true;
+              const start = customStart ? new Date(customStart + 'T00:00:00') : null;
+              const end = customEnd ? new Date(customEnd + 'T23:59:59') : null;
+              if (start && invoiceDate < start) return false;
+              if (end && invoiceDate > end) return false;
+              return true;
             
             default:
               return true;
@@ -1180,7 +1191,71 @@
                 >
                   Year to Date
                 </button>
+                <button
+                  onClick={() => { setDateFilter('custom'); setShowCustomPicker(true); }}
+                  style={{
+                    padding: '0.625rem 1.25rem',
+                    borderRadius: '8px',
+                    border: dateFilter === 'custom' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                    background: dateFilter === 'custom' ? 'var(--primary)' : 'white',
+                    color: dateFilter === 'custom' ? 'white' : 'var(--text)',
+                    fontWeight: '600',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  📅 Custom Range
+                </button>
               </div>
+
+              {/* Custom Date Picker */}
+              {showCustomPicker && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  marginTop: '0.75rem',
+                  padding: '1rem',
+                  background: '#f8fafc',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border)',
+                  flexWrap: 'wrap'
+                }}>
+                  <span style={{fontWeight: '600', fontSize: '0.9rem', color: 'var(--text)'}}>From:</span>
+                  <input
+                    type="date"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    style={{padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border)', fontFamily: 'inherit', fontSize: '0.9rem'}}
+                  />
+                  <span style={{fontWeight: '600', fontSize: '0.9rem', color: 'var(--text)'}}>To:</span>
+                  <input
+                    type="date"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    style={{padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border)', fontFamily: 'inherit', fontSize: '0.9rem'}}
+                  />
+                  <button
+                    onClick={() => { setShowCustomPicker(false); }}
+                    style={{padding: '0.4rem 1rem', borderRadius: '6px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: '600', cursor: 'pointer', fontSize: '0.9rem'}}
+                  >
+                    Apply
+                  </button>
+                  <button
+                    onClick={() => { setCustomStart(''); setCustomEnd(''); setDateFilter('all'); setShowCustomPicker(false); }}
+                    style={{padding: '0.4rem 1rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'white', color: 'var(--text)', fontWeight: '600', cursor: 'pointer', fontSize: '0.9rem'}}
+                  >
+                    Clear
+                  </button>
+                  {customStart && customEnd && (
+                    <span style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>
+                      Showing: {new Date(customStart).toLocaleDateString()} – {new Date(customEnd).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Export Button */}
               {filteredInvoices.length > 0 && (
