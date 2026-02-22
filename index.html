@@ -1816,15 +1816,15 @@ return (
       const cred = await auth.createUserWithEmailAndPassword(email, password);
       let uid = cred.user.uid;
       // ✅ Wait until Firebase auth state is actually established (prevents auth.currentUser being undefined)
-await new Promise((resolve) => {
+const confirmedUser = await new Promise((resolve) => {
   const unsub = auth.onAuthStateChanged((u) => {
     if (u) { unsub(); resolve(u); }
   });
 });
 
 // Force token refresh so Firestore sees request.auth
-await auth.currentUser.getIdToken(true);
-      uid = auth.currentUser.uid;
+await confirmedUser.getIdToken(true);
+uid = confirmedUser.uid;
 
 // Use the authenticated UID from the live session
 
