@@ -1814,21 +1814,16 @@ return (
       if (!auth || !db) throw new Error("Firebase is not initialized.");
 
       const cred = await auth.createUserWithEmailAndPassword(email, password);
-      let uid = cred.user.uid;
-      // ✅ Wait until Firebase auth state is actually established (prevents auth.currentUser being undefined)
-const confirmedUser = await new Promise((resolve) => {
-  const unsub = auth.onAuthStateChanged((u) => {
-    if (u) { unsub(); resolve(u); }
-  });
-});
+      // Use cred.user directly — it is guaranteed to be the newly created user
+      const newUser = cred.user;
+      let uid = newUser.uid;
+      console.log("✅ Auth user created, UID:", uid);
 
-// Force token refresh so Firestore sees request.auth
-await confirmedUser.getIdToken(true);
-uid = confirmedUser.uid;
+      // Force token refresh so Firestore sees request.auth
+      await newUser.getIdToken(true);
+      console.log("✅ Token refreshed, proceeding to Firestore write");
 
 // Use the authenticated UID from the live session
-
-     
 // ✅ Always fetch the lead fresh right before creating farrierDoc (no reliance on React state)
 let leadSnapData = null;
 if (leadId && db) {
@@ -1872,14 +1867,17 @@ const ba = (leadSnapData && leadSnapData.billingAddress) ? leadSnapData.billingA
   updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
 };
 
-console.log("AUTH UID:", auth.currentUser?.uid);
-      console.log("AUTH UID:", auth.currentUser?.uid);
-console.log("WRITING DOC ID (uid param):", uid);
-console.log("WRITING DOC ID (farrierDoc.farrierId):", farrierDoc?.farrierId);
+console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farrierId);
 
       
       // ✅ Write the farrier profile to Firestore
-      await ensureFarrierProfile_(uid, farrierDoc);
+      try {
+        await ensureFarrierProfile_(uid, farrierDoc);
+        console.log("✅ Farrier profile written successfully");
+      } catch (writeErr) {
+        console.error("❌ ensureFarrierProfile_ failed:", writeErr?.code, writeErr?.message);
+        throw writeErr;
+      }
 
       // Link the lead to the new farrier (merge so we don't overwrite lead fields)
       if (leadId) {
@@ -1909,14 +1907,14 @@ console.log("WRITING DOC ID (farrierDoc.farrierId):", farrierDoc?.farrierId);
 
       if (code === "auth/email-already-in-use") {
         // Auth user was created on a previous attempt but Firestore write failed.
-        // Try signing in with the same credentials and finish writing the profile.
+        // Try signing in and finishing the profile write.
         try {
           const signInCred = await auth.signInWithEmailAndPassword(email, password);
           const existingUser = signInCred.user;
           await existingUser.getIdToken(true);
           const recoveryUid = existingUser.uid;
+          console.log("🔄 Recovery: signed in existing user, UID:", recoveryUid);
 
-          // Fetch lead fresh
           let recoveryLeadData = null;
           if (leadId && db) {
             try {
@@ -1927,9 +1925,7 @@ console.log("WRITING DOC ID (farrierDoc.farrierId):", farrierDoc?.farrierId);
           const recoveryBa = (recoveryLeadData && recoveryLeadData.billingAddress) ? recoveryLeadData.billingAddress : {};
 
           const recoveryDoc = {
-            ownerUid: recoveryUid,
-            farrierId: recoveryUid,
-            status: "active",
+            ownerUid: recoveryUid, farrierId: recoveryUid, status: "active",
             businessName: businessName || (recoveryLeadData && recoveryLeadData.businessName) || "My Farrier Business",
             firstName: firstName || (recoveryLeadData && recoveryLeadData.firstName) || "",
             lastName: lastName || (recoveryLeadData && recoveryLeadData.lastName) || "",
@@ -1940,35 +1936,29 @@ console.log("WRITING DOC ID (farrierDoc.farrierId):", farrierDoc?.farrierId);
             state: ((state || recoveryBa.state || "") + "").toUpperCase(),
             zip: zip || recoveryBa.zip || "",
             bookingUrl: window.location.origin + "/?farrier=" + recoveryUid,
-            googleCalendarConnected: false,
-            autoPrintPdf: true,
-            logoUrl: "",
-            subscriptionId: subscriptionId || "",
-            leadId: leadId || "",
+            googleCalendarConnected: false, autoPrintPdf: true, logoUrl: "",
+            subscriptionId: subscriptionId || "", leadId: leadId || "",
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           };
 
           await ensureFarrierProfile_(recoveryUid, recoveryDoc);
-
           if (leadId) {
             try {
               await db.collection("leads").doc(leadId).set({
-                farrierId: recoveryUid,
-                subscriptionId: subscriptionId || "",
+                farrierId: recoveryUid, subscriptionId: subscriptionId || "",
                 activatedAt: firebase.firestore.FieldValue.serverTimestamp(),
               }, { merge: true });
             } catch (e) {}
           }
-
           try { await seedDefaultServicesIfEmpty_(recoveryUid); } catch (e) {}
-
           setSuccessMessage("Account created! Redirecting to your dashboard…");
           cleanupUrl();
           setTimeout(() => { window.location.href = window.location.origin + window.location.pathname; }, 800);
           return;
         } catch (signInErr) {
-          return setError("This email already has an account with a different password. Please log in instead.");
+          console.error("❌ Recovery sign-in failed:", signInErr?.code, signInErr?.message);
+          return setError("This email already has an account. Please log in instead.");
         }
       }
       if (code === "auth/weak-password") return setError("Password is too weak.");
