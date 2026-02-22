@@ -1821,7 +1821,9 @@ return (
 
       // Force token refresh so Firestore sees request.auth
       await newUser.getIdToken(true);
-      console.log("✅ Token refreshed, proceeding to Firestore write");
+// Small delay to ensure Firestore SDK picks up the refreshed auth token
+await new Promise(resolve => setTimeout(resolve, 500));
+console.log("✅ Token refreshed, proceeding to Firestore write");
 
 // Use the authenticated UID from the live session
 // ✅ Always fetch the lead fresh right before creating farrierDoc (no reliance on React state)
