@@ -911,7 +911,7 @@
               </div>
               <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
                 <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>
-                  {customerProfile?.name || user.email}
+                  {farrierBusinessName || customerProfile?.name || user.email}
                 </span>
                 <button 
                   onClick={handleLogout}
