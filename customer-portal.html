@@ -445,6 +445,9 @@
       }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 </head>
 <body>
   <div id="root"></div>
@@ -716,6 +719,141 @@
           </div>
         </div>
       );
+    }
+
+    // PDF Helper functions
+    const formatDate_ = (tsOrDate) => {
+      try {
+        const d = tsOrDate?.toDate ? tsOrDate.toDate() : (tsOrDate instanceof Date ? tsOrDate : new Date(tsOrDate));
+        return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
+      } catch { return ""; }
+    };
+    const safeText_ = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
+    const pdfWrapText_ = (doc, text, x, y, maxWidth, lineHeight) => {
+      const lines = doc.splitTextToSize(String(text || ""), maxWidth);
+      lines.forEach((ln, i) => doc.text(ln, x, y + (i * lineHeight)));
+      return y + (lines.length * lineHeight);
+    };
+    const buildInvoicePayUrl_ = (invoice) => {
+      if (invoice?.paymentUrl) return String(invoice.paymentUrl);
+      return "";
+    };
+    const qrToDataUrl_ = async (text) => {
+      try {
+        if (!text) return "";
+        if (window.QRCode && typeof window.QRCode.toDataURL === "function") {
+          return await window.QRCode.toDataURL(text, { margin: 1, width: 220 });
+        }
+      } catch (e) {}
+      return "";
+    };
+
+    async function generateInvoicePdfBlobUrl(invoice, farrierProfile) {
+      if (!window.jspdf?.jsPDF) throw new Error("jsPDF not loaded");
+      const { jsPDF } = window.jspdf;
+      const profile = farrierProfile || {};
+      const businessName = safeText_(profile.businessName) || "FarriTech";
+      const bizPhone = safeText_(profile.phone);
+      const bizEmail = safeText_(profile.email || "");
+      const bizAddr = [safeText_(profile.address), safeText_(profile.city), safeText_(profile.state), safeText_(profile.zip)].filter(Boolean).join(", ");
+      const doc = new jsPDF({ unit: "pt", format: "letter" });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const borderMargin = 28;
+      doc.setDrawColor(0);
+      doc.setLineWidth(1);
+      doc.rect(borderMargin, borderMargin, pageW - (borderMargin * 2), pageH - (borderMargin * 2));
+      doc.setFont("helvetica", "normal");
+      const logoUrl = safeText_(profile.logoUrl);
+      let cursorY = 54;
+      if (logoUrl) {
+        try {
+          const resp = await fetch(logoUrl, { mode: "cors" });
+          const blob = await resp.blob();
+          const dataUrl = await new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(blob); });
+          doc.addImage(dataUrl, "PNG", 48, 40, 120, 50);
+        } catch (e) {}
+      }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(22);
+      doc.text("INVOICE", pageW - 48, 56, { align: "right" });
+      doc.setFontSize(10); doc.setFont("helvetica", "normal");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+      doc.text(businessName, 48, 108);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+      let bizLine = 126;
+      if (bizAddr) { doc.text(bizAddr, 48, bizLine); bizLine += 14; }
+      if (bizPhone) { doc.text("Phone: " + bizPhone, 48, bizLine); bizLine += 14; }
+      if (bizEmail) { doc.text("Email: " + bizEmail, 48, bizLine); bizLine += 14; }
+      const invNo = safeText_(invoice.invoiceNumber || "");
+      const invDate = formatDate_(invoice.createdAt) || formatDate_(new Date());
+      const invStatus = safeText_(invoice.status || "outstanding");
+      doc.setFont("helvetica", "bold");
+      doc.text("Invoice #", pageW - 220, 108); doc.text("Date", pageW - 220, 126); doc.text("Status", pageW - 220, 144);
+      doc.setFont("helvetica", "normal");
+      doc.text(invNo, pageW - 48, 108, { align: "right" }); doc.text(invDate, pageW - 48, 126, { align: "right" }); doc.text(invStatus.toUpperCase(), pageW - 48, 144, { align: "right" });
+      if (invStatus === "paid" || invStatus === "cancelled") {
+        doc.saveGraphicsState(); doc.setTextColor(200, 200, 200); doc.setFontSize(72); doc.setFont("helvetica", "bold");
+        doc.text(invStatus.toUpperCase(), pageW / 2, pageH / 2, { align: "center", angle: 30 });
+        doc.restoreGraphicsState(); doc.setTextColor(0, 0, 0);
+      }
+      doc.setDrawColor(220); doc.setLineWidth(1); doc.roundedRect(48, 170, pageW - 96, 78, 10, 10);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.text("BILL TO", 64, 192);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+      doc.text(safeText_(invoice.customerName || ""), 64, 212);
+      let custY = 228;
+      if (invoice.customerEmail) { doc.text(safeText_(invoice.customerEmail), 64, custY); custY += 14; }
+      if (invoice.customerPhone) { doc.text(safeText_(invoice.customerPhone), 64, custY); custY += 14; }
+      const payUrl = buildInvoicePayUrl_(invoice);
+      if (payUrl) {
+        try {
+          const qr = await qrToDataUrl_(payUrl);
+          if (qr) {
+            doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+            doc.text("PAY ONLINE", pageW - 150, 192, { align: "center" });
+            doc.addImage(qr, "PNG", pageW - 190, 200, 80, 80);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+            doc.text("Scan to pay", pageW - 150, 290, { align: "center" });
+          }
+        } catch (e) {}
+      }
+      let y = 270;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+      doc.text("DESCRIPTION", 48, y);
+      doc.text("QTY", pageW - 220, y, { align: "right" });
+      doc.text("UNIT PRICE", pageW - 140, y, { align: "right" });
+      doc.text("TOTAL", pageW - 48, y, { align: "right" });
+      y += 6; doc.setLineWidth(1); doc.setDrawColor(0); doc.line(48, y, pageW - 48, y); y += 16;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+      const items = Array.isArray(invoice.items) && invoice.items.length > 0 ? invoice.items : [{ description: safeText_(invoice.services || invoice.service || "Service"), quantity: 1, unitPrice: Number(invoice.total || invoice.amount || 0) }];
+      items.forEach(item => {
+        const desc = safeText_(item.description || item.name || "");
+        const qty = Number(item.quantity || 1);
+        const price = Number(item.unitPrice || item.price || 0);
+        const lineTotal = qty * price;
+        y = pdfWrapText_(doc, desc, 48, y, 260, 14);
+        doc.text(String(qty), pageW - 220, y - 14, { align: "right" });
+        doc.text("$" + price.toFixed(2), pageW - 140, y - 14, { align: "right" });
+        doc.text("$" + lineTotal.toFixed(2), pageW - 48, y - 14, { align: "right" });
+        y += 4;
+      });
+      y += 10; doc.setLineWidth(0.5); doc.setDrawColor(180); doc.line(pageW - 200, y, pageW - 48, y); y += 16;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(12);
+      doc.text("TOTAL DUE", pageW - 200, y);
+      doc.text("$" + Number(invoice.total || invoice.amount || 0).toFixed(2), pageW - 48, y, { align: "right" });
+      const blobUrl = doc.output("bloburl");
+      return blobUrl;
+    }
+
+    async function openInvoicePdf(invoice, farrierProfile) {
+      try {
+        const url = await generateInvoicePdfBlobUrl(invoice, farrierProfile);
+        const w = window.open(url, "_blank", "noopener,noreferrer");
+        if (!w) { alert("Popup blocked. Please allow popups to view/print the invoice PDF."); return; }
+        setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 700);
+      } catch (e) {
+        console.error("PDF generation failed:", e);
+        alert("Could not generate PDF. Check console for details.");
+      }
     }
 
     // Customer Dashboard Component
@@ -1190,6 +1328,16 @@
                         💳 Pay Now
                       </button>
                     )}
+                    <button
+                      className="btn btn-outline"
+                      style={{width: '100%', marginTop: '0.5rem'}}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openInvoicePdf(invoice, { businessName: farrierBusinessName });
+                      }}
+                    >
+                      🖨️ Print / Save PDF
+                    </button>
                   </div>
                 ))}
               </div>
