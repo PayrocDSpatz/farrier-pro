@@ -840,6 +840,21 @@
       doc.setFont("helvetica", "bold"); doc.setFontSize(12);
       doc.text("TOTAL DUE", pageW - 200, y);
       doc.text("$" + Number(invoice.total || invoice.amount || 0).toFixed(2), pageW - 48, y, { align: "right" });
+
+      // Footer: printed date + Powered by FarriTech
+      const footerY = pageH - 38;
+      doc.setLineWidth(0.5);
+      doc.setDrawColor(180);
+      doc.line(borderMargin + 10, footerY - 8, pageW - borderMargin - 10, footerY - 8);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 140);
+      const printedDate = "Printed: " + new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      doc.text(printedDate, borderMargin + 18, footerY + 4);
+      doc.setFont("helvetica", "bold");
+      doc.text("Powered by FarriTech", pageW - borderMargin - 18, footerY + 4, { align: "right" });
+      doc.setTextColor(0, 0, 0);
+
       const blobUrl = doc.output("bloburl");
       return blobUrl;
     }
