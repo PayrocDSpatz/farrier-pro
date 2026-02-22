@@ -1303,13 +1303,11 @@ if (support) {
 }
 
  // Finish signup (post-billing activation)
-// ✅ Always show FinishSignupView for new signups — never skip it due to a cached auth session.
-// If someone is already logged in, sign them out silently so the new account can be created.
 if (finishSignup) {
-  if (user) {
-    // Sign out the cached session so the new farrier can create their account fresh
+  // Only sign out a pre-existing cached session, never one just created by handleComplete
+  if (user && !window.__finishSignupInProgress__) {
     auth.signOut().catch(() => {});
-    return null; // briefly null while signOut triggers onAuthStateChanged → user becomes null → re-render shows FinishSignupView
+    return null;
   }
   return <FinishSignupView />;
 }
@@ -1802,6 +1800,7 @@ return (
   }, [leadId]);
 
   const handleComplete = async (e) => {
+    window.__finishSignupInProgress__ = true;
     e.preventDefault();
     setError("");
     setSuccessMessage("");
@@ -1820,10 +1819,19 @@ return (
       console.log("✅ Auth user created, UID:", uid);
 
       // Force token refresh so Firestore sees request.auth
+      // Wait until Firestore's internal auth listener sees this exact UID
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("Auth state timeout")), 10000);
+        const unsub = auth.onAuthStateChanged((u) => {
+          if (u && u.uid === uid) {
+            clearTimeout(timeout);
+            unsub();
+            resolve(u);
+          }
+        });
+      });
       await newUser.getIdToken(true);
-// Small delay to ensure Firestore SDK picks up the refreshed auth token
-await new Promise(resolve => setTimeout(resolve, 500));
-console.log("✅ Token refreshed, proceeding to Firestore write");
+      console.log("✅ Token refreshed, proceeding to Firestore write");
 
 // Use the authenticated UID from the live session
 // ✅ Always fetch the lead fresh right before creating farrierDoc (no reliance on React state)
