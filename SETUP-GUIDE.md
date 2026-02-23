@@ -1,4 +1,4 @@
-# Farrier Pro - Multi-User Platform Setup Guide
+# FarriTech - Multi-User Platform Setup Guide
 
 A complete multi-user business management platform for farriers with authentication, Google Calendar sync, unique QR codes, Stripe payments, and SMS notifications.
 
@@ -30,7 +30,7 @@ Firebase provides authentication and database storage for free!
 
 1. **Go to [Firebase Console](https://console.firebase.google.com/)**
 2. Click **"Add project"** or **"Create a project"**
-3. Enter project name (e.g., "farrier-pro")
+3. Enter project name (e.g., "farritech")
 4. Disable Google Analytics (optional for now)
 5. Click **Create project**
 
@@ -88,13 +88,13 @@ This allows appointments to sync to each farrier's Google Calendar.
 2. Click **"Create Credentials"** → **"OAuth client ID"**
 3. If prompted, configure OAuth consent screen:
    - User type: **External**
-   - App name: **Farrier Pro**
+   - App name: **FarriTech**
    - User support email: Your email
    - Add scope: `../auth/calendar`
    - Add test users: Your email
 4. Back to Create credentials:
    - Application type: **Web application**
-   - Name: **Farrier Pro Web**
+   - Name: **FarriTech Web**
    - Authorized JavaScript origins: Add your domain (e.g., `https://yoursite.netlify.app`)
    - Authorized redirect URIs: Same as above
 5. Click **Create**
@@ -132,7 +132,7 @@ const stripe = window.Stripe('pk_test_YOUR_PUBLISHABLE_KEY');
 #### Option A: Netlify (Recommended - Easiest)
 
 1. Go to [Netlify Drop](https://app.netlify.com/drop)
-2. Drag and drop your entire **`farrier-pro`** folder
+2. Drag and drop your entire **`farritech`** folder
 3. Get your live URL instantly!
 4. Update Firebase and Google Calendar authorized domains with your Netlify URL
 

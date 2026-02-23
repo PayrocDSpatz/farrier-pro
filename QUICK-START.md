@@ -4,12 +4,12 @@
 
 ### Step 1: Deploy to Netlify (2 minutes)
 1. Go to https://app.netlify.com/drop
-2. Drag and drop the `farrier-pro` folder
+2. Drag and drop the `farritech` folder
 3. **Copy your live URL** (e.g., `https://your-site-123.netlify.app`)
 
 ### Step 2: Firebase Setup (5 minutes)
 1. Go to https://console.firebase.google.com/
-2. Create new project → Name it "farrier-pro"
+2. Create new project → Name it "farritech"
 3. Click **Authentication** → Get started → Enable Email/Password
 4. Click **Firestore Database** → Create database → Test mode
 5. Click ⚙️ → Project settings → Scroll to "Your apps"

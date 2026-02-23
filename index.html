@@ -1011,9 +1011,9 @@
     // Firebase Configuration
     const firebaseConfig = {
       apiKey: "AIzaSyAQ1LaWG9lE9j5h6X0T0YQKa_j04vJZHE4",
-      authDomain: "farrier-pro.firebaseapp.com",
-      projectId: "farrier-pro",
-      storageBucket: "farrier-pro.firebasestorage.app",
+      authDomain: "farritech.firebaseapp.com",
+      projectId: "farritech",
+      storageBucket: "farritech.firebasestorage.app",
       messagingSenderId: "1010833069179",
       appId: "1:1010833069179:web:844b6055462b55640b3ede",
       measurementId: "G-H14XM830EY"
@@ -1085,7 +1085,7 @@ async function seedDefaultServicesIfEmpty_(userId) {
 }
 
 // Ensures the farrier profile doc exists and surfaces permission/config errors clearly
-async function ensureFarrierProfile_(uid, profile) {
+async function ensureFarriTechfile_(uid, profile) {
   if (!db || !uid) throw new Error("Firestore is not initialized.");
   const ref = db.collection("farriers").doc(uid);
   const now = firebase.firestore.FieldValue.serverTimestamp();
@@ -1236,7 +1236,7 @@ async function ensureFarrierProfile_(uid, profile) {
                   createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
               };
-              await ensureFarrierProfile_(farrierIdToUse, baseProfile);
+              await ensureFarriTechfile_(farrierIdToUse, baseProfile);
               const createdSnap = await db.collection("farriers").doc(farrierIdToUse).get();
               setUserProfile(createdSnap.exists ? createdSnap.data() : baseProfile);
             } catch (e) {
@@ -1426,7 +1426,7 @@ const [loading, setLoading] = useState(false);
           
           if (!profileDoc.exists) {
             // First time Google sign-in - create profile
-            await ensureFarrierProfile_(user.uid, {
+            await ensureFarriTechfile_(user.uid, {
               businessName: user.displayName || 'My Farrier Business',
               email: user.email,
               phone: '',
@@ -1480,7 +1480,7 @@ const [loading, setLoading] = useState(false);
     try { await user.sendEmailVerification(); } catch (e) {}
 
     // 4) Create/merge farrier profile doc
-    await ensureFarrierProfile_(user.uid, {
+    await ensureFarriTechfile_(user.uid, {
       businessName: businessName || 'My Farrier Business',
       email: email || user.email || '',
       phone: phone || '',
@@ -1538,7 +1538,7 @@ return (
   className="auth-tab"
   onClick={() => {
     const returnUrl = encodeURIComponent(`${window.location.origin}/?finishSignup=1`);
-    window.location.href = `https://farrier-pro-landing-page.vercel.app/signup?returnUrl=${returnUrl}`;
+    window.location.href = `https://farritech-landing-page.vercel.app/signup?returnUrl=${returnUrl}`;
   }}
 >
   Sign Up
@@ -1882,10 +1882,10 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
       
       // ✅ Write the farrier profile to Firestore
       try {
-        await ensureFarrierProfile_(uid, farrierDoc);
+        await ensureFarriTechfile_(uid, farrierDoc);
         console.log("✅ Farrier profile written successfully");
       } catch (writeErr) {
-        console.error("❌ ensureFarrierProfile_ failed:", writeErr?.code, writeErr?.message);
+        console.error("❌ ensureFarriTechfile_ failed:", writeErr?.code, writeErr?.message);
         throw writeErr;
       }
 
@@ -1952,7 +1952,7 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           };
 
-          await ensureFarrierProfile_(recoveryUid, recoveryDoc);
+          await ensureFarriTechfile_(recoveryUid, recoveryDoc);
           if (leadId) {
             try {
               await db.collection("leads").doc(leadId).set({
@@ -6712,7 +6712,7 @@ useEffect(() => {
               throw new Error('Missing farrier id');
             }
             // Use merge-safe set so we never wipe other fields (ex: Google Calendar tokens)
-            await ensureFarrierProfile_(safeFarrierId, {
+            await ensureFarriTechfile_(safeFarrierId, {
               businessName: businessName,
               firstName: firstName,
               lastName: lastName,
@@ -7006,7 +7006,7 @@ useEffect(() => {
                     try {
                       if (db) {
                         // Use merge-safe set so we never wipe other fields (ex: Google Calendar tokens)
-            await ensureFarrierProfile_(safeFarrierId, { bookingUrl: `${window.location.origin}/?farrier=${safeFarrierId}` });
+            await ensureFarriTechfile_(safeFarrierId, { bookingUrl: `${window.location.origin}/?farrier=${safeFarrierId}` });
 setUserProfile({
                           ...userProfile,
                           bookingUrl: `${window.location.origin}?farrier=${safeFarrierId}`

@@ -2,7 +2,7 @@
 
 ## 🎉 What's Included
 
-Complete payment processing integration for Farrier Pro:
+Complete payment processing integration for FarriTech:
 - ✅ **Secure credit card processing**
 - ✅ **"Pay Now" button on invoices**
 - ✅ **PCI compliant payment form**
@@ -29,7 +29,7 @@ Complete payment processing integration for Farrier Pro:
 ### Step 1: Add Environment Variables to Vercel
 
 1. **Go to** [Vercel Dashboard](https://vercel.com/dashboard)
-2. **Select** your project: `farrier-pro`
+2. **Select** your project: `farritech`
 3. **Click** Settings → Environment Variables
 4. **Add these 3 variables:**
 
@@ -54,7 +54,7 @@ AUTHORIZENET_SANDBOX = true
 
 **Your repo structure:**
 ```
-farrier-pro/
+farritech/
 ├── index.html (UPDATED)
 ├── landing.html
 ├── oauth-callback.html
@@ -100,7 +100,7 @@ Use these **test credit cards** (sandbox mode):
 
 ### Test Payment Flow:
 
-1. **Login** to your Farrier Pro account
+1. **Login** to your FarriTech account
 2. **Go to** Invoices tab
 3. **Create** a test invoice
    - Customer: Test Customer
@@ -212,7 +212,7 @@ Now customers can pay with real credit cards! 🎉
 - Chargeback management
 - Fraud detection alerts
 
-**View in Farrier Pro:**
+**View in FarriTech:**
 - Paid invoices
 - Outstanding invoices
 - Total collected
@@ -232,7 +232,7 @@ Now customers can pay with real credit cards! 🎉
 5. Confirm
 
 **Option 2: Via API (Future Feature)**
-- Can add refund button in Farrier Pro
+- Can add refund button in FarriTech
 - Processes refund via API
 - Updates invoice automatically
 
@@ -255,7 +255,7 @@ Now customers can pay with real credit cards! 🎉
 1. ✅ `/api/authorize-net-payment.js` file uploaded to GitHub
 2. ✅ Vercel deployment completed successfully
 3. ✅ Browser console for error messages
-4. ✅ API endpoint exists: `https://farrier-pro.vercel.app/api/authorize-net-payment`
+4. ✅ API endpoint exists: `https://farritech.vercel.app/api/authorize-net-payment`
 
 ### Invoice Doesn't Update:
 
@@ -274,9 +274,9 @@ Now customers can pay with real credit cards! 🎉
 - Email: merchant@authorize.net
 - Hours: 24/7
 
-**Farrier Pro Support:**
+**FarriTech Support:**
 - Phone: (954) 673-3041
-- Email: support@farrierpro.com
+- Email: support@farritech.com
 
 ---
 
@@ -323,7 +323,7 @@ Now customers can pay with real credit cards! 🎉
 
 ## 🎉 You're All Set!
 
-Your Farrier Pro platform now has **professional payment processing**!
+Your FarriTech platform now has **professional payment processing**!
 
 Customers can pay invoices instantly with credit cards, and you get paid faster with less hassle.
 

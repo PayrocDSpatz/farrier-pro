@@ -1,4 +1,4 @@
-# Farrier Pro App (Cleaned)
+# FarriTech App (Cleaned)
 
 ## What changed
 - Removed the `/api/auth/email-exists` pre-check during signup.

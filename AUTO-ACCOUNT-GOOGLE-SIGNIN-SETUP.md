@@ -25,7 +25,7 @@ Two major improvements to your customer experience:
 ### Step 1: Enable Google Sign-In in Firebase
 
 1. **Go to** [Firebase Console](https://console.firebase.google.com)
-2. **Select** your project: "farrier-pro"
+2. **Select** your project: "farritech"
 3. **Click** "Authentication" (left sidebar)
 4. **Click** "Sign-in method" tab
 5. **Find** "Google" in the list
@@ -86,7 +86,7 @@ Step 6: Sees Their Invoices
 **Customer sees:**
 ```
 ┌─────────────────────────────────┐
-│   🐴 Farrier Pro                │
+│   🐴 FarriTech                │
 │                                 │
 │   [🔵 Continue with Google]    │ ← Click once!
 │                                 │
@@ -246,7 +246,7 @@ Hi [Name]!
 Your appointment is confirmed for [Date]!
 
 Your customer account is ready:
-→ Visit: farrier-pro.vercel.app/customer-portal.html
+→ Visit: farritech.vercel.app/customer-portal.html
 → Sign in with Google (one click!)
 → View invoices and pay online
 
@@ -451,6 +451,6 @@ Check Vercel dashboard
 
 ---
 
-**Portal URL:** `https://farrier-pro.vercel.app/customer-portal.html`
+**Portal URL:** `https://farritech.vercel.app/customer-portal.html`
 
 **Start getting more customers to pay online today!** 💰🐴

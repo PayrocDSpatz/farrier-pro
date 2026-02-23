@@ -23,13 +23,13 @@ This implementation adds OAuth refresh tokens so farriers stay connected to Goog
 ### Step 1: Update Google Cloud Console
 
 1. **Go to** [Google Cloud Console](https://console.cloud.google.com/)
-2. **Select** farrier-pro project
+2. **Select** farritech project
 3. **Click** "Credentials"
 4. **Click** on your OAuth Client ID
 
 5. **Add Redirect URI:**
    ```
-   https://farrier-pro.vercel.app/oauth-callback
+   https://farritech.vercel.app/oauth-callback
    ```
    (Add both your production and preview URLs if needed)
 
@@ -42,7 +42,7 @@ This implementation adds OAuth refresh tokens so farriers stay connected to Goog
 ### Step 2: Add Vercel Environment Variables
 
 1. **Go to** [Vercel Dashboard](https://vercel.com/dashboard)
-2. **Select** farrier-pro project
+2. **Select** farritech project
 3. **Click** "Settings" → "Environment Variables"
 4. **Add these variables:**
 
@@ -51,7 +51,7 @@ This implementation adds OAuth refresh tokens so farriers stay connected to Goog
    
    GOOGLE_CLIENT_SECRET = [Your Client Secret from Google Cloud]
    
-   GOOGLE_REDIRECT_URI = https://farrier-pro.vercel.app/oauth-callback
+   GOOGLE_REDIRECT_URI = https://farritech.vercel.app/oauth-callback
    ```
 
 5. **Check all boxes:** ☑ Production ☑ Preview ☑ Development
@@ -61,7 +61,7 @@ This implementation adds OAuth refresh tokens so farriers stay connected to Goog
 
 Your repo structure should be:
 ```
-farrier-pro/
+farritech/
 ├── index.html (updated)
 ├── oauth-callback.html (NEW)
 └── api/
@@ -177,7 +177,7 @@ await db.collection('farriers').doc(uid).update({
 ### Error: "redirect_uri_mismatch"
 **Fix:** Add exact redirect URI to Google Cloud Console:
 ```
-https://farrier-pro.vercel.app/oauth-callback
+https://farritech.vercel.app/oauth-callback
 ```
 
 ### Error: "Invalid client secret"

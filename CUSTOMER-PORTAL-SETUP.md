@@ -38,7 +38,7 @@ customer-portal.html
 
 **Your repo structure:**
 ```
-farrier-pro/
+farritech/
 ├── index.html (farrier dashboard)
 ├── customer-portal.html (NEW - customer portal)
 ├── landing.html
@@ -51,7 +51,7 @@ farrier-pro/
 
 Once deployed, customers can access at:
 ```
-https://farrier-pro.vercel.app/customer-portal.html
+https://farritech.vercel.app/customer-portal.html
 ```
 
 ### Step 3: Share with Customers
@@ -68,7 +68,7 @@ Send customers this link to:
 ### For Customers:
 
 **First Time:**
-1. **Go to** farrier-pro.vercel.app/customer-portal.html
+1. **Go to** farritech.vercel.app/customer-portal.html
 2. **Click** "Don't have an account? Sign up"
 3. **Enter:**
    - Full Name
@@ -79,7 +79,7 @@ Send customers this link to:
 5. **Logged in!** ✅
 
 **Returning Customers:**
-1. **Go to** farrier-pro.vercel.app/customer-portal.html
+1. **Go to** farritech.vercel.app/customer-portal.html
 2. **Enter** email & password
 3. **Click** "Sign In"
 4. **See invoices!** ✅
@@ -212,7 +212,7 @@ Customer Sees Updated Status
 ### Give Customers This URL:
 
 ```
-https://farrier-pro.vercel.app/customer-portal.html
+https://farritech.vercel.app/customer-portal.html
 ```
 
 ### Ways to Share:
@@ -221,7 +221,7 @@ https://farrier-pro.vercel.app/customer-portal.html
 ```
 Hi [Name]! You can view and pay your farrier 
 invoices online at:
-https://farrier-pro.vercel.app/customer-portal.html
+https://farritech.vercel.app/customer-portal.html
 
 Sign up with this email: [their email]
 ```
@@ -234,7 +234,7 @@ Hi [Name],
 
 You can now view and pay your invoices online!
 
-Visit: https://farrier-pro.vercel.app/customer-portal.html
+Visit: https://farritech.vercel.app/customer-portal.html
 Sign up with: [their email]
 
 Thanks!
@@ -451,6 +451,6 @@ Your customers can now self-serve and pay online anytime! 🚀
 
 ---
 
-**Portal URL:** `https://farrier-pro.vercel.app/customer-portal.html`
+**Portal URL:** `https://farritech.vercel.app/customer-portal.html`
 
 **Share this link with your customers today!** 💰🐴
