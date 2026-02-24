@@ -3606,6 +3606,7 @@ function ServicesView({ userId }) {
                   email: formData.email,
                   phone: formData.phone,
                   address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zip}`.trim(),
+                  farrierId: farrierId,
                   createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                   source: 'qr_booking'
                 });
@@ -6028,8 +6029,8 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const loadCustomers = async () => {
         if (db) {
           try {
-            // Load from customers collection
-            const customersSnapshot = await db.collection('customers').get();
+            // Load from customers collection - filter by farrierId
+            const customersSnapshot = await db.collection('customers').where('farrierId', '==', userId).get();
             const customersList = customersSnapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
