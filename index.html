@@ -1185,11 +1185,11 @@ async function ensureFarriTechfile_(uid, profile) {
     const unsubscribe = auth.onAuthStateChanged(async (u) => {
       try {
         if (!u) {
-          // Only log out if user was never signed in (initial load)
-          // or after a longer delay to avoid token refresh race conditions
           const delay = hasEverSignedIn ? 5000 : 0;
+          console.warn("⚠️ onAuthStateChanged fired NULL. hasEverSignedIn:", hasEverSignedIn, "Stack:", new Error().stack.split("\n").slice(1,4).join(" | "));
           setLogoutTimerActive(true);
           logoutTimer = setTimeout(() => {
+            console.error("🔴 Logout timer expired - signing out. Auth state:", auth.currentUser);
             setLogoutTimerActive(false);
             setUser(null);
             setUserProfile(null);
@@ -1200,6 +1200,7 @@ async function ensureFarriTechfile_(uid, profile) {
           return;
         }
         // User is signed in - cancel any pending logout
+        console.log("✅ onAuthStateChanged fired with user:", u.uid, u.email);
         hasEverSignedIn = true;
         if (logoutTimer) { clearTimeout(logoutTimer); logoutTimer = null; setLogoutTimerActive(false); }
 
