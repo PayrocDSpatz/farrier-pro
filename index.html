@@ -959,6 +959,59 @@
         doc.text("TOTAL", pageW - 140, y, { align: "right" });
         doc.text(total, pageW - 48, y, { align: "right" });
 
+        // Payment History
+        const payments = Array.isArray(invoice.payments) ? invoice.payments : [];
+        const paidAmount = invoice.paidAmount || payments.reduce((s,p) => s + (p.amount||0), 0);
+        const balanceDue = Math.max(0, (invoice.total || 0) - paidAmount);
+
+        if (payments.length > 0) {
+          y += 16;
+          if (y > pageH - 160) { doc.addPage(); y = 72; }
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.setTextColor(30);
+          doc.text("PAYMENT HISTORY", 48, y);
+          y += 8;
+          doc.setDrawColor(180);
+          doc.line(48, y, pageW - 48, y);
+          y += 14;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          const methodLabels = { cash: 'Cash', check: 'Check', credit_card: 'Credit Card', other: 'Other' };
+          for (const p of payments) {
+            if (y > pageH - 100) { doc.addPage(); y = 72; }
+            const dateStr = p.date ? new Date(p.date).toLocaleDateString() : '';
+            const methodStr = methodLabels[p.method] || p.method || '';
+            const memoStr = p.memo ? ` — ${p.memo}` : '';
+            doc.setTextColor(60);
+            doc.text(`${dateStr}  ${methodStr}${memoStr}`, 48, y);
+            doc.setTextColor(0);
+            doc.text(money_(p.amount || 0), pageW - 48, y, { align: 'right' });
+            y += 16;
+          }
+          y += 4;
+          doc.setDrawColor(200);
+          doc.line(48, y, pageW - 48, y);
+          y += 14;
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.text("AMOUNT PAID", pageW - 140, y, { align: "right" });
+          doc.text(money_(paidAmount), pageW - 48, y, { align: "right" });
+          y += 16;
+          if (balanceDue > 0) {
+            doc.setTextColor(220, 38, 38);
+            doc.text("BALANCE DUE", pageW - 140, y, { align: "right" });
+            doc.text(money_(balanceDue), pageW - 48, y, { align: "right" });
+            doc.setTextColor(0);
+            y += 16;
+          } else {
+            doc.setTextColor(5, 150, 105);
+            doc.text("PAID IN FULL", pageW - 140, y, { align: "right" });
+            doc.setTextColor(0);
+            y += 16;
+          }
+        }
+
         // Footer
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
@@ -1588,6 +1641,10 @@ return (
               <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'10px'}}>
                 <input type="checkbox" checked={Boolean(autoPrintPdf)} onChange={(e)=>setAutoPrintPdf(e.target.checked)} />
                 <span>Auto-open PDF after creating an invoice</span>
+              </div>
+              <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'10px'}}>
+                <input type="checkbox" checked={Boolean(allowManualPayments)} onChange={(e)=>setAllowManualPayments(e.target.checked)} />
+                <span>Allow manual payments (Cash / Check) on invoices</span>
               </div>
 
                     </div>
@@ -5235,6 +5292,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [invoices, setInvoices] = useState([]);
       const [showCreateModal, setShowCreateModal] = useState(false);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
+      const [showManualPaymentModal, setShowManualPaymentModal] = useState(false);
       const [selectedInvoice, setSelectedInvoice] = useState(null);
       const [loading, setLoading] = useState(false);
       const [showCancelModal, setShowCancelModal] = useState(false);
@@ -5636,10 +5694,11 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                     <div className="appointment-actions">
                       <span className={`badge badge-${
                         invoice.status === 'paid' ? 'success' : 
-                        invoice.status === 'cancelled' ? 'secondary' : 
+                        invoice.status === 'cancelled' ? 'secondary' :
+                        invoice.status === 'partial' ? 'warning' :
                         'warning'
                       }`}>
-                        {invoice.status}
+                        {invoice.status === 'partial' ? `partial ($${((invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0)).toFixed(2)} paid)` : invoice.status}
                       </span>
                       <button
                         className="btn btn-sm btn-outline"
@@ -5664,7 +5723,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                           🔗 Copy Link
                         </button>
                       )}
-                      {invoice.status === 'outstanding' && (
+                      {(invoice.status === 'outstanding' || invoice.status === 'partial') && (
                         <>
                           <button 
                             className="btn btn-sm btn-success"
@@ -5675,6 +5734,18 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                           >
                             💳 Pay Now
                           </button>
+                          {userProfile?.allowManualPayments !== false && (
+                            <button
+                              className="btn btn-sm"
+                              style={{background: '#059669', color: 'white'}}
+                              onClick={() => {
+                                setSelectedInvoice(invoice);
+                                setShowManualPaymentModal(true);
+                              }}
+                            >
+                              💵 Record Payment
+                            </button>
+                          )}
                           <button 
                             className="btn btn-sm btn-danger"
                             onClick={() => {
@@ -5731,6 +5802,21 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               }}
               onPaymentSuccess={() => {
                 setShowPaymentModal(false);
+                setSelectedInvoice(null);
+                loadInvoices();
+              }}
+            />
+          )}
+
+          {showManualPaymentModal && selectedInvoice && (
+            <ManualPaymentModal
+              invoice={selectedInvoice}
+              onClose={() => {
+                setShowManualPaymentModal(false);
+                setSelectedInvoice(null);
+              }}
+              onPaymentRecorded={() => {
+                setShowManualPaymentModal(false);
                 setSelectedInvoice(null);
                 loadInvoices();
               }}
@@ -5810,10 +5896,13 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
     }
 
     function PaymentModal({ invoice, onClose, onPaymentSuccess }) {
+      const paidSoFar = (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+      const remaining = Math.max(0, (invoice.total || 0) - paidSoFar);
       const [cardNumber, setCardNumber] = useState('');
       const [expiryMonth, setExpiryMonth] = useState('');
       const [expiryYear, setExpiryYear] = useState('');
       const [cvv, setCvv] = useState('');
+      const [chargeAmount, setChargeAmount] = useState(remaining.toFixed(2));
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
 
@@ -5838,7 +5927,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 cardNumber: cardNumber.replace(/\s/g, ''),
                 expirationDate: expirationDate,
                 cardCode: cvv,
-                amount: invoice.total,
+                amount: parseFloat(chargeAmount) || invoice.total,
                 customerEmail: invoice.customerEmail || 'customer@example.com',
                 customerName: invoice.customerName,
                 invoiceNumber: invoice.invoiceNumber,
@@ -5899,14 +5988,24 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             
             <div style={{background: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem'}}>
               <div style={{fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem'}}>
-                Invoice #{invoice.invoiceNumber}
+                Invoice #{invoice.invoiceNumber} • {invoice.customerName}
               </div>
-              <div style={{fontSize: '2rem', fontWeight: 'bold', color: 'var(--primary)'}}>
-                ${invoice.total?.toFixed(2)}
+              <div style={{fontSize: '0.875rem', color: '#666'}}>
+                Invoice Total: ${invoice.total?.toFixed(2)}
+                {paidSoFar > 0 && <> • Already Paid: ${paidSoFar.toFixed(2)} • <strong>Balance: ${remaining.toFixed(2)}</strong></>}
               </div>
-              <div style={{fontSize: '0.875rem', color: '#666', marginTop: '0.5rem'}}>
-                {invoice.customerName}
-              </div>
+            </div>
+            <div className="form-group">
+              <label>Amount to Charge *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={invoice.total}
+                required
+                value={chargeAmount}
+                onChange={(e) => setChargeAmount(e.target.value)}
+              />
             </div>
 
             {error && (
@@ -5985,7 +6084,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                   disabled={processing}
                   style={{flex: 1}}
                 >
-                  {processing ? <span className="spinner"></span> : `Pay $${invoice.total?.toFixed(2)}`}
+                  {processing ? <span className="spinner"></span> : `Pay $${parseFloat(chargeAmount || 0).toFixed(2)}`}
                 </button>
               </div>
             </form>
@@ -5994,6 +6093,126 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               🔒 <strong>Secure Payment</strong><br/>
               Your payment is processed securely by Authorize.Net
             </div>
+          </div>
+        </div>
+      );
+    }
+
+
+    function ManualPaymentModal({ invoice, onClose, onPaymentRecorded }) {
+      const paidSoFar = (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0);
+      const remaining = Math.max(0, (invoice.total || 0) - paidSoFar);
+      const [amount, setAmount] = useState(remaining.toFixed(2));
+      const [method, setMethod] = useState('cash');
+      const [memo, setMemo] = useState('');
+      const [datePaid, setDatePaid] = useState(new Date().toISOString().split('T')[0]);
+      const [processing, setProcessing] = useState(false);
+      const [error, setError] = useState('');
+
+      const handleRecord = async (e) => {
+        e.preventDefault();
+        const amt = parseFloat(amount);
+        if (!amt || amt <= 0) { setError('Please enter a valid amount.'); return; }
+        setProcessing(true);
+        setError('');
+        try {
+          if (db) {
+            const newPayment = {
+              amount: amt,
+              method: method,
+              memo: memo,
+              date: new Date(datePaid).toISOString()
+            };
+            const existingPayments = invoice.payments || [];
+            const allPayments = [...existingPayments, newPayment];
+            const totalPaid = allPayments.reduce((s,p) => s + (p.amount||0), 0);
+            const newStatus = totalPaid >= invoice.total ? 'paid' : 'partial';
+            await db.collection('invoices').doc(invoice.id).update({
+              status: newStatus,
+              payments: allPayments,
+              paidAmount: totalPaid,
+              balanceDue: Math.max(0, invoice.total - totalPaid),
+              paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (invoice.paidAt || null)
+            });
+            onPaymentRecorded();
+          }
+        } catch (err) {
+          console.error('Error recording payment:', err);
+          setError('Failed to record payment. Please try again.');
+        }
+        setProcessing(false);
+      };
+
+      const methodLabels = { cash: '💵 Cash', check: '📝 Check', other: '🔄 Other' };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '480px'}}>
+            <h2 style={{marginBottom: '1.5rem'}}>💵 Record Manual Payment</h2>
+
+            <div style={{background: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem'}}>
+              <div style={{fontSize: '0.875rem', color: '#666', marginBottom: '0.25rem'}}>
+                Invoice #{invoice.invoiceNumber} • {invoice.customerName}
+              </div>
+              <div style={{fontSize: '0.875rem', color: '#666'}}>
+                Invoice Total: ${invoice.total?.toFixed(2)}
+                {paidSoFar > 0 && <> • Already Paid: ${paidSoFar.toFixed(2)} • <strong>Balance: ${remaining.toFixed(2)}</strong></>}
+              </div>
+            </div>
+
+            {error && <div className="error-message" style={{marginBottom:'1rem'}}>{error}</div>}
+
+            <form onSubmit={handleRecord}>
+              <div className="form-group">
+                <label>Amount Received *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Payment Method *</label>
+                <select value={method} onChange={(e) => setMethod(e.target.value)}>
+                  <option value="cash">💵 Cash</option>
+                  <option value="check">📝 Check</option>
+                  <option value="other">🔄 Other</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Memo / Note (optional)</label>
+                <input
+                  type="text"
+                  value={memo}
+                  onChange={(e) => setMemo(e.target.value)}
+                  placeholder={method === 'check' ? 'e.g. Check #1042' : 'Optional note'}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Date Paid *</label>
+                <input
+                  type="date"
+                  required
+                  value={datePaid}
+                  onChange={(e) => setDatePaid(e.target.value)}
+                />
+              </div>
+
+              <div style={{display:'flex', gap:'0.75rem', marginTop:'1.5rem'}}>
+                <button type="button" onClick={onClose} className="btn btn-outline" disabled={processing} style={{flex:1}}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn" disabled={processing} style={{flex:1, background:'#059669', color:'white'}}>
+                  {processing ? <span className="spinner"></span> : `Record $${parseFloat(amount||0).toFixed(2)} Payment`}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       );
@@ -6683,6 +6902,7 @@ useEffect(() => {
       const [lastName, setLastName] = useState(userProfile?.lastName || '');
       const [logoUrl, setLogoUrl] = useState(userProfile?.logoUrl || '');
       const [autoPrintPdf, setAutoPrintPdf] = useState(userProfile?.autoPrintPdf ?? true);
+      const [allowManualPayments, setAllowManualPayments] = useState(userProfile?.allowManualPayments ?? true);
       const [phone, setPhone] = useState(userProfile?.phone || '');
       const [address, setAddress] = useState(userProfile?.address || '');
       const [city, setCity] = useState(userProfile?.city || '');
@@ -6740,6 +6960,7 @@ useEffect(() => {
               zip: zip,
               logoUrl: logoUrl,
               autoPrintPdf: autoPrintPdf,
+              allowManualPayments: allowManualPayments,
               availability: availability,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -6757,6 +6978,7 @@ useEffect(() => {
               zip,
               logoUrl,
               autoPrintPdf,
+              allowManualPayments,
               availability
             }));
 
