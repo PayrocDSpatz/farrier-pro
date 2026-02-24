@@ -1024,6 +1024,7 @@
     try {
       app = firebase.initializeApp(firebaseConfig);
       auth = firebase.auth();
+      auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
       db = firebase.firestore();
     } catch (error) {
       ("Firebase not configured yet - using demo mode");
