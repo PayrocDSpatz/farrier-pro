@@ -833,7 +833,10 @@
         // Invoice meta (right)
         const invNo = safeText_(invoice.invoiceNumber || "");
         const invDate = formatDate_(invoice.createdAt) || formatDate_(new Date());
-        const invStatus = safeText_(invoice.status || "outstanding");
+        // Calculate real status from payments
+        const _paidSoFar = invoice.paidAmount || (invoice.payments||[]).reduce((s,p)=>s+(p.amount||0),0);
+        const _balDue = Math.max(0, (invoice.total||0) - _paidSoFar);
+        const invStatus = _balDue <= 0 && _paidSoFar > 0 ? 'paid' : (_paidSoFar > 0 ? 'partial' : safeText_(invoice.status || 'outstanding'));
 
         doc.setFont("helvetica", "bold");
         doc.text("Invoice #", pageW - 220, 108);
@@ -844,7 +847,7 @@
         doc.text(invDate, pageW - 48, 126, { align: "right" });
         doc.text(invStatus.toUpperCase(), pageW - 48, 144, { align: "right" });
 
-        // Watermark if paid/cancelled
+        // Watermark - only show PAID when fully paid, CANCELLED when cancelled
         if (invStatus === "paid" || invStatus === "cancelled") {
           doc.saveGraphicsState();
           doc.setTextColor(200, 200, 200);
@@ -5740,6 +5743,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       </div>
                       <div className="appointment-details">
                         Amount: ${invoice.total?.toFixed(2)} • Created: {invoice.createdAt?.toDate().toLocaleDateString()}
+                        {invoice.status === 'partial' && (() => { const paid = invoice.paidAmount || (invoice.payments||[]).reduce((s,p)=>s+(p.amount||0),0); const bal = Math.max(0,(invoice.total||0)-paid); return <> • <strong style={{color:'#d97706'}}>Balance Due: ${bal.toFixed(2)}</strong></>; })()}
                         {invoice.status === 'paid' && invoice.paidAt && (
                           <><br/>Paid: {invoice.paidAt?.toDate().toLocaleDateString()} 
                           {invoice.cardLast4 && <> • {invoice.cardType || 'Card'} {invoice.cardLast4}</>}
@@ -6003,18 +6007,35 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           const result = await response.json();
 
           if (result.success) {
-            // Update invoice status in Firestore
             if (db) {
+              const amt = parseFloat(chargeAmount) || invoice.total;
+              // Fetch fresh from Firestore to avoid stale payments array
+              const freshDoc = await db.collection('invoices').doc(invoice.id).get();
+              const freshData = freshDoc.exists ? freshDoc.data() : {};
+              const existingPayments = freshData.payments || [];
+              const newPayment = {
+                amount: amt,
+                method: 'credit_card',
+                memo: result.accountNumber ? `Card ending ${result.accountNumber}` : 'Credit card',
+                date: new Date().toISOString(),
+                transactionId: result.transactionId,
+                authCode: result.authCode
+              };
+              const allPayments = [...existingPayments, newPayment];
+              const totalPaid = allPayments.reduce((s,p) => s + (p.amount||0), 0);
+              const newStatus = totalPaid >= invoice.total ? 'paid' : 'partial';
               await db.collection('invoices').doc(invoice.id).update({
-                status: 'paid',
-                paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+                status: newStatus,
+                payments: allPayments,
+                paidAmount: totalPaid,
+                balanceDue: Math.max(0, invoice.total - totalPaid),
+                paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null),
                 transactionId: result.transactionId,
                 authCode: result.authCode,
                 accountNumber: result.accountNumber
               });
             }
-
-            alert('✅ Payment successful! Invoice has been marked as paid.');
+            alert('✅ Payment successful!');
             onPaymentSuccess();
           } else {
             setError(result.error || 'Payment failed. Please try again.');
@@ -6177,13 +6198,16 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         setError('');
         try {
           if (db) {
+            // Fetch fresh from Firestore to avoid stale payments array
+            const freshDoc = await db.collection('invoices').doc(invoice.id).get();
+            const freshData = freshDoc.exists ? freshDoc.data() : {};
+            const existingPayments = freshData.payments || [];
             const newPayment = {
               amount: amt,
               method: method,
               memo: memo,
               date: new Date(datePaid).toISOString()
             };
-            const existingPayments = invoice.payments || [];
             const allPayments = [...existingPayments, newPayment];
             const totalPaid = allPayments.reduce((s,p) => s + (p.amount||0), 0);
             const newStatus = totalPaid >= invoice.total ? 'paid' : 'partial';
@@ -6192,7 +6216,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               payments: allPayments,
               paidAmount: totalPaid,
               balanceDue: Math.max(0, invoice.total - totalPaid),
-              paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (invoice.paidAt || null)
+              paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null)
             });
             onPaymentRecorded();
           }
