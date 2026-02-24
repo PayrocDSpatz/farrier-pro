@@ -2457,20 +2457,19 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
       const filteredInvoices = getFilteredInvoices();
 
-      // Calculate metrics
-      const totalRevenue = filteredInvoices
-        .filter(inv => inv.status === 'paid')
-        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+      // Calculate metrics - use paidAmount to include partial payments
+      const getPaidAmount = (inv) => inv.paidAmount || (inv.payments || []).reduce((s,p) => s + (p.amount||0), 0) || (inv.status === 'paid' ? (inv.total || 0) : 0);
+      const totalRevenue = filteredInvoices.reduce((sum, inv) => sum + getPaidAmount(inv), 0);
 
       const totalOutstanding = filteredInvoices
-        .filter(inv => inv.status === 'outstanding')
-        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+        .filter(inv => inv.status === 'outstanding' || inv.status === 'partial')
+        .reduce((sum, inv) => sum + (inv.balanceDue || Math.max(0, (inv.total||0) - getPaidAmount(inv))), 0);
 
       const totalInvoices = filteredInvoices.length;
       const paidInvoices = filteredInvoices.filter(inv => inv.status === 'paid').length;
-      const unpaidInvoices = filteredInvoices.filter(inv => inv.status === 'outstanding').length;
+      const unpaidInvoices = filteredInvoices.filter(inv => inv.status === 'outstanding' || inv.status === 'partial').length;
 
-      const averageInvoice = totalInvoices > 0 ? totalRevenue / paidInvoices : 0;
+      const averageInvoice = totalInvoices > 0 ? totalRevenue / Math.max(1, paidInvoices) : 0;
       const collectionRate = totalInvoices > 0 ? (paidInvoices / totalInvoices * 100) : 0;
 
       // Top customers
@@ -4145,8 +4144,9 @@ function ServicesView({ userId }) {
           const amount = Number(inv.amount || inv.total || inv.totalAmount || 0) || 0;
           const status = String(inv.status || '').toLowerCase();
 
-          if (status === 'paid' || status === 'settled') totalRevenue += amount;
-          else outstandingInvoices += amount;
+          const paidAmt = Number(inv.paidAmount || 0) || (Array.isArray(inv.payments) ? inv.payments.reduce((s,p) => s+(p.amount||0), 0) : 0) || (status === 'paid' || status === 'settled' ? amount : 0);
+          totalRevenue += paidAmt;
+          if (status === 'outstanding' || status === 'partial') outstandingInvoices += Math.max(0, amount - paidAmt);
         });
       } catch (e) {
         // invoices collection may not exist yet - that's fine
@@ -5479,13 +5479,12 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
       const filteredInvoices = getFilteredInvoices();
 
-      const totalCollected = filteredInvoices
-        .filter(inv => inv.status === 'paid')
-        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+      const getInvPaidAmount = (inv) => inv.paidAmount || (inv.payments||[]).reduce((s,p)=>s+(p.amount||0),0) || (inv.status==='paid'?(inv.total||0):0);
+      const totalCollected = filteredInvoices.reduce((sum, inv) => sum + getInvPaidAmount(inv), 0);
 
       const totalOutstanding = filteredInvoices
-        .filter(inv => inv.status === 'outstanding')
-        .reduce((sum, inv) => sum + (inv.total || 0), 0);
+        .filter(inv => inv.status === 'outstanding' || inv.status === 'partial')
+        .reduce((sum, inv) => sum + Math.max(0, (inv.total||0) - getInvPaidAmount(inv)), 0);
 
       const totalCancelled = filteredInvoices
         .filter(inv => inv.status === 'cancelled')
