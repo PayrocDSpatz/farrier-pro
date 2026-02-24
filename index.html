@@ -1179,16 +1179,22 @@ async function ensureFarriTechfile_(uid, profile) {
       return;
     }
 
+    let logoutTimer = null;
     const unsubscribe = auth.onAuthStateChanged(async (u) => {
       try {
         if (!u) {
-          setUser(null);
-          setUserProfile(null);
-          setSupportSession(null);
-          setEffectiveFarrierId(null);
-          setIsSupportMode(false);
+          // Delay logout to avoid race condition during token refresh
+          logoutTimer = setTimeout(() => {
+            setUser(null);
+            setUserProfile(null);
+            setSupportSession(null);
+            setEffectiveFarrierId(null);
+            setIsSupportMode(false);
+          }, 2000);
           return;
         }
+        // User is signed in - cancel any pending logout
+        if (logoutTimer) { clearTimeout(logoutTimer); logoutTimer = null; }
 
         setUser(u);
 
