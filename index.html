@@ -7109,6 +7109,18 @@ useEffect(() => {
                 </div>
               </div>
 
+              <div style={{marginTop: '1.5rem', padding: '1rem', background: '#f8f9fa', borderRadius: '8px'}}>
+                <div style={{fontWeight: '600', marginBottom: '0.75rem'}}>⚙️ Preferences</div>
+                <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'0.75rem'}}>
+                  <input type="checkbox" id="autoPrintPdfToggle" checked={Boolean(autoPrintPdf)} onChange={(e)=>setAutoPrintPdf(e.target.checked)} style={{width:'18px',height:'18px'}} />
+                  <label htmlFor="autoPrintPdfToggle" style={{cursor:'pointer'}}>Auto-open PDF after creating an invoice</label>
+                </div>
+                <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                  <input type="checkbox" id="manualPayToggle" checked={Boolean(allowManualPayments)} onChange={(e)=>setAllowManualPayments(e.target.checked)} style={{width:'18px',height:'18px'}} />
+                  <label htmlFor="manualPayToggle" style={{cursor:'pointer'}}>Allow manual payments (Cash / Check) on invoices</label>
+                </div>
+              </div>
+
               <button 
                 type="submit" 
                 className="btn btn-primary"
