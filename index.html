@@ -1180,20 +1180,24 @@ async function ensureFarriTechfile_(uid, profile) {
     }
 
     let logoutTimer = null;
+    let hasEverSignedIn = false;
     const unsubscribe = auth.onAuthStateChanged(async (u) => {
       try {
         if (!u) {
-          // Delay logout to avoid race condition during token refresh
+          // Only log out if user was never signed in (initial load)
+          // or after a longer delay to avoid token refresh race conditions
+          const delay = hasEverSignedIn ? 5000 : 0;
           logoutTimer = setTimeout(() => {
             setUser(null);
             setUserProfile(null);
             setSupportSession(null);
             setEffectiveFarrierId(null);
             setIsSupportMode(false);
-          }, 2000);
+          }, delay);
           return;
         }
         // User is signed in - cancel any pending logout
+        hasEverSignedIn = true;
         if (logoutTimer) { clearTimeout(logoutTimer); logoutTimer = null; }
 
         setUser(u);
