@@ -3127,6 +3127,67 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             </>
           )}
 
+          {/* Payment Methods Report */}
+          {(() => {
+            const methodLabels = { cash: '💵 Cash', check: '📝 Check', credit_card: '💳 Credit Card', other: '🔄 Other' };
+            const methodColors = { cash: '#059669', check: '#2683FB', credit_card: '#7c3aed', other: '#d97706' };
+            const methodTotals = {};
+            const methodCounts = {};
+            filteredInvoices.forEach(inv => {
+              (inv.payments || []).forEach(p => {
+                const m = p.method || 'other';
+                methodTotals[m] = (methodTotals[m] || 0) + (p.amount || 0);
+                methodCounts[m] = (methodCounts[m] || 0) + 1;
+              });
+              // Legacy: fully paid invoice with no payments array
+              if ((!inv.payments || inv.payments.length === 0) && inv.status === 'paid') {
+                const m = inv.cardLast4 ? 'credit_card' : 'cash';
+                methodTotals[m] = (methodTotals[m] || 0) + (inv.total || 0);
+                methodCounts[m] = (methodCounts[m] || 0) + 1;
+              }
+            });
+            const totalPaid = Object.values(methodTotals).reduce((s,v) => s+v, 0);
+            const methods = Object.keys(methodTotals).sort((a,b) => methodTotals[b] - methodTotals[a]);
+            return (
+              <div className="card" style={{marginTop: '1.5rem'}}>
+                <h3 style={{fontSize: '1.25rem', marginBottom: '1.5rem', color: 'var(--primary)'}}>
+                  💰 Payment Methods Breakdown
+                </h3>
+                {methods.length === 0 ? (
+                  <p style={{color: 'var(--text-muted)', textAlign: 'center', padding: '2rem'}}>
+                    No payment data yet
+                  </p>
+                ) : (
+                  <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+                    {methods.map(m => {
+                      const pct = totalPaid > 0 ? (methodTotals[m] / totalPaid * 100) : 0;
+                      const color = methodColors[m] || '#888';
+                      return (
+                        <div key={m}>
+                          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.4rem'}}>
+                            <div style={{fontWeight:'600'}}>{methodLabels[m] || m}</div>
+                            <div style={{display:'flex', gap:'1.5rem', alignItems:'center'}}>
+                              <span style={{fontSize:'0.85rem', color:'var(--text-muted)'}}>{methodCounts[m]} payment{methodCounts[m]!==1?'s':''}</span>
+                              <span style={{fontWeight:'700', color, fontSize:'1.1rem'}}>${methodTotals[m].toFixed(2)}</span>
+                              <span style={{fontSize:'0.85rem', color:'var(--text-muted)', minWidth:'40px', textAlign:'right'}}>{pct.toFixed(1)}%</span>
+                            </div>
+                          </div>
+                          <div style={{background:'#f3f4f6', borderRadius:'99px', height:'10px', overflow:'hidden'}}>
+                            <div style={{width:`${pct}%`, background:color, height:'100%', borderRadius:'99px', transition:'width 0.5s ease'}}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div style={{borderTop:'1px solid #e5e7eb', paddingTop:'1rem', display:'flex', justifyContent:'space-between', fontWeight:'700'}}>
+                      <span>Total Collected</span>
+                      <span style={{color:'var(--primary)', fontSize:'1.1rem'}}>${totalPaid.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Detail Modal */}
           {detailView && (
             <div className="modal-overlay" onClick={() => setDetailView(null)}>
