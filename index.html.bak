@@ -4579,7 +4579,7 @@ function CalendarView({ userId }) {
         return appointments.filter(apt => {
           // Status filters
           if (appointmentFilter === 'pending' && apt.status !== 'pending') return false;
-          if (appointmentFilter === 'confirmed' && apt.status !== 'confirmed' && apt.status !== 'confirmed_by_customer') return false;
+          if (appointmentFilter === 'confirmed' && apt.status !== 'confirmed') return false;
           if (appointmentFilter === 'cancelled' && apt.status === 'cancelled') return true;
           if (appointmentFilter === 'invoiced' && !apt.invoiced) return false;
 
@@ -4779,19 +4779,15 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           // If confirming, add to Google Calendar
           if (newStatus === 'confirmed') {
             console.log('🟢 Status is confirmed, attempting calendar sync...');
+            console.log('📋 Found appointment:', appointment);
+            console.log('👤 UserProfile:', userProfile);
             
             if (appointment) {
               const success = await createCalendarEvent(appointment, userProfile);
               if (success) {
                 alert('✓ Appointment confirmed and added to your Google Calendar!');
               } else {
-                alert('⚠️ Appointment confirmed, but failed to add to Google Calendar.');
-              }
-              // Send SMS confirmation if enabled
-              if (userProfile?.smsEnabled && appointment.phone) {
-                const bizName = userProfile?.businessName || 'Your Farrier';
-                const msg = `Hi ${appointment.customerName}, your appointment with ${bizName} is confirmed for ${appointment.requestedDate} at ${appointment.requestedTime}. Reply CONFIRM to confirm or STOP to opt out.`;
-                await sendSms(appointment.phone, msg);
+                alert('⚠️ Appointment confirmed, but failed to add to Google Calendar. Check console for details.');
               }
             } else {
               console.error('❌ Appointment not found in local state');
@@ -4816,45 +4812,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         }
       };
 
-      // ── SMS helpers ──────────────────────────────────────────────────
-      const sendSms = async (phone, message) => {
-        try {
-          const res = await fetch('/api/send-sms', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: phone, body: message })
-          });
-          const data = await res.json();
-          return data.success === true;
-        } catch (e) {
-          console.error('SMS error:', e);
-          return false;
-        }
-      };
-
-      const isSmsEnabled = (customerPhone, customers) => {
-        if (!userProfile?.smsEnabled) return false;
-        if (!customerPhone) return false;
-        // Check if customer has opted out
-        const phone = customerPhone.replace(/\D/g, '');
-        const customer = customers?.find(c => c.phone?.replace(/\D/g, '') === phone);
-        if (customer?.smsOptOut) return false;
-        return true;
-      };
-
-      const sendReminder = async (appointment) => {
-        if (!userProfile?.smsEnabled || !appointment.phone) {
-          alert('SMS not enabled. Enable it in Settings → SMS & Messaging.');
-          return;
-        }
-        const bizName = userProfile?.businessName || 'Your Farrier';
-        const message = `Hi ${appointment.customerName}, reminder: your appointment with ${bizName} is on ${appointment.requestedDate} at ${appointment.requestedTime}. Reply CONFIRM to confirm or STOP to opt out.`;
-        const sent = await sendSms(appointment.phone, message);
-        if (sent) {
-          alert(`✅ Reminder sent to ${appointment.customerName}`);
-        } else {
-          alert('❌ Failed to send reminder. Check SMS settings.');
-        }
+      const sendReminder = (appointment) => {
+        const message = `Hi ${appointment.customerName}! Reminder: Your farrier appointment is on ${appointment.requestedDate} at ${appointment.requestedTime}. ${appointment.address ? 'Location: ' + appointment.address : ''}`;
+        alert(`SMS would be sent to ${appointment.phone}:\n\n${message}`);
       };
 
       const handleCreateInvoiceFromAppointment = (appointment) => {
@@ -4981,13 +4941,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                     <div className="appointment-info">
                       <div className="appointment-customer">{apt.customerName}</div>
                       <div className="appointment-details">
-                        📞 {apt.phone} {apt.email && `• ✉️ ${apt.email}`}
-                        {userProfile?.smsEnabled && apt.phone && (() => {
-                          const ph = apt.phone.replace(/\D/g,'');
-                          const cust = appointments.find ? null : null; // will use Firestore
-                          return null; // handled via button below
-                        })()}
-                        <br/>
+                        📞 {apt.phone} {apt.email && `• ✉️ ${apt.email}`}<br/>
                         📅 {apt.requestedDate} at {apt.requestedTime}<br/>
                         {apt.services && apt.services.length > 0 && (
                           <>🔧 Services: {apt.services.join(', ')}<br/></>
@@ -5007,12 +4961,8 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       </div>
                     </div>
                     <div className="appointment-actions">
-                      <span className={`badge badge-${
-                        apt.status === 'confirmed' ? 'success' :
-                        apt.status === 'confirmed_by_customer' ? 'success' :
-                        apt.status === 'pending' ? 'warning' : 'pending'
-                      }`}>
-                        {apt.status === 'confirmed_by_customer' ? '✅ Confirmed by Customer' : (apt.status || 'pending')}
+                      <span className={`badge badge-${apt.status === 'confirmed' ? 'success' : apt.status === 'pending' ? 'warning' : 'pending'}`}>
+                        {apt.status || 'pending'}
                       </span>
                       {apt.invoiced && (
                         <span className="badge" style={{background: '#dcfce7', color: '#166534'}}>
@@ -5045,35 +4995,12 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                           💰 Create Invoice
                         </button>
                       )}
-                      {userProfile?.smsEnabled && (
-                        <button 
-                          className="btn btn-sm btn-warning"
-                          onClick={() => sendReminder(apt)}
-                        >
-                          📱 Send Reminder
-                        </button>
-                      )}
-                      {userProfile?.smsEnabled && apt.phone && (
-                        <button
-                          className="btn btn-sm btn-outline"
-                          style={{fontSize:'0.75rem'}}
-                          onClick={async () => {
-                            if (!db) return;
-                            const phone = apt.phone.replace(/\D/g,'');
-                            const snap = await db.collection('customers').where('phone','==',phone).where('farrierId','==',userId).get();
-                            if (snap.empty) {
-                              alert('Customer record not found.');
-                              return;
-                            }
-                            const doc = snap.docs[0];
-                            const current = doc.data().smsOptOut || false;
-                            await doc.ref.update({ smsOptOut: !current });
-                            alert(!current ? `🚫 SMS disabled for ${apt.customerName}` : `✅ SMS re-enabled for ${apt.customerName}`);
-                          }}
-                        >
-                          {apt.smsOptOut ? '✅ SMS On' : '🚫 SMS Off'}
-                        </button>
-                      )}
+                      <button 
+                        className="btn btn-sm btn-warning"
+                        onClick={() => sendReminder(apt)}
+                      >
+                        📱 Send Reminder
+                      </button>
                       {apt.status !== 'cancelled' && (
                         <button 
                           className="btn btn-sm btn-outline"
@@ -5919,25 +5846,12 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               userId={userId}
               userProfile={userProfile}
               onClose={() => setShowCreateModal(false)}
-              onCreated={async (createdInvoice) => {
+              onCreated={(createdInvoice) => {
                 setShowCreateModal(false);
                 loadInvoices();
                 if (createdInvoice) {
                   // Auto-open PDF after create (toggle in Settings)
                   openInvoicePdf(createdInvoice, userProfile, userProfile?.autoPrintPdf ?? true);
-                  // Send SMS invoice notification if enabled
-                  if (userProfile?.smsEnabled && createdInvoice.customerPhone) {
-                    const bizName = userProfile?.businessName || 'Your Farrier';
-                    const payLink = createdInvoice.paymentUrl || '';
-                    const msg = `Hi ${createdInvoice.customerName}, you have a new invoice #${createdInvoice.invoiceNumber} for $${createdInvoice.total?.toFixed(2)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''} Reply STOP to opt out.`;
-                    try {
-                      await fetch('/api/send-sms', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ to: createdInvoice.customerPhone, body: msg })
-                      });
-                    } catch(e) { console.error('Invoice SMS error:', e); }
-                  }
                 }
               }}
             />
@@ -7073,7 +6987,6 @@ useEffect(() => {
       const [logoUrl, setLogoUrl] = useState(userProfile?.logoUrl || '');
       const [autoPrintPdf, setAutoPrintPdf] = useState(userProfile?.autoPrintPdf ?? true);
       const [allowManualPayments, setAllowManualPayments] = useState(userProfile?.allowManualPayments ?? true);
-      const [smsEnabled, setSmsEnabled] = useState(userProfile?.smsEnabled ?? false);
       const [phone, setPhone] = useState(userProfile?.phone || '');
       const [address, setAddress] = useState(userProfile?.address || '');
       const [city, setCity] = useState(userProfile?.city || '');
@@ -7132,7 +7045,6 @@ useEffect(() => {
               logoUrl: logoUrl,
               autoPrintPdf: autoPrintPdf,
               allowManualPayments: allowManualPayments,
-              smsEnabled: smsEnabled,
               availability: availability,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -7151,7 +7063,6 @@ useEffect(() => {
               logoUrl,
               autoPrintPdf,
               allowManualPayments,
-              smsEnabled,
               availability
             }));
 
@@ -7400,94 +7311,6 @@ useEffect(() => {
                 {loading ? <span className="spinner"></span> : 'Save Availability'}
               </button>
             </form>
-          </div>
-
-          {/* SMS & Messaging Settings */}
-          <div className="card" style={{marginTop: '1.5rem'}}>
-            <h2>📱 SMS & Messaging</h2>
-            <p style={{color: 'var(--text-muted)', marginBottom: '1.5rem'}}>
-              Send automated appointment reminders and invoice notifications to your customers via text message.
-              {userProfile?.subscriptionPlan === 'basic' && <><br/><span style={{color:'#d97706', fontWeight:'500'}}>SMS is a $9.95/month add-on for Basic plan subscribers.</span></>}
-            </p>
-
-            <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'1rem'}}>
-              <input
-                type="checkbox"
-                id="smsToggle"
-                checked={Boolean(smsEnabled)}
-                onChange={(e) => setSmsEnabled(e.target.checked)}
-                style={{width:'18px', height:'18px'}}
-              />
-              <label htmlFor="smsToggle" style={{cursor:'pointer', fontWeight:'500'}}>
-                Enable SMS notifications for my customers
-              </label>
-            </div>
-
-            {smsEnabled && (
-              <div style={{background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:'8px', padding:'1rem', marginBottom:'1rem'}}>
-                <div style={{fontWeight:'600', marginBottom:'0.5rem', color:'#166534'}}>✅ SMS Active</div>
-                {userProfile?.twilioPhoneNumber ? (
-                  <div style={{fontSize:'0.9rem', color:'#166534'}}>
-                    Your dedicated number: <strong>{userProfile.twilioPhoneNumber}</strong>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{fontSize:'0.9rem', color:'#166534', marginBottom:'0.75rem'}}>
-                      No phone number assigned yet. Click below to provision your dedicated SMS number.
-                    </div>
-                    <button
-                      className="btn btn-sm"
-                      style={{background:'#059669', color:'white'}}
-                      onClick={async () => {
-                        try {
-                          const res = await fetch('/api/provision-twilio-number', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ farrierId: safeFarrierId })
-                          });
-                          const data = await res.json();
-                          if (data.success) {
-                            await ensureFarriTechfile_(safeFarrierId, { twilioPhoneNumber: data.phoneNumber });
-                            setUserProfile(prev => ({ ...prev, twilioPhoneNumber: data.phoneNumber }));
-                            alert(`✅ Your SMS number has been provisioned: ${data.phoneNumber}`);
-                          } else {
-                            alert('❌ Failed to provision number: ' + data.error);
-                          }
-                        } catch(e) {
-                          alert('❌ Error provisioning number. Please try again.');
-                        }
-                      }}
-                    >
-                      📞 Get My SMS Number
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {smsEnabled && (
-              <div style={{fontSize:'0.85rem', color:'var(--text-muted)', marginTop:'0.5rem'}}>
-                <strong>What gets sent automatically:</strong>
-                <ul style={{marginTop:'0.5rem', paddingLeft:'1.25rem'}}>
-                  <li>Appointment confirmation when you confirm an appointment</li>
-                  <li>Invoice notification with payment link when you create an invoice</li>
-                  <li>Reminders via the 📱 Send Reminder button on appointments</li>
-                </ul>
-                Customers can reply <strong>CONFIRM</strong> to confirm appointments or <strong>STOP</strong> to opt out.
-              </div>
-            )}
-
-            <div style={{marginTop:'1rem'}}>
-              <button className="btn btn-primary" onClick={async () => {
-                try {
-                  await ensureFarriTechfile_(safeFarrierId, { smsEnabled });
-                  setUserProfile(prev => ({ ...prev, smsEnabled }));
-                  alert(smsEnabled ? '✅ SMS enabled!' : '✅ SMS disabled.');
-                } catch(e) { alert('Failed to save SMS settings.'); }
-              }}>
-                Save SMS Settings
-              </button>
-            </div>
           </div>
 
           <div className="card" style={{marginTop: '1.5rem'}}>
