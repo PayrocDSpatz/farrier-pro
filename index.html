@@ -1181,6 +1181,8 @@ async function ensureFarriTechfile_(uid, profile) {
   const [loading, setLoading] = useState(true);
   const [logoutTimerActive, setLogoutTimerActive] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
+  const [showInactivityWarning, setShowInactivityWarning] = useState(false);
+  const [inactivityCountdown, setInactivityCountdown] = useState(60);
 
 
   const [supportSession, setSupportSession] = useState(null);
@@ -1330,6 +1332,60 @@ async function ensureFarriTechfile_(uid, profile) {
     return () => { unsubscribe(); if (logoutTimer) clearTimeout(logoutTimer); };
   }, [supportSessionId]);
 
+  // ── Inactivity timer - 30 min then warning, 60s then logout ──────────
+  useEffect(() => {
+    if (!user) return;
+
+    const INACTIVE_MS = 30 * 60 * 1000; // 30 minutes
+    const COUNTDOWN_S = 60;
+
+    let inactivityTimer = null;
+    let countdownTimer = null;
+    let countdownValue = COUNTDOWN_S;
+
+    const resetTimer = () => {
+      if (showInactivityWarning) return; // don't reset if warning is showing
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        setShowInactivityWarning(true);
+        setInactivityCountdown(COUNTDOWN_S);
+        countdownValue = COUNTDOWN_S;
+        countdownTimer = setInterval(() => {
+          countdownValue -= 1;
+          setInactivityCountdown(countdownValue);
+          if (countdownValue <= 0) {
+            clearInterval(countdownTimer);
+            setShowInactivityWarning(false);
+            auth.signOut();
+          }
+        }, 1000);
+      }, INACTIVE_MS);
+    };
+
+    const stayLoggedIn = () => {
+      setShowInactivityWarning(false);
+      clearInterval(countdownTimer);
+      countdownValue = COUNTDOWN_S;
+      setInactivityCountdown(COUNTDOWN_S);
+      resetTimer();
+    };
+
+    // Store stayLoggedIn so we can call it from the modal
+    window.__farritech_stayLoggedIn = stayLoggedIn;
+
+    const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
+    events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }));
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      clearInterval(countdownTimer);
+      events.forEach(e => window.removeEventListener(e, resetTimer));
+      delete window.__farritech_stayLoggedIn;
+    };
+  }, [user]);
+
   // Show spinner while loading OR while waiting to confirm logout (prevents flash to login)
   if (loading || (logoutTimerActive)) {
     return (
@@ -1392,6 +1448,39 @@ if (finishSignup) {
   // Farrier dashboard (+ support banner)
   return (
     <>
+      {/* Inactivity Warning Modal */}
+      {showInactivityWarning && (
+        <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{background:'white', borderRadius:'12px', padding:'2rem', maxWidth:'420px', width:'90%', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+            <div style={{fontSize:'3rem', marginBottom:'1rem'}}>⏱️</div>
+            <h2 style={{marginBottom:'0.75rem', color:'#1a1a1a'}}>Still there?</h2>
+            <p style={{color:'#666', marginBottom:'1.5rem'}}>
+              You've been inactive for 30 minutes. For your security, you'll be logged out in:
+            </p>
+            <div style={{fontSize:'3rem', fontWeight:'700', color:'#ef4444', marginBottom:'1.5rem'}}>
+              {inactivityCountdown}s
+            </div>
+            <div style={{display:'flex', gap:'0.75rem', justifyContent:'center'}}>
+              <button
+                className="btn btn-outline"
+                onClick={() => { auth.signOut(); setShowInactivityWarning(false); }}
+                style={{flex:1}}
+              >
+                Log Out Now
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => window.__farritech_stayLoggedIn && window.__farritech_stayLoggedIn()}
+                style={{flex:1}}
+                autoFocus
+              >
+                Stay Logged In
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isSupportMode && (
         <div style={{padding:"10px", background:"#ffefef", border:"1px solid #ffb3b3", borderRadius:"8px", margin:"12px"}}>
           <strong>SUPPORT MODE</strong>
@@ -1610,7 +1699,7 @@ return (
   className="auth-tab"
   onClick={() => {
     const returnUrl = encodeURIComponent(`${window.location.origin}/?finishSignup=1`);
-    window.location.href = `https://farritech-landing-page.vercel.app/signup?returnUrl=${returnUrl}`;
+    window.location.href = `https://farritech-landing-page.vercel.app/?returnUrl=${returnUrl}`;
   }}
 >
   Sign Up
