@@ -1000,7 +1000,26 @@ body .auth-page.ft-auth-wrap .auth-card{
     margin: 28px auto !important;
   }
 }
-</style>
+/* === FIX POSITIONING + FORCE THE CINEMATIC BG TO SHOW === */
+body .auth-page.ft-auth-wrap{
+  position: relative !important;
+  background:
+    linear-gradient(120deg, rgba(5,11,24,0.65), rgba(5,11,24,0.45)),
+    url("/assets/auth/auth-bg.jpg") !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
+
+/* make sure the glow overlay stays behind the card */
+body .auth-page.ft-auth-wrap::after{
+  z-index: 1 !important;
+}
+
+/* ensure the auth card sits above everything */
+body .auth-page.ft-auth-wrap .auth-card{
+  z-index: 5 !important;
+}
+  </style>
 </head>
 <body>
   <div id="root"></div>
