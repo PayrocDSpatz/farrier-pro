@@ -946,8 +946,15 @@
   0% { opacity: 0.6; }
   100% { opacity: 1; }
 }
-
-</style>
+/* Keep auth content above the animated glow overlay */
+.auth-page.ft-auth-wrap > *{
+  position: relative;
+  z-index: 2;
+}
+.auth-page.ft-auth-wrap::after{
+  pointer-events: none;
+}
+ 
 </style>
 </head>
 <body>
@@ -1911,8 +1918,8 @@ const [loading, setLoading] = useState(false);
 };
 
 return (
-        <div className="auth-page">
-          <section className="auth-hero">
+<div className="auth-page ft-auth-wrap">    
+  <section className="auth-hero">
             <div className="auth-hero-content">
               <h2>Run Your Hoof Care Business Like a Pro.</h2>
               <p>Scheduling. Payments. Clients.<br />All in one place.</p>
