@@ -954,7 +954,52 @@
 .auth-page.ft-auth-wrap::after{
   pointer-events: none;
 }
- 
+ /* ===== FORCE CINEMATIC AUTH MODE (override everything) ===== */
+
+/* force auth-page layout to stop splitting the screen */
+body .auth-page.ft-auth-wrap{
+  display: block !important;
+  background: none !important;
+  min-height: 100vh !important;
+  padding: 0 !important;
+}
+
+/* remove any grid split / columns on auth page */
+body .auth-page.ft-auth-wrap{
+  grid-template-columns: none !important;
+  place-items: unset !important;
+}
+
+/* kill the old hero column + circle graphic */
+body .auth-page.ft-auth-wrap .auth-hero,
+body .auth-page.ft-auth-wrap .auth-hero *,
+body .auth-page.ft-auth-wrap .auth-hero::before,
+body .auth-page.ft-auth-wrap .auth-hero::after{
+  display: none !important;
+  content: none !important;
+}
+
+/* make your auth-card float on the right like the mock */
+body .auth-page.ft-auth-wrap .auth-card{
+  position: absolute !important;
+  top: 50% !important;
+  right: 6% !important;
+  transform: translateY(-50%) !important;
+  max-width: 520px !important;
+  width: min(520px, 92vw) !important;
+  z-index: 5 !important;
+}
+
+/* mobile: center the card */
+@media (max-width: 980px){
+  body .auth-page.ft-auth-wrap .auth-card{
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    transform: none !important;
+    margin: 28px auto !important;
+  }
+}
 </style>
 </head>
 <body>
