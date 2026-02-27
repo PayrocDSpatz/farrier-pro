@@ -1019,6 +1019,32 @@ body .auth-page.ft-auth-wrap::after{
 body .auth-page.ft-auth-wrap .auth-card{
   z-index: 5 !important;
 }
+/* ===== BRIGHTEN CINEMATIC BG (keep contrast, reduce darkness) ===== */
+body .auth-page.ft-auth-wrap{
+  /* lighter overlay + slightly brighter image */
+  background:
+    linear-gradient(120deg, rgba(5,11,24,0.30), rgba(5,11,24,0.18)),
+    url("/auth-bg.jpg") !important;
+  background-size: cover !important;
+  background-position: center !important;
+  filter: brightness(1.08) contrast(1.05) saturate(1.10);
+}
+
+/* soften the glow overlay so it doesn't darken */
+body .auth-page.ft-auth-wrap::after{
+  opacity: 0.55 !important;
+}
+/* Boost the blue energy on the right side (like the screenshot) */
+body .auth-page.ft-auth-wrap::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(900px 520px at 82% 45%, rgba(42,168,255,0.22), transparent 60%),
+    radial-gradient(900px 520px at 70% 80%, rgba(11,99,255,0.18), transparent 62%);
+  pointer-events:none;
+  z-index: 1;
+}
   </style>
 </head>
 <body>
