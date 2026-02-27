@@ -909,7 +909,45 @@
     @media (max-width: 520px){
       .auth-card{ padding: 1.75rem; }
     }
+@media (max-width: 520px){
+  .auth-card{ padding: 1.75rem; }
+}
 
+/* PASTE THE NEW CINEMATIC CSS RIGHT HERE */
+
+/* ===== CINEMATIC AUTH BACKGROUND ===== */
+
+.ft-auth-wrap{
+  min-height: 100vh;
+  width: 100%;
+  background:
+    linear-gradient(120deg, rgba(5,11,24,0.65), rgba(5,11,24,0.45)),
+    url("/assets/auth/auth-bg.jpg");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  position: relative;
+  overflow: hidden;
+  color: white;
+}
+
+.ft-auth-wrap::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(800px 400px at 70% 40%, rgba(42,168,255,0.25), transparent 60%),
+    radial-gradient(600px 400px at 30% 80%, rgba(11,99,255,0.25), transparent 60%);
+  animation: ftGlow 6s ease-in-out infinite alternate;
+  pointer-events:none;
+}
+
+@keyframes ftGlow{
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+</style>
 </style>
 </head>
 <body>
