@@ -727,9 +727,17 @@
   .ft-auth-grid{
   position: relative;
   min-height: 100vh;
-  background: url('/auth-bg.jpg') center/cover no-repeat;
+  background: url('/auth-bg.jpg') center/cover no-repeat fixed;
   overflow: hidden;
 }
+  .ft-auth-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .ft-auth-shell > .ft-auth-grid {
+    flex: 1;
+  }
   /* Lifts the image instead of crushing it */
 .ft-auth-shell::before{
   content:"";
@@ -758,11 +766,11 @@
     .ft-auth-shell .logo-icon{ filter: drop-shadow(0 8px 18px rgba(0,0,0,0.35)); }
 
     .ft-auth-grid{
-      max-width: 1240px;
-      margin: 0 auto;
-      padding: clamp(22px, 3.5vw, 56px);
+      max-width: 100%;
+      margin: 0;
+      padding: clamp(22px, 4vw, 72px) clamp(28px, 6vw, 96px);
       display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
+      grid-template-columns: 1.4fr 0.7fr;
       gap: clamp(22px, 4vw, 72px);
       align-items: center;
       min-height: calc(100vh - 88px);
@@ -817,7 +825,7 @@
       -webkit-backdrop-filter: blur(8px);
     }
 
-    .ft-auth-container{ max-width: none; margin: 0; }
+    .ft-auth-container{ max-width: 480px; margin: 0 0 0 auto; }
     .ft-auth-shell .auth-card{
       padding: 26px;
       border-radius: 22px;
