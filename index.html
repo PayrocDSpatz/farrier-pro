@@ -55,7 +55,8 @@
     }
     #root {
       width: 100%;
-      height: 100%;
+      min-height: 100%;
+      height: auto;
     }
     body {
       font-family: 'Outfit', sans-serif;
@@ -744,12 +745,11 @@
 
 /* NEW: shell is the full-page background */
 .ft-auth-shell {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  background: url('/auth-bg.svg') center/cover no-repeat;
-  overflow-y: auto;
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  background: url('/auth-bg.svg') center/cover no-repeat fixed;
+  overflow-y: visible;
 }
   /* Lifts the image instead of crushing it */
 /* Overlay gradient on the grid area */
@@ -924,16 +924,14 @@
 
 /* Full-page background shell */
 .ft-auth-shell {
-  position: fixed !important;
-  inset: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  min-height: unset !important;
+  position: relative !important;
+  width: 100% !important;
+  min-height: 100vh !important;
   display: flex !important;
   flex-direction: column !important;
-  background: url('/auth-bg.svg') center/cover no-repeat !important;
-  overflow-y: auto !important;
+  background: url('/auth-bg.svg') center/cover no-repeat fixed !important;
   overflow-x: hidden !important;
+  overflow-y: visible !important;
 }
 
 .ft-auth-shell > *{ position: relative; z-index: 1; }
@@ -953,13 +951,13 @@
   flex: 1 !important;
 }
 
-/* On short viewports, shift card to top so nothing is clipped */
-@media (max-height: 750px) {
+/* On short viewports, align top and let page scroll naturally */
+@media (max-height: 820px) {
   .ft-auth-grid {
     align-items: flex-start !important;
-    padding-top: 20px !important;
-    padding-bottom: 20px !important;
     min-height: unset !important;
+    padding-top: clamp(20px, 3vh, 40px) !important;
+    padding-bottom: clamp(20px, 3vh, 40px) !important;
   }
 }
 
