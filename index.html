@@ -2920,6 +2920,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         { id: 'calendar', label: 'Calendar', icon: '📅' },
         { id: 'appointments', label: 'Appointments', icon: '📋' },
         { id: 'invoices', label: 'Invoices', icon: '💰' },
+        { id: 'customers', label: 'Customers', icon: '👥' },
         { id: 'services', label: 'Services', icon: '🧾' },
         { id: 'reports', label: 'Reports', icon: '📈' },
         { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -2977,11 +2978,481 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'calendar' && <CalendarView userId={farrierId} />}
             {tab === 'appointments' && <AppointmentsView userId={farrierId} userProfile={userProfile} />}
             {tab === 'invoices' && <InvoicesView userId={farrierId} userProfile={userProfile} />}
+            {tab === 'customers' && <CustomersView userId={farrierId} userProfile={userProfile} />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
             {tab === 'reports' && <ReportsView userId={farrierId} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
             {tab === 'about' && <AboutView />}
           </main>
+        </div>
+      );
+    }
+
+    function CustomersView({ userId, userProfile }) {
+      const [customers, setCustomers] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [search, setSearch] = useState('');
+      const [smsFilter, setSmsFilter] = useState('all'); // all | opted_in | opted_out
+      const [selectedCustomer, setSelectedCustomer] = useState(null);
+      const [detailLoading, setDetailLoading] = useState(false);
+      const [customerDetail, setCustomerDetail] = useState(null); // { appointments, invoices, balance }
+      const [showAddEdit, setShowAddEdit] = useState(false);
+      const [editingCustomer, setEditingCustomer] = useState(null);
+      const [saving, setSaving] = useState(false);
+      const [confirmDelete, setConfirmDelete] = useState(null);
+
+      // Form state
+      const [formName, setFormName] = useState('');
+      const [formEmail, setFormEmail] = useState('');
+      const [formPhone, setFormPhone] = useState('');
+      const [formAddress, setFormAddress] = useState('');
+      const [formNotes, setFormNotes] = useState('');
+
+      const loadCustomers = async () => {
+        if (!db) return;
+        setLoading(true);
+        try {
+          const snap = await db.collection('customers')
+            .where('farrierId', '==', userId)
+            .get();
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          setCustomers(list);
+        } catch (e) {
+          console.error('Error loading customers:', e);
+        }
+        setLoading(false);
+      };
+
+      useEffect(() => { loadCustomers(); }, [userId]);
+
+      const openDetail = async (cust) => {
+        setSelectedCustomer(cust);
+        setDetailLoading(true);
+        setCustomerDetail(null);
+        try {
+          const [apptSnap, invSnap] = await Promise.all([
+            db.collection('appointments')
+              .where('farrierId', '==', userId)
+              .where('phone', '==', cust.phone || '__none__')
+              .orderBy('requestedDate', 'desc')
+              .get()
+              .catch(() => db.collection('appointments')
+                .where('farrierId', '==', userId)
+                .get()
+                .then(s => ({ docs: s.docs.filter(d => {
+                  const d2 = d.data();
+                  return d2.email === cust.email || d2.phone === cust.phone;
+                })}))
+              ),
+            db.collection('invoices')
+              .where('farrierId', '==', userId)
+              .where('customerEmail', '==', cust.email || '__none__')
+              .orderBy('createdAt', 'desc')
+              .get()
+              .catch(() => ({ docs: [] }))
+          ]);
+
+          const appointments = apptSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const invoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const balance = invoices
+            .filter(i => i.status === 'outstanding' || i.status === 'partial')
+            .reduce((s, i) => s + (i.balanceDue || Math.max(0, (i.total || 0) - ((i.paidAmount || 0) + ((i.payments||[]).reduce((x,p)=>x+(p.amount||0),0))))), 0);
+          const totalPaid = invoices
+            .filter(i => i.status === 'paid')
+            .reduce((s, i) => s + (i.total || 0), 0);
+          setCustomerDetail({ appointments, invoices, balance, totalPaid });
+        } catch (e) {
+          console.error('Error loading customer detail:', e);
+          setCustomerDetail({ appointments: [], invoices: [], balance: 0, totalPaid: 0 });
+        }
+        setDetailLoading(false);
+      };
+
+      const openAdd = () => {
+        setEditingCustomer(null);
+        setFormName(''); setFormEmail(''); setFormPhone('');
+        setFormAddress(''); setFormNotes('');
+        setShowAddEdit(true);
+      };
+
+      const openEdit = (cust) => {
+        setEditingCustomer(cust);
+        setFormName(cust.name || '');
+        setFormEmail(cust.email || '');
+        setFormPhone(cust.phone || '');
+        setFormAddress(cust.address || '');
+        setFormNotes(cust.notes || '');
+        setShowAddEdit(true);
+      };
+
+      const saveCustomer = async () => {
+        if (!formName.trim()) return alert('Name is required.');
+        setSaving(true);
+        try {
+          const payload = {
+            farrierId: userId,
+            name: formName.trim(),
+            email: formEmail.trim(),
+            phone: formPhone.trim(),
+            address: formAddress.trim(),
+            notes: formNotes.trim(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          };
+          if (editingCustomer) {
+            await db.collection('customers').doc(editingCustomer.id).update(payload);
+            if (selectedCustomer && selectedCustomer.id === editingCustomer.id) {
+              setSelectedCustomer({ ...selectedCustomer, ...payload });
+            }
+          } else {
+            await db.collection('customers').add({
+              ...payload,
+              smsOptOut: false,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              source: 'manual',
+            });
+          }
+          setShowAddEdit(false);
+          await loadCustomers();
+        } catch (e) {
+          alert('Error saving customer: ' + e.message);
+        }
+        setSaving(false);
+      };
+
+      const deleteCustomer = async (cust) => {
+        try {
+          await db.collection('customers').doc(cust.id).delete();
+          if (selectedCustomer && selectedCustomer.id === cust.id) setSelectedCustomer(null);
+          setConfirmDelete(null);
+          await loadCustomers();
+        } catch (e) {
+          alert('Error deleting customer: ' + e.message);
+        }
+      };
+
+      const toggleSmsOptOut = async (cust) => {
+        try {
+          const newVal = !cust.smsOptOut;
+          await db.collection('customers').doc(cust.id).update({ smsOptOut: newVal });
+          setCustomers(prev => prev.map(c => c.id === cust.id ? { ...c, smsOptOut: newVal } : c));
+          if (selectedCustomer && selectedCustomer.id === cust.id) {
+            setSelectedCustomer({ ...selectedCustomer, smsOptOut: newVal });
+          }
+        } catch (e) {
+          alert('Error updating SMS preference: ' + e.message);
+        }
+      };
+
+      const filtered = customers.filter(c => {
+        const q = search.toLowerCase();
+        const matchSearch = !q ||
+          (c.name || '').toLowerCase().includes(q) ||
+          (c.email || '').toLowerCase().includes(q) ||
+          (c.phone || '').includes(q);
+        const matchSms = smsFilter === 'all' ||
+          (smsFilter === 'opted_out' && c.smsOptOut) ||
+          (smsFilter === 'opted_in' && !c.smsOptOut);
+        return matchSearch && matchSms;
+      });
+
+      const fmtDate = (ts) => {
+        if (!ts) return '—';
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      };
+
+      const fmtMoney = (n) => `$${(n || 0).toFixed(2)}`;
+
+      const statusColor = { pending: '#f59e0b', confirmed: '#10b981', cancelled: '#ef4444', invoiced: '#6366f1' };
+
+      // ── ADD/EDIT MODAL ──
+      if (showAddEdit) return (
+        <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h2 style={{ margin: 0, color: 'var(--primary)' }}>{editingCustomer ? '✏️ Edit Customer' : '➕ Add Customer'}</h2>
+            <button className="btn btn-sm btn-outline" onClick={() => setShowAddEdit(false)}>✕ Cancel</button>
+          </div>
+          {[
+            { label: 'Full Name *', val: formName, set: setFormName, type: 'text', ph: 'Jane Smith' },
+            { label: 'Email', val: formEmail, set: setFormEmail, type: 'email', ph: 'jane@example.com' },
+            { label: 'Phone', val: formPhone, set: setFormPhone, type: 'tel', ph: '(555) 555-5555' },
+            { label: 'Address', val: formAddress, set: setFormAddress, type: 'text', ph: '123 Main St, City, FL 12345' },
+          ].map(f => (
+            <div className="form-group" key={f.label}>
+              <label>{f.label}</label>
+              <input type={f.type} value={f.val} placeholder={f.ph}
+                onChange={e => f.set(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+            </div>
+          ))}
+          <div className="form-group">
+            <label>Notes</label>
+            <textarea value={formNotes} placeholder="Horse names, special instructions, preferences…"
+              onChange={e => setFormNotes(e.target.value)} rows={3}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', resize: 'vertical', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+            <button className="btn btn-primary" onClick={saveCustomer} disabled={saving} style={{ flex: 1 }}>
+              {saving ? '⏳ Saving…' : (editingCustomer ? '💾 Save Changes' : '✅ Add Customer')}
+            </button>
+            <button className="btn btn-outline" onClick={() => setShowAddEdit(false)} style={{ flex: 0 }}>Cancel</button>
+          </div>
+        </div>
+      );
+
+      // ── CUSTOMER DETAIL PANEL ──
+      if (selectedCustomer) return (
+        <div>
+          <button className="btn btn-sm btn-outline" onClick={() => setSelectedCustomer(null)} style={{ marginBottom: '1rem' }}>
+            ← Back to Customers
+          </button>
+
+          {/* Header card */}
+          <div className="card" style={{ marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2 style={{ margin: '0 0 0.25rem', color: 'var(--primary)', fontSize: '1.6rem' }}>
+                  👤 {selectedCustomer.name}
+                </h2>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', color: '#555', fontSize: '0.95rem' }}>
+                  {selectedCustomer.phone && <span>📞 {selectedCustomer.phone}</span>}
+                  {selectedCustomer.email && <span>✉️ {selectedCustomer.email}</span>}
+                  {selectedCustomer.address && <span>📍 {selectedCustomer.address}</span>}
+                </div>
+                {selectedCustomer.notes && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.9rem', background: '#f8fafc', borderRadius: 8, fontSize: '0.9rem', color: '#444', borderLeft: '3px solid var(--primary)' }}>
+                    💬 {selectedCustomer.notes}
+                  </div>
+                )}
+                <div style={{ marginTop: '0.75rem' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                    padding: '0.3rem 0.8rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600,
+                    background: selectedCustomer.smsOptOut ? '#fee2e2' : '#dcfce7',
+                    color: selectedCustomer.smsOptOut ? '#dc2626' : '#16a34a',
+                  }}>
+                    {selectedCustomer.smsOptOut ? '🚫 SMS Opted Out' : '✅ SMS Opted In'}
+                  </span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button className="btn btn-sm btn-outline" onClick={() => openEdit(selectedCustomer)}>✏️ Edit</button>
+                {userProfile?.smsEnabled && (
+                  <button className="btn btn-sm btn-outline" onClick={() => toggleSmsOptOut(selectedCustomer)}
+                    style={{ borderColor: selectedCustomer.smsOptOut ? '#16a34a' : '#dc2626', color: selectedCustomer.smsOptOut ? '#16a34a' : '#dc2626' }}>
+                    {selectedCustomer.smsOptOut ? '✅ Re-enable SMS' : '🚫 Opt Out SMS'}
+                  </button>
+                )}
+                <button className="btn btn-sm btn-outline" onClick={() => setConfirmDelete(selectedCustomer)}
+                  style={{ borderColor: '#ef4444', color: '#ef4444' }}>🗑️ Delete</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Stats row */}
+          {!detailLoading && customerDetail && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+              {[
+                { label: 'Appointments', val: customerDetail.appointments.length, icon: '📋', color: '#3b82f6' },
+                { label: 'Total Invoices', val: customerDetail.invoices.length, icon: '🧾', color: '#8b5cf6' },
+                { label: 'Total Paid', val: fmtMoney(customerDetail.totalPaid), icon: '✅', color: '#10b981' },
+                { label: 'Outstanding', val: fmtMoney(customerDetail.balance), icon: '⚠️', color: customerDetail.balance > 0 ? '#ef4444' : '#10b981' },
+              ].map(s => (
+                <div key={s.label} style={{ background: '#fff', borderRadius: 12, padding: '1rem 1.25rem', boxShadow: '0 2px 8px rgba(0,0,0,0.07)', border: `2px solid ${s.color}22` }}>
+                  <div style={{ fontSize: '1.4rem' }}>{s.icon}</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 700, color: s.color }}>{s.val}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#777' }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {detailLoading && <div style={{ textAlign: 'center', padding: '2rem', color: '#999' }}>⏳ Loading history…</div>}
+
+          {/* Appointment history */}
+          {!detailLoading && customerDetail && customerDetail.appointments.length > 0 && (
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <h2 style={{ marginBottom: '1rem', fontSize: '1.1rem', color: 'var(--primary)' }}>📋 Appointment History</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {customerDetail.appointments.slice(0, 10).map(apt => (
+                  <div key={apt.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.9rem', background: '#f8fafc', borderRadius: 8, flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                        {apt.requestedDate || apt.date || '—'} {apt.requestedTime ? `at ${apt.requestedTime}` : ''}
+                      </span>
+                      {apt.services && apt.services.length > 0 && (
+                        <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.2rem' }}>
+                          🔧 {Array.isArray(apt.services) ? apt.services.join(', ') : apt.services}
+                        </div>
+                      )}
+                      {apt.address && <div style={{ fontSize: '0.78rem', color: '#888' }}>📍 {apt.address}</div>}
+                    </div>
+                    <span style={{
+                      padding: '0.2rem 0.7rem', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700,
+                      background: `${statusColor[apt.status] || '#94a3b8'}22`,
+                      color: statusColor[apt.status] || '#94a3b8',
+                      textTransform: 'capitalize',
+                    }}>{apt.status || 'pending'}</span>
+                  </div>
+                ))}
+                {customerDetail.appointments.length > 10 && (
+                  <div style={{ textAlign: 'center', color: '#888', fontSize: '0.85rem', paddingTop: '0.5rem' }}>
+                    + {customerDetail.appointments.length - 10} more appointments
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Invoice history */}
+          {!detailLoading && customerDetail && customerDetail.invoices.length > 0 && (
+            <div className="card">
+              <h2 style={{ marginBottom: '1rem', fontSize: '1.1rem', color: 'var(--primary)' }}>💰 Invoice History</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {customerDetail.invoices.slice(0, 10).map(inv => {
+                  const statusColors = { paid: '#10b981', outstanding: '#ef4444', partial: '#f59e0b' };
+                  return (
+                    <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.9rem', background: '#f8fafc', borderRadius: 8, flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Invoice #{inv.invoiceNumber || inv.id.slice(-6).toUpperCase()}</span>
+                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{fmtDate(inv.createdAt)}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 700, fontSize: '1rem' }}>{fmtMoney(inv.total)}</div>
+                        <span style={{
+                          padding: '0.15rem 0.6rem', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700,
+                          background: `${statusColors[inv.status] || '#94a3b8'}22`,
+                          color: statusColors[inv.status] || '#94a3b8',
+                          textTransform: 'capitalize',
+                        }}>{inv.status || 'outstanding'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!detailLoading && customerDetail && customerDetail.appointments.length === 0 && customerDetail.invoices.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: '#888', padding: '2rem' }}>
+              No appointment or invoice history found for this customer yet.
+            </div>
+          )}
+
+          {/* Delete confirm */}
+          {confirmDelete && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+              <div style={{ background: '#fff', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
+                <h3 style={{ marginBottom: '0.5rem' }}>Delete {confirmDelete.name}?</h3>
+                <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                  This removes the customer record only. Appointments and invoices are not affected.
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                  <button className="btn btn-sm btn-outline" onClick={() => setConfirmDelete(null)}>Cancel</button>
+                  <button className="btn btn-sm" style={{ background: '#ef4444', color: '#fff' }} onClick={() => deleteCustomer(confirmDelete)}>🗑️ Delete</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+
+      // ── CUSTOMER LIST ──
+      return (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <h2 style={{ margin: 0, color: 'var(--primary)' }}>👥 Customers ({filtered.length})</h2>
+            <button className="btn btn-primary btn-sm" onClick={openAdd}>➕ Add Customer</button>
+          </div>
+
+          {/* Filters */}
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              type="text" placeholder="🔍 Search name, email, phone…"
+              value={search} onChange={e => setSearch(e.target.value)}
+              style={{ flex: '1', minWidth: 200, padding: '0.6rem 0.9rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '0.95rem' }}
+            />
+            {userProfile?.smsEnabled && (
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                {[['all','All'],['opted_in','SMS On'],['opted_out','SMS Off']].map(([v, l]) => (
+                  <button key={v} onClick={() => setSmsFilter(v)}
+                    className={`btn btn-sm ${smsFilter === v ? 'btn-primary' : 'btn-outline'}`}
+                    style={{ fontSize: '0.8rem' }}>{l}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {loading && <div style={{ textAlign: 'center', padding: '3rem', color: '#999' }}>⏳ Loading customers…</div>}
+
+          {!loading && filtered.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '3rem', color: '#888' }}>
+              {customers.length === 0
+                ? 'No customers yet. They\'ll appear here after booking or you can add them manually.'
+                : 'No customers match your search.'}
+            </div>
+          )}
+
+          {!loading && filtered.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {filtered.map(cust => (
+                <div key={cust.id || cust.email} onClick={() => openDetail(cust)}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1.1rem', background: '#f8fafc', borderRadius: 12, border: '1.5px solid var(--border)', cursor: 'pointer', transition: 'all 0.15s', flexWrap: 'wrap', gap: '0.5rem' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '1.1rem', flexShrink: 0 }}>
+                      {(cust.name || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{cust.name || 'Unknown'}</div>
+                      <div style={{ fontSize: '0.82rem', color: '#666', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        {cust.phone && <span>📞 {cust.phone}</span>}
+                        {cust.email && <span>✉️ {cust.email}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {userProfile?.smsEnabled && (
+                      <span style={{
+                        padding: '0.2rem 0.6rem', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600,
+                        background: cust.smsOptOut ? '#fee2e2' : '#dcfce7',
+                        color: cust.smsOptOut ? '#dc2626' : '#16a34a',
+                      }}>
+                        {cust.smsOptOut ? '🚫 SMS Off' : '✅ SMS On'}
+                      </span>
+                    )}
+                    <div style={{ display: 'flex', gap: '0.4rem' }} onClick={e => e.stopPropagation()}>
+                      <button className="btn btn-sm btn-outline" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}
+                        onClick={() => openEdit(cust)}>✏️</button>
+                      <button className="btn btn-sm btn-outline" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', borderColor: '#ef4444', color: '#ef4444' }}
+                        onClick={() => setConfirmDelete(cust)}>🗑️</button>
+                    </div>
+                    <span style={{ color: '#aaa', fontSize: '1.2rem' }}>›</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Delete confirm modal */}
+          {confirmDelete && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+              <div style={{ background: '#fff', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
+                <h3 style={{ marginBottom: '0.5rem' }}>Delete {confirmDelete.name}?</h3>
+                <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                  This removes the customer record only. Appointments and invoices are not affected.
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                  <button className="btn btn-sm btn-outline" onClick={() => setConfirmDelete(null)}>Cancel</button>
+                  <button className="btn btn-sm" style={{ background: '#ef4444', color: '#fff' }} onClick={() => deleteCustomer(confirmDelete)}>🗑️ Delete</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
