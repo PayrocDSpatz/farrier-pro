@@ -953,6 +953,16 @@
   flex: 1 !important;
 }
 
+/* On short viewports, shift card to top so nothing is clipped */
+@media (max-height: 750px) {
+  .ft-auth-grid {
+    align-items: flex-start !important;
+    padding-top: 20px !important;
+    padding-bottom: 20px !important;
+    min-height: unset !important;
+  }
+}
+
 /* Card: right-aligned glass card */
 .auth-card{
   width: 100% !important;
@@ -970,6 +980,26 @@
   -webkit-backdrop-filter: blur(18px) !important;
   position: relative !important;
   overflow: hidden !important;
+}
+
+/* Reduce card padding on short viewports so all elements (Google sign-in, forgot password) remain visible */
+@media (max-height: 750px) {
+  .auth-card {
+    padding: 16px 20px !important;
+  }
+  .ft-card-logo {
+    width: 70px !important;
+    margin-bottom: 8px !important;
+  }
+  .ft-auth-shell .auth-header {
+    margin-bottom: 10px !important;
+  }
+  .ft-auth-shell .auth-tabs {
+    margin-bottom: 10px !important;
+  }
+  .ft-auth-shell .form-group {
+    margin-bottom: 10px !important;
+  }
 }
 
 .auth-card::before{
