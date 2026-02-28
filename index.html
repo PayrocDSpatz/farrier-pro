@@ -4234,7 +4234,8 @@ function ServicesView({ userId }) {
         zip: '',
         comments: '',
         date: '',
-        time: ''
+        time: '',
+        smsConsent: false
       });
 
       useEffect(() => {
@@ -4282,6 +4283,7 @@ function ServicesView({ userId }) {
               requestedDate: formData.date,
               requestedTime: formData.time,
               status: 'pending',
+              smsConsent: formData.smsConsent,
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
@@ -4565,6 +4567,29 @@ function ServicesView({ userId }) {
                         onChange={(e) => setFormData({...formData, phone: e.target.value})}
                         placeholder="(555) 555-5555"
                       />
+                    </div>
+
+                    <div style={{
+                      background: '#f8faff',
+                      border: '1px solid #dbeafe',
+                      borderRadius: '8px',
+                      padding: '12px 14px',
+                      marginBottom: '0.75rem'
+                    }}>
+                      <label style={{display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', margin: 0}}>
+                        <input
+                          type="checkbox"
+                          checked={formData.smsConsent}
+                          onChange={(e) => setFormData({...formData, smsConsent: e.target.checked})}
+                          style={{marginTop: '3px', flexShrink: 0, width: '16px', height: '16px', cursor: 'pointer'}}
+                        />
+                        <span style={{fontSize: '0.82rem', color: '#444', lineHeight: '1.5'}}>
+                          I agree to receive SMS appointment reminders and service notifications from FarriTech. 
+                          Message and data rates may apply. Up to 3 messages per appointment. 
+                          Reply <strong>STOP</strong> to opt out or <strong>HELP</strong> for help. 
+                          Consent is not required as a condition of booking.
+                        </span>
+                      </label>
                     </div>
                     
                     <div className="form-group">
