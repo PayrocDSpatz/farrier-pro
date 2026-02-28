@@ -724,11 +724,10 @@
       }
 
     /* FarriTech Auth Cinematic */
-   .ft-auth-grid{
+  .ft-auth-grid{
   position: relative;
   min-height: 100vh;
-  background:
-    url('/auth-bg.jpg?v=3') center/cover no-repeat;
+  background: url('/auth-bg.jpg') center/cover no-repeat;
   overflow: hidden;
 }
   /* Lifts the image instead of crushing it */
@@ -927,11 +926,8 @@
   content:"";
   position:absolute;
   inset:0;
-  background:
-    radial-gradient(900px 700px at 75% 30%, rgba(70,160,255,0.18), transparent 60%),
-    radial-gradient(800px 600px at 30% 70%, rgba(30,70,255,0.10), transparent 55%),
-    linear-gradient(120deg, rgba(5,11,24,0.55), rgba(5,11,24,0.35));
   pointer-events:none;
+  background: transparent; /* TEMP: disable overlay */
 }
 
 /* Ensure your children sit above overlays */
@@ -2035,8 +2031,8 @@ const [loading, setLoading] = useState(false);
   setLoading(false);
 };
 
-return (
-        <div className="app-container ft-auth-shell">
+return 
+  (<div className="ft-auth-shell">
           <header className="app-header">
             <div className="header-content">
               <div className="logo">
@@ -2047,16 +2043,7 @@ return (
           </header>
 
           <main className="ft-auth-grid">
-            <section className="ft-auth-hero" aria-hidden="true">
-              <h1>Run your hoof care business <span className="ft-accent">like a pro</span>.</h1>
-              <p>Scheduling. Payments. Clients. All in one place.</p>
-              <div className="ft-hero-bullets">
-                <span className="ft-pill">📅 Schedule</span>
-                <span className="ft-pill">💳 Payments</span>
-                <span className="ft-pill">🐴 Horses</span>
-                <span className="ft-pill">📍 Routes</span>
-              </div>
-            </section>
+           
 
             <div className="auth-container ft-auth-container">
             <div className="auth-card">
