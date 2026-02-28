@@ -708,344 +708,163 @@
         margin-right:10px;
       }
 
-    /* ===== FarriTech Auth Redesign (Blue Split) ===== */
-    .auth-page{
-      min-height:100vh;
-      display:grid;
+    /* FarriTech Auth Cinematic */
+    .ft-auth-shell{
+      position: relative;
+      min-height: 100vh;
+      background: url('/assets/auth/auth-bg.jpg') center/cover no-repeat;
+      overflow: hidden;
+    }
+    .ft-auth-shell::before{
+      content:'';
+      position:absolute; inset:0;
+      background: radial-gradient(900px 700px at 70% 30%, rgba(56,189,248,0.18), transparent 60%),
+                  radial-gradient(800px 600px at 30% 70%, rgba(37,99,235,0.14), transparent 60%),
+                  linear-gradient(90deg, rgba(2,6,23,0.35) 0%, rgba(2,6,23,0.10) 45%, rgba(2,6,23,0.30) 100%);
+      pointer-events:none;
+    }
+    .ft-auth-shell > *{ position: relative; }
+
+    .ft-auth-shell .app-header{
+      background: rgba(2,6,23,0.28);
+      border-bottom: 1px solid rgba(148,163,184,0.18);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .ft-auth-shell .logo{
+      color: rgba(226,232,240,0.95);
+    }
+    .ft-auth-shell .logo-icon{ filter: drop-shadow(0 8px 18px rgba(0,0,0,0.35)); }
+
+    .ft-auth-grid{
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: clamp(22px, 3.5vw, 56px);
+      display: grid;
       grid-template-columns: 1.15fr 0.85fr;
-      background:#060B1A;
+      gap: clamp(22px, 4vw, 72px);
+      align-items: center;
+      min-height: calc(100vh - 88px);
     }
-
-    .auth-hero{
-      position:relative;
-      overflow:hidden;
-      display:flex;
-      align-items:center;
-      padding: clamp(2.25rem, 6vw, 4.5rem);
-      background-image:
-        radial-gradient(900px 600px at 15% 25%, rgba(70,197,255,.22), transparent 60%),
-        radial-gradient(700px 500px at 70% 70%, rgba(38,131,251,.22), transparent 62%),
-        linear-gradient(135deg, rgba(6,11,26,0.92), rgba(6,11,26,0.55)),
-        url("/auth-hero-bg.png");
-      background-size: cover;
-      background-position: center;
+    .ft-auth-hero{
+      color: rgba(226,232,240,0.92);
+      max-width: 620px;
+      text-shadow: 0 10px 28px rgba(0,0,0,0.35);
     }
-
-    .auth-hero::before{
-      content:"";
-      position:absolute;
-      inset:-20%;
-      background-image: url("/favicon.svg");
-      background-repeat:no-repeat;
-      background-position: 55% 45%;
-      background-size: min(860px, 85%);
-      opacity: 0.08;
-      transform: rotate(-6deg);
-      pointer-events:none;
-    }
-
-    .auth-hero::after{
-      content:"";
-      position:absolute;
-      inset:-40% -20% -40% -20%;
-      background:
-        radial-gradient(circle at 65% 55%, rgba(70,197,255,.18), transparent 55%),
-        radial-gradient(circle at 25% 35%, rgba(38,131,251,.18), transparent 55%);
-      opacity: 0.75;
-      pointer-events:none;
-    }
-
-    .auth-hero-content{
-      position:relative;
-      max-width: 560px;
-      color: #EAF2FF;
-      z-index:1;
-    }
-
-    .auth-hero-content h2{
-      font-family: "Outfit", sans-serif;
-      font-weight: 800;
+    .ft-auth-hero h1{
+      font-size: clamp(2.25rem, 4vw, 3.2rem);
+      line-height: 1.05;
       letter-spacing: -0.02em;
-      font-size: clamp(2.1rem, 4vw, 3.25rem);
-      line-height: 1.08;
-      margin: 0 0 1rem 0;
-      text-shadow: 0 10px 30px rgba(0,0,0,.35);
+      margin: 0 0 14px 0;
     }
-
-    .auth-hero-content p{
+    .ft-auth-hero .ft-accent{
+      background: linear-gradient(90deg, #60a5fa, #38bdf8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .ft-auth-hero p{
       margin: 0;
       font-size: 1.05rem;
-      line-height: 1.55;
-      color: rgba(234,242,255,.82);
-    }
-
-    .auth-panel{
-      position:relative;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding: clamp(1.5rem, 4vw, 3rem);
-      background:
-        radial-gradient(800px 520px at 40% 25%, rgba(38,131,251,.22), transparent 60%),
-        radial-gradient(900px 620px at 60% 80%, rgba(70,197,255,.16), transparent 65%),
-        linear-gradient(180deg, #060B1A 0%, #07102A 60%, #060B1A 100%);
-      overflow:hidden;
-    }
-
-    .auth-panel::before{
-      content:"";
-      position:absolute;
-      inset:0;
-      background-image:
-        radial-gradient(circle at 20% 30%, rgba(255,255,255,.06), transparent 35%),
-        radial-gradient(circle at 75% 60%, rgba(255,255,255,.04), transparent 38%);
-      opacity: 0.8;
-      pointer-events:none;
-    }
-
-    /* Override legacy auth layout */
-    .auth-container{
+      color: rgba(226,232,240,0.78);
       max-width: 520px;
-      margin: 0;
-      width: 100%;
-      position: relative;
-      z-index: 1;
+    }
+    .ft-auth-hero .ft-hero-bullets{
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .ft-pill{
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(2,6,23,0.35);
+      border: 1px solid rgba(148,163,184,0.22);
+      color: rgba(226,232,240,0.85);
+      font-size: 0.95rem;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
 
-    .auth-card{
-      background: rgba(8, 18, 48, 0.55);
-      border: 1px solid rgba(70,197,255,0.22);
-      box-shadow: 0 20px 70px rgba(0,0,0,0.55);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      color: #EAF2FF;
+    .ft-auth-container{ max-width: none; margin: 0; }
+    .ft-auth-shell .auth-card{
+      padding: 26px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(2,6,23,0.72), rgba(2,6,23,0.58));
+      border: 1px solid rgba(148,163,184,0.22);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.45);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
     }
-
-    .auth-header h1{ color: #EAF2FF; }
-    .auth-header p{ color: rgba(234,242,255,.78); }
-
-    .brand-lockup{
-      display:flex;
-      justify-content:center;
-      margin-bottom: 1.25rem;
+    .ft-auth-shell .auth-header{ margin-bottom: 18px; }
+    .ft-auth-shell .auth-header h1{
+      color: rgba(226,232,240,0.96);
+      font-size: 2rem;
+      margin-bottom: 6px;
     }
+    .ft-auth-shell .auth-header p{ color: rgba(226,232,240,0.72); }
 
-    .brand-lockup img{
-      width: min(360px, 90%);
+    .ft-auth-logo{
+      width: 220px;
       height: auto;
-      filter: drop-shadow(0 10px 28px rgba(0,0,0,.45));
+      display:block;
+      margin: 0 auto 14px auto;
+      filter: drop-shadow(0 16px 32px rgba(0,0,0,0.35));
     }
 
-    .auth-tabs{
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08);
+    .ft-auth-shell .auth-tabs{
+      background: rgba(2,6,23,0.35);
+      border: 1px solid rgba(148,163,184,0.18);
     }
-
-    .auth-tab{ color: rgba(234,242,255,.85); }
-
-    .auth-tab.active{
-      background: rgba(255,255,255,0.12);
-      color: #EAF2FF;
+    .ft-auth-shell .auth-tab{
+      color: rgba(226,232,240,0.8);
+    }
+    .ft-auth-shell .auth-tab.active{
+      background: rgba(226,232,240,0.10);
+      color: rgba(226,232,240,0.95);
       box-shadow: none;
+      border: 1px solid rgba(56,189,248,0.30);
     }
 
-    .form-group label{ color: rgba(234,242,255,.86); }
-
-    .form-group input,
-    .form-group textarea,
-    .form-group select{
-      background: rgba(255,255,255,0.06);
-      border-color: rgba(255,255,255,0.14);
-      color: #EAF2FF;
+    .ft-auth-shell .form-group label{ color: rgba(226,232,240,0.86); }
+    .ft-auth-shell .form-group input,
+    .ft-auth-shell .form-group textarea,
+    .ft-auth-shell .form-group select{
+      background: rgba(2,6,23,0.50);
+      border: 1px solid rgba(148,163,184,0.22);
+      color: rgba(226,232,240,0.95);
+    }
+    .ft-auth-shell .form-group input::placeholder{ color: rgba(226,232,240,0.42); }
+    .ft-auth-shell .form-group input:focus,
+    .ft-auth-shell .form-group textarea:focus,
+    .ft-auth-shell .form-group select:focus{
+      border-color: rgba(56,189,248,0.55);
+      box-shadow: 0 0 0 3px rgba(56,189,248,0.12);
     }
 
-    .form-group input::placeholder{ color: rgba(234,242,255,.55); }
-
-    .form-group input:focus,
-    .form-group textarea:focus,
-    .form-group select:focus{
-      outline:none;
-      border-color: rgba(70,197,255,0.55);
-      box-shadow: 0 0 0 4px rgba(38,131,251,0.18);
+    .ft-auth-shell .btn-primary{
+      background: linear-gradient(90deg, #1d4ed8, #0ea5e9);
+      border: 1px solid rgba(96,165,250,0.35);
+      box-shadow: 0 18px 46px rgba(14,165,233,0.18);
+    }
+    .ft-auth-shell .btn-primary:hover{
+      transform: translateY(-1px);
+      filter: brightness(1.03);
     }
 
-    .auth-page .btn-primary{
-      background: linear-gradient(90deg, #1E5CFF 0%, #35C9FF 100%);
-      color: #fff;
-      border: none;
-      box-shadow: 0 14px 36px rgba(30,92,255,0.28);
-    }
-
-    .auth-page .btn-primary:hover{
-      background: linear-gradient(90deg, #2B6BFF 0%, #4ED2FF 100%);
-      transform: translateY(-2px);
-    }
-
-    .google-button{
-      background: rgba(255,255,255,0.9);
-      color: #111827;
-      border: 1px solid rgba(255,255,255,0.28);
-    }
-
-    .divider{ color: rgba(234,242,255,.65); }
-
-    .error-message{
-      background: rgba(239, 68, 68, 0.14);
-      border: 1px solid rgba(239, 68, 68, 0.28);
-      color: #FFD2D2;
-    }
-
-    .success-message{
-      background: rgba(34, 197, 94, 0.14);
-      border: 1px solid rgba(34, 197, 94, 0.26);
-      color: #D6FFE3;
+    .ft-auth-shell .error-message,
+    .ft-auth-shell .success-message{
+      background: rgba(2,6,23,0.35);
     }
 
     @media (max-width: 980px){
-      .auth-page{ grid-template-columns: 1fr; }
-      .auth-hero{ min-height: 42vh; }
+      .ft-auth-grid{ grid-template-columns: 1fr; min-height: auto; padding-top: 26px; }
+      .ft-auth-hero{ text-align: center; margin: 0 auto; }
+      .ft-auth-hero p{ margin: 0 auto; }
+      .ft-auth-hero .ft-hero-bullets{ justify-content: center; }
     }
 
-    @media (max-width: 520px){
-      .auth-card{ padding: 1.75rem; }
-    }
-@media (max-width: 520px){
-  .auth-card{ padding: 1.75rem; }
-}
-
-/* PASTE THE NEW CINEMATIC CSS RIGHT HERE */
-
-/* ===== CINEMATIC AUTH BACKGROUND ===== */
-
-.ft-auth-wrap{
-  min-height: 100vh;
-  width: 100%;
-  background:
-    linear-gradient(120deg, rgba(5,11,24,0.65), rgba(5,11,24,0.45)),
-    url("/auth-bg.jpg");
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  position: relative;
-  overflow: hidden;
-  color: white;
-}
-
-.ft-auth-wrap::after{
-  content:"";
-  position:absolute;
-  inset:0;
-  background:
-    radial-gradient(800px 400px at 70% 40%, rgba(42,168,255,0.25), transparent 60%),
-    radial-gradient(600px 400px at 30% 80%, rgba(11,99,255,0.25), transparent 60%);
-  animation: ftGlow 6s ease-in-out infinite alternate;
-  pointer-events:none;
-}
-
-@keyframes ftGlow{
-  0% { opacity: 0.6; }
-  100% { opacity: 1; }
-}
-/* Keep auth content above the animated glow overlay */
-.auth-page.ft-auth-wrap > *{
-  position: relative;
-  z-index: 2;
-}
-.auth-page.ft-auth-wrap::after{
-  pointer-events: none;
-}
- /* ===== FORCE CINEMATIC AUTH MODE (override everything) ===== */
-
-/* force auth-page layout to stop splitting the screen */
-body .auth-page.ft-auth-wrap{
-  display: block !important;
-  background: none !important;
-  min-height: 100vh !important;
-  padding: 0 !important;
-}
-
-/* remove any grid split / columns on auth page */
-body .auth-page.ft-auth-wrap{
-  grid-template-columns: none !important;
-  place-items: unset !important;
-}
-
-/* kill the old hero column + circle graphic */
-body .auth-page.ft-auth-wrap .auth-hero,
-body .auth-page.ft-auth-wrap .auth-hero *,
-body .auth-page.ft-auth-wrap .auth-hero::before,
-body .auth-page.ft-auth-wrap .auth-hero::after{
-  display: none !important;
-  content: none !important;
-}
-
-/* make your auth-card float on the right like the mock */
-body .auth-page.ft-auth-wrap .auth-card{
-  position: absolute !important;
-  top: 50% !important;
-  right: 6% !important;
-  transform: translateY(-50%) !important;
-  max-width: 520px !important;
-  width: min(520px, 92vw) !important;
-  z-index: 5 !important;
-}
-
-/* mobile: center the card */
-@media (max-width: 980px){
-  body .auth-page.ft-auth-wrap .auth-card{
-    position: relative !important;
-    top: auto !important;
-    right: auto !important;
-    transform: none !important;
-    margin: 28px auto !important;
-  }
-}
-/* === FIX POSITIONING + FORCE THE CINEMATIC BG TO SHOW === */
-body .auth-page.ft-auth-wrap{
-  position: relative !important;
-  background:
-    linear-gradient(120deg, rgba(5,11,24,0.65), rgba(5,11,24,0.45)),
-    url("/auth-bg.jpg") !important;
-  background-size: cover !important;
-  background-position: center !important;
-}
-
-/* make sure the glow overlay stays behind the card */
-body .auth-page.ft-auth-wrap::after{
-  z-index: 1 !important;
-}
-
-/* ensure the auth card sits above everything */
-body .auth-page.ft-auth-wrap .auth-card{
-  z-index: 5 !important;
-}
-/* ===== BRIGHTEN CINEMATIC BG (keep contrast, reduce darkness) ===== */
-body .auth-page.ft-auth-wrap{
-  /* lighter overlay + slightly brighter image */
-  background:
-    linear-gradient(120deg, rgba(5,11,24,0.30), rgba(5,11,24,0.18)),
-    url("/auth-bg.jpg") !important;
-  background-size: cover !important;
-  background-position: center !important;
-  filter: brightness(1.08) contrast(1.05) saturate(1.10);
-}
-
-/* soften the glow overlay so it doesn't darken */
-body .auth-page.ft-auth-wrap::after{
-  opacity: 0.55 !important;
-}
-/* Boost the blue energy on the right side (like the screenshot) */
-body .auth-page.ft-auth-wrap::before{
-  content:"";
-  position:absolute;
-  inset:0;
-  background:
-    radial-gradient(900px 520px at 82% 45%, rgba(42,168,255,0.22), transparent 60%),
-    radial-gradient(900px 520px at 70% 80%, rgba(11,99,255,0.18), transparent 62%);
-  pointer-events:none;
-  z-index: 1;
-}
-  </style>
+</style>
 </head>
 <body>
   <div id="root"></div>
@@ -2008,20 +1827,31 @@ const [loading, setLoading] = useState(false);
 };
 
 return (
-<div className="auth-page ft-auth-wrap">    
-  <section className="auth-hero">
-            <div className="auth-hero-content">
-              <h2>Run Your Hoof Care Business Like a Pro.</h2>
-              <p>Scheduling. Payments. Clients.<br />All in one place.</p>
-            </div>
-          </section>
-
-          <section className="auth-panel">
-            <div className="auth-container">
-            <div className="auth-card">
-              <div className="brand-lockup">
-                <img src="new_farritech_logo.png" alt="FarriTech" />
+        <div className="app-container ft-auth-shell">
+          <header className="app-header">
+            <div className="header-content">
+              <div className="logo">
+                <span className="logo-icon">🐴</span>
+                <span>FarriTech</span>
               </div>
+            </div>
+          </header>
+
+          <main className="ft-auth-grid">
+            <section className="ft-auth-hero" aria-hidden="true">
+              <h1>Run your hoof care business <span className="ft-accent">like a pro</span>.</h1>
+              <p>Scheduling. Payments. Clients. All in one place.</p>
+              <div className="ft-hero-bullets">
+                <span className="ft-pill">📅 Schedule</span>
+                <span className="ft-pill">💳 Payments</span>
+                <span className="ft-pill">🐴 Horses</span>
+                <span className="ft-pill">📍 Routes</span>
+              </div>
+            </section>
+
+            <div className="auth-container ft-auth-container">
+            <div className="auth-card">
+              <img className="ft-auth-logo" src="/assets/auth/new_farritech_logo.png" alt="FarriTech" />
               <div className="auth-header">
                 <h1>Welcome Back</h1>
                 <p>Manage your farrier business with ease</p>
@@ -2178,9 +2008,9 @@ return (
 
                 {/* Divider */}
                 <div style={{display: 'flex', alignItems: 'center', margin: '1.5rem 0', gap: '1rem'}}>
-                  <div style={{flex: 1, height: '1px', background: 'rgba(234,242,255,0.18)'}}></div>
-                  <span style={{color: 'rgba(234,242,255,0.65)', fontSize: '0.875rem'}}>OR</span>
-                  <div style={{flex: 1, height: '1px', background: 'rgba(234,242,255,0.18)'}}></div>
+                  <div style={{flex: 1, height: '1px', background: '#e0e0e0'}}></div>
+                  <span style={{color: '#666', fontSize: '0.875rem'}}>OR</span>
+                  <div style={{flex: 1, height: '1px', background: '#e0e0e0'}}></div>
                 </div>
 
                 {/* Google Sign-In Button */}
@@ -2231,7 +2061,7 @@ return (
               </form>
             </div>
           </div>
-          </section>
+          </main>
         </div>
       );
     }
@@ -6584,10 +6414,10 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             <h2 style={{marginBottom: '1.5rem'}}>💳 Pay Invoice</h2>
             
             <div style={{background: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem'}}>
-              <div style={{fontSize: '0.875rem', color: 'rgba(234,242,255,0.65)', marginBottom: '0.5rem'}}>
+              <div style={{fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem'}}>
                 Invoice #{invoice.invoiceNumber} • {invoice.customerName}
               </div>
-              <div style={{fontSize: '0.875rem', color: 'rgba(234,242,255,0.65)'}}>
+              <div style={{fontSize: '0.875rem', color: '#666'}}>
                 Invoice Total: ${invoice.total?.toFixed(2)}
                 {paidSoFar > 0 && <> • Already Paid: ${paidSoFar.toFixed(2)} • <strong>Balance: ${remaining.toFixed(2)}</strong></>}
               </div>
@@ -6622,7 +6452,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                   placeholder="1234 5678 9012 3456"
                   maxLength="19"
                 />
-                <div style={{fontSize: '0.75rem', color: 'rgba(234,242,255,0.65)', marginTop: '0.25rem'}}>
+                <div style={{fontSize: '0.75rem', color: '#666', marginTop: '0.25rem'}}>
                   Test: 4111 1111 1111 1111
                 </div>
               </div>
@@ -6751,10 +6581,10 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             <h2 style={{marginBottom: '1.5rem'}}>💵 Record Manual Payment</h2>
 
             <div style={{background: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem'}}>
-              <div style={{fontSize: '0.875rem', color: 'rgba(234,242,255,0.65)', marginBottom: '0.25rem'}}>
+              <div style={{fontSize: '0.875rem', color: '#666', marginBottom: '0.25rem'}}>
                 Invoice #{invoice.invoiceNumber} • {invoice.customerName}
               </div>
-              <div style={{fontSize: '0.875rem', color: 'rgba(234,242,255,0.65)'}}>
+              <div style={{fontSize: '0.875rem', color: '#666'}}>
                 Invoice Total: ${invoice.total?.toFixed(2)}
                 {paidSoFar > 0 && <> • Already Paid: ${paidSoFar.toFixed(2)} • <strong>Balance: ${remaining.toFixed(2)}</strong></>}
               </div>
@@ -7486,7 +7316,7 @@ useEffect(() => {
               {loading ? <span className="spinner"></span> : '✓ Create Invoice'}
             </button>
 
-            <p style={{fontSize: '0.875rem', color: 'rgba(234,242,255,0.65)', marginTop: '0.5rem', textAlign: 'center'}}>
+            <p style={{fontSize: '0.875rem', color: '#666', marginTop: '0.5rem', textAlign: 'center'}}>
               Customer will use "Pay Now" button to pay with Authorize.Net
             </p>
           </div>
@@ -7773,7 +7603,7 @@ useEffect(() => {
                   {availability[day].enabled && (
                     <>
                       <div>
-                        <label style={{fontSize: '0.875rem', color: 'rgba(234,242,255,0.65)', display: 'block', marginBottom: '0.25rem'}}>
+                        <label style={{fontSize: '0.875rem', color: '#666', display: 'block', marginBottom: '0.25rem'}}>
                           Start Time
                         </label>
                         <input
@@ -7786,7 +7616,7 @@ useEffect(() => {
                       </div>
 
                       <div>
-                        <label style={{fontSize: '0.875rem', color: 'rgba(234,242,255,0.65)', display: 'block', marginBottom: '0.25rem'}}>
+                        <label style={{fontSize: '0.875rem', color: '#666', display: 'block', marginBottom: '0.25rem'}}>
                           End Time
                         </label>
                         <input
@@ -7798,7 +7628,7 @@ useEffect(() => {
                         />
                       </div>
 
-                      <div style={{fontSize: '0.875rem', color: 'rgba(234,242,255,0.65)', textAlign: 'center'}}>
+                      <div style={{fontSize: '0.875rem', color: '#666', textAlign: 'center'}}>
                         {availability[day].start && availability[day].end && (
                           <>
                             {(() => {
