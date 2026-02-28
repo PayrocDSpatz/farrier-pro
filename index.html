@@ -1053,6 +1053,125 @@
   .auth-card{ margin: 0 auto !important; max-width: 420px !important; }
   .ft-auth-hero{ text-align: center; margin: 0 auto; }
 }
+
+/* ================================
+   GLOW EFFECTS
+================================ */
+
+/* Pulsing logo glow */
+@keyframes logoPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(56,189,248,0.6))
+            drop-shadow(0 0 20px rgba(56,189,248,0.35))
+            drop-shadow(0 0 40px rgba(56,189,248,0.15));
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(56,189,248,0.9))
+            drop-shadow(0 0 35px rgba(56,189,248,0.55))
+            drop-shadow(0 0 70px rgba(56,189,248,0.25));
+  }
+}
+
+.ft-auth-shell .logo img {
+  animation: logoPulse 3s ease-in-out infinite !important;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: filter;
+}
+
+/* FarriTech text shimmer */
+@keyframes textShimmer {
+  0%, 100% { text-shadow: 0 0 8px rgba(56,189,248,0.5), 0 0 20px rgba(56,189,248,0.2); }
+  50%       { text-shadow: 0 0 16px rgba(56,189,248,0.9), 0 0 40px rgba(56,189,248,0.4), 0 0 80px rgba(56,189,248,0.15); }
+}
+.ft-auth-shell .logo span[style*="38bdf8"] {
+  animation: textShimmer 3s ease-in-out infinite;
+  display: inline-block;
+}
+
+/* Card animated glowing border */
+@keyframes cardGlow {
+  0%, 100% {
+    box-shadow:
+      0 30px 90px rgba(0,0,0,0.62),
+      0 0 0 1px rgba(255,255,255,0.04) inset,
+      0 0 40px rgba(59,130,246,0.25),
+      0 0 0 1px rgba(56,189,248,0.15);
+  }
+  50% {
+    box-shadow:
+      0 30px 90px rgba(0,0,0,0.62),
+      0 0 0 1px rgba(255,255,255,0.04) inset,
+      0 0 80px rgba(59,130,246,0.45),
+      0 0 0 1px rgba(56,189,248,0.35),
+      0 0 120px rgba(56,189,248,0.12);
+  }
+}
+.ft-auth-shell .auth-card {
+  animation: cardGlow 4s ease-in-out infinite !important;
+}
+
+/* Rotating border sweep on card */
+@keyframes borderSweep {
+  0%   { opacity: 0.3; transform: rotate(0deg); }
+  50%  { opacity: 0.7; }
+  100% { opacity: 0.3; transform: rotate(360deg); }
+}
+.ft-auth-shell .auth-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 23px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(56,189,248,0.6) 60deg,
+    transparent 120deg
+  );
+  animation: borderSweep 4s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 1px;
+}
+
+/* Ambient background breathing glow */
+@keyframes ambientGlow {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+.ft-auth-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 600px 400px at 80% 50%, rgba(56,189,248,0.07), transparent 70%),
+    radial-gradient(ellipse 400px 300px at 15% 80%, rgba(99,102,241,0.06), transparent 70%);
+  animation: ambientGlow 6s ease-in-out infinite;
+}
+
+/* Login button glow on hover */
+.ft-auth-shell .btn-primary {
+  transition: all 0.3s ease !important;
+}
+.ft-auth-shell .btn-primary:hover {
+  box-shadow:
+    0 0 20px rgba(14,165,233,0.6),
+    0 0 60px rgba(14,165,233,0.25),
+    0 18px 46px rgba(14,165,233,0.3) !important;
+  transform: translateY(-2px) !important;
+}
 </style>
 </head>
 <body>
@@ -2020,10 +2139,10 @@ return (
           <header className="app-header">
             <div className="header-content">
               <div className="logo">
-                <img src="/new_farritech_logo.png" alt="FarriTech" style={{height:'72px', width:'auto', filter:'drop-shadow(0 4px 12px rgba(0,0,0,0.4))'}} />
+                <img src="/new_farritech_logo.png" alt="FarriTech" style={{height:'56px', width:'auto', imageRendering:'-webkit-optimize-contrast', WebkitFontSmoothing:'antialiased'}} />
                 <div style={{display:'flex', flexDirection:'column', lineHeight:1.1}}>
-                  <span style={{fontFamily:"'Space Mono',monospace", fontSize:'1.4rem', fontWeight:700, color:'#fff', letterSpacing:'-0.01em'}}><span style={{color:'#fff'}}>Farri</span><span style={{color:'#38bdf8'}}>Tech</span></span>
-                  <span style={{fontSize:'0.6rem', letterSpacing:'0.18em', color:'rgba(226,232,240,0.65)', textTransform:'uppercase', fontFamily:"'Outfit',sans-serif", fontWeight:400}}>Advanced Farrier Solutions</span>
+                  <span style={{fontFamily:"'Space Mono',monospace", fontSize:'1.8rem', fontWeight:700, color:'#fff', letterSpacing:'-0.01em'}}><span style={{color:'#fff'}}>Farri</span><span style={{color:'#38bdf8'}}>Tech</span></span>
+                  <span style={{fontSize:'0.65rem', letterSpacing:'0.18em', color:'rgba(226,232,240,0.65)', textTransform:'uppercase', fontFamily:"'Outfit',sans-serif", fontWeight:400}}>Advanced Farrier Solutions</span>
                 </div>
               </div>
             </div>
