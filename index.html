@@ -9,7 +9,7 @@
   <link rel="shortcut icon" href="/favicon.svg" />
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.9/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
   <!-- Authorize.Net integration via backend functions -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2032,7 +2032,7 @@ const [loading, setLoading] = useState(false);
 };
 
 return (
-  (<div className="ft-auth-shell">
+  <div className="ft-auth-shell">
           <header className="app-header">
             <div className="header-content">
               <div className="logo">
