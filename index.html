@@ -46,6 +46,12 @@
       --border: #DDE3EC;
     }
 
+    html, body, #root {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100vh;
+    }
     body {
       font-family: 'Outfit', sans-serif;
       background: var(--bg);
@@ -727,17 +733,10 @@
   .ft-auth-grid{
   position: relative;
   min-height: 100vh;
-  background: url('/auth-bg.jpg') center/cover no-repeat fixed;
+  width: 100%;
+  background: url('/auth-bg.jpg') center/cover no-repeat;
   overflow: hidden;
 }
-  .ft-auth-shell {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-  .ft-auth-shell > .ft-auth-grid {
-    flex: 1;
-  }
   /* Lifts the image instead of crushing it */
 .ft-auth-shell::before{
   content:"";
@@ -754,11 +753,19 @@
 }
     .ft-auth-shell > *{ position: relative; }
 
+    .ft-auth-shell {
+      width: 100%;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
     .ft-auth-shell .app-header{
       background: rgba(2,6,23,0.28);
       border-bottom: 1px solid rgba(148,163,184,0.18);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
+      width: 100%;
+      box-sizing: border-box;
     }
     .ft-auth-shell .logo{
       color: rgba(226,232,240,0.95);
@@ -766,11 +773,13 @@
     .ft-auth-shell .logo-icon{ filter: drop-shadow(0 8px 18px rgba(0,0,0,0.35)); }
 
     .ft-auth-grid{
+      width: 100%;
       max-width: 100%;
       margin: 0;
-      padding: clamp(22px, 4vw, 72px) clamp(28px, 6vw, 96px);
+      padding: clamp(22px, 4vw, 64px) clamp(32px, 6vw, 100px);
+      box-sizing: border-box;
       display: grid;
-      grid-template-columns: 1.4fr 0.7fr;
+      grid-template-columns: 1.5fr 0.75fr;
       gap: clamp(22px, 4vw, 72px);
       align-items: center;
       min-height: calc(100vh - 88px);
@@ -825,7 +834,7 @@
       -webkit-backdrop-filter: blur(8px);
     }
 
-    .ft-auth-container{ max-width: 480px; margin: 0 0 0 auto; }
+    .ft-auth-container{ max-width: 460px; width: 100%; margin: 0 0 0 auto; }
     .ft-auth-shell .auth-card{
       padding: 26px;
       border-radius: 22px;
