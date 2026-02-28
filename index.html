@@ -46,11 +46,16 @@
       --border: #DDE3EC;
     }
 
-    html, body, #root {
+    html, body {
       margin: 0;
       padding: 0;
       width: 100%;
-      min-height: 100vh;
+      height: 100%;
+      overflow-x: hidden;
+    }
+    #root {
+      width: 100%;
+      height: 100%;
     }
     body {
       font-family: 'Outfit', sans-serif;
@@ -730,37 +735,39 @@
       }
 
     /* FarriTech Auth Cinematic */
+  /* ── FULL-BLEED AUTH SHELL ── */
   .ft-auth-grid{
   position: relative;
-  min-height: 100vh;
-  width: 100%;
-  background: url('/auth-bg.jpg') center/cover no-repeat;
+  /* background moved to ft-auth-shell */
   overflow: hidden;
 }
+
+/* NEW: shell is the full-page background */
+.ft-auth-shell {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: url('/auth-bg.jpg') center/cover no-repeat;
+  overflow-y: auto;
+}
   /* Lifts the image instead of crushing it */
-.ft-auth-shell::before{
+/* Overlay gradient on the grid area */
+.ft-auth-grid::before{
   content:"";
   position:absolute;
   inset:0;
-
-  /* brighter + cleaner, less muddy */
   background:
     radial-gradient(1200px 800px at 78% 32%, rgba(80,170,255,0.20), transparent 62%),
     radial-gradient(900px 650px at 30% 78%, rgba(60,120,255,0.12), transparent 60%),
     linear-gradient(120deg, rgba(2,6,16,0.35), rgba(2,6,16,0.18));
-
   pointer-events:none;
 }
     .ft-auth-shell > *{ position: relative; }
 
-    .ft-auth-shell {
-      width: 100%;
-      min-height: 100vh;
-      margin: 0;
-      padding: 0;
-    }
+    /* Header floats over the background */
     .ft-auth-shell .app-header{
-      background: rgba(2,6,23,0.28);
+      background: rgba(2,6,23,0.55);
       border-bottom: 1px solid rgba(148,163,184,0.18);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
@@ -772,14 +779,13 @@
     }
     .ft-auth-shell .logo-icon{ filter: drop-shadow(0 8px 18px rgba(0,0,0,0.35)); }
 
+    /* Grid fills remaining screen height */
     .ft-auth-grid{
       width: 100%;
-      max-width: 100%;
-      margin: 0;
-      padding: clamp(22px, 4vw, 64px) clamp(32px, 6vw, 100px);
       box-sizing: border-box;
+      padding: clamp(22px, 4vw, 64px) clamp(40px, 7vw, 110px);
       display: grid;
-      grid-template-columns: 1.5fr 0.75fr;
+      grid-template-columns: 1.5fr 0.8fr;
       gap: clamp(22px, 4vw, 72px);
       align-items: center;
       min-height: calc(100vh - 88px);
@@ -2053,14 +2059,21 @@ return (
           <header className="app-header">
             <div className="header-content">
               <div className="logo">
-                <span className="logo-icon">🐴</span>
-                <span>FarriTech</span>
+                <img src="/new_farritech_logo.png" alt="FarriTech" style={{height:'52px', width:'auto', filter:'drop-shadow(0 4px 12px rgba(0,0,0,0.4))'}} />
+                <div style={{display:'flex', flexDirection:'column', lineHeight:1.1}}>
+                  <span style={{fontFamily:"'Space Mono',monospace", fontSize:'1.4rem', fontWeight:700, color:'#fff', letterSpacing:'-0.01em'}}><span style={{color:'#fff'}}>Farri</span><span style={{color:'#38bdf8'}}>Tech</span></span>
+                  <span style={{fontSize:'0.6rem', letterSpacing:'0.18em', color:'rgba(226,232,240,0.65)', textTransform:'uppercase', fontFamily:"'Outfit',sans-serif", fontWeight:400}}>Advanced Farrier Solutions</span>
+                </div>
               </div>
             </div>
           </header>
 
           <main className="ft-auth-grid">
-           
+            {/* Hero text — left column */}
+            <div className="ft-auth-hero">
+              <h1>Run Your Hoof Care<br/>Business <span className="ft-accent">Like a Pro.</span></h1>
+              <p>Scheduling. Payments. Clients.<br/>All in one place.</p>
+            </div>
 
             <div className="auth-container ft-auth-container">
             <div className="auth-card">
