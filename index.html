@@ -5881,10 +5881,13 @@ function CalendarView({ userId }) {
 
         return appointments.filter(apt => {
           // Status filters
-          if (appointmentFilter === 'pending' && apt.status !== 'pending') return false;
-          if (appointmentFilter === 'confirmed' && apt.status !== 'confirmed' && apt.status !== 'confirmed_by_customer') return false;
-          if (appointmentFilter === 'cancelled' && apt.status === 'cancelled') return true;
-          if (appointmentFilter === 'invoiced' && !apt.invoiced) return false;
+          if (appointmentFilter === 'pending') return apt.status === 'pending';
+          if (appointmentFilter === 'confirmed') return apt.status === 'confirmed' || apt.status === 'confirmed_by_customer';
+          if (appointmentFilter === 'cancelled') return apt.status === 'cancelled';
+          if (appointmentFilter === 'invoiced') return !!apt.invoiced;
+
+          // 'all' and date filters: hide cancelled by default
+          if (apt.status === 'cancelled') return false;
 
           // Date filters - use requestedDate (appointment date)
           if (!apt.requestedDate) return true;
@@ -6101,18 +6104,18 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             }
           }
           
-          // If cancelling, remove from Google Calendar
+          // If cancelling, remove from Google Calendar (only if connected)
           if (newStatus === 'cancelled') {
-            console.log('🔴 Status is cancelled, removing from calendar...');
-            
-            if (appointment) {
+            if (appointment && userProfile?.googleCalendarConnected && appointment.googleEventId) {
+              console.log('🔴 Status is cancelled, removing from calendar...');
               const deleted = await deleteCalendarEvent(appointment, userProfile);
               if (deleted) {
                 alert('✓ Appointment cancelled and removed from your Google Calendar!');
               } else {
-                alert('⚠️ Appointment cancelled in app, but may still be in Google Calendar. You may need to remove it manually.');
+                alert('⚠️ Appointment cancelled, but could not remove from Google Calendar. Please remove it manually.');
               }
             }
+            // No alert needed if calendar isn't connected — cancel is silent/fast
           }
           
           loadAppointments();
@@ -6360,7 +6363,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       {apt.status !== 'cancelled' && (
                         <button 
                           className="btn btn-sm btn-outline"
-                          onClick={() => updateStatus(apt.id, 'cancelled')}
+                          onClick={() => { if (window.confirm(`Cancel appointment for ${apt.customerName}? This cannot be undone.`)) updateStatus(apt.id, 'cancelled'); }}
                         >
                           ✕ Cancel
                         </button>
