@@ -1221,7 +1221,7 @@
     const { useState, useEffect } = React;
 
 
-      const BUILD_VERSION = "Ver 3.0";
+      const BUILD_VERSION = "Ver 3.1";
 ("FarriTech build:", BUILD_VERSION);
 
 /**********************
@@ -5007,8 +5007,35 @@ function ServicesView({ userId }) {
               // Don't fail the booking if customer save fails
             }
 
-            // If Google Calendar is connected, create event
-            // (This would be done server-side in production)
+            // Send booking notification emails (farrier + customer)
+            try {
+              await fetch('/api/send-booking-emails', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  // Farrier
+                  farrierEmail: farrierInfo?.email || '',
+                  farrierBusinessName: farrierInfo?.businessName || '',
+                  // Customer / booking
+                  customerName: formData.name,
+                  farmName: formData.farmName,
+                  customerEmail: formData.email,
+                  customerPhone: formData.phone,
+                  services: formData.services,
+                  numberOfHorses: formData.numberOfHorses,
+                  address: formData.address,
+                  city: formData.city,
+                  state: formData.state,
+                  zip: formData.zip,
+                  requestedDate: formData.date,
+                  requestedTime: formData.time,
+                  comments: formData.comments,
+                })
+              });
+              console.log('✅ Booking emails sent');
+            } catch (emailErr) {
+              console.warn('⚠️ Booking emails failed (non-blocking):', emailErr);
+            }
           }
           
           setStep('success');
