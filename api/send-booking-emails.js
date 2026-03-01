@@ -113,7 +113,7 @@ export default async function handler(req, res) {
   </div>
 
   <div style="background:#f9fafb;padding:20px 30px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;text-align:center;">
-    <p style="color:#9ca3af;font-size:12px;margin:0;">© 2026 FarriTech · <a href="https://farrier-pro.vercel.app" style="color:#6b7280;">farrier-pro.vercel.app</a></p>
+    <p style="color:#9ca3af;font-size:12px;margin:0;">      <p style="color:#9ca3af;font-size:12px;margin:0;">Powered by <a href="https://www.farritech.com" style="color:#6b7280;text-decoration:none;">FarriTech</a> &nbsp;·&nbsp; <a href="https://www.farritech.com" style="color:#9ca3af;text-decoration:none;">www.farritech.com</a></p></p>
   </div>
 </body>
 </html>`;
@@ -166,7 +166,7 @@ export default async function handler(req, res) {
   </div>
 
   <div style="background:#f9fafb;padding:20px 30px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;text-align:center;">
-    <p style="color:#9ca3af;font-size:12px;margin:0;">© 2026 FarriTech · Powered by FarriTech Advanced Farrier Solutions</p>
+    <p style="color:#9ca3af;font-size:12px;margin:0;">      <p style="color:#9ca3af;font-size:12px;margin:0;">Powered by <a href="https://www.farritech.com" style="color:#6b7280;text-decoration:none;">FarriTech</a> &nbsp;·&nbsp; <a href="https://www.farritech.com" style="color:#9ca3af;text-decoration:none;">www.farritech.com</a></p></p>
   </div>
 </body>
 </html>`;
