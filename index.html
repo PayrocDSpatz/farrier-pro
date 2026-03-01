@@ -3000,9 +3000,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const [editingCustomer, setEditingCustomer] = useState(null);
       const [saving, setSaving] = useState(false);
       const [confirmDelete, setConfirmDelete] = useState(null);
+      const [showNewAppt, setShowNewAppt] = useState(false);
 
       // Form state
       const [formName, setFormName] = useState('');
+      const [formFarmName, setFormFarmName] = useState('');
       const [formEmail, setFormEmail] = useState('');
       const [formPhone, setFormPhone] = useState('');
       const [formAddress, setFormAddress] = useState('');
@@ -3071,7 +3073,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
       const openAdd = () => {
         setEditingCustomer(null);
-        setFormName(''); setFormEmail(''); setFormPhone('');
+        setFormName(''); setFormFarmName(''); setFormEmail(''); setFormPhone('');
         setFormAddress(''); setFormNotes('');
         setShowAddEdit(true);
       };
@@ -3079,6 +3081,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const openEdit = (cust) => {
         setEditingCustomer(cust);
         setFormName(cust.name || '');
+        setFormFarmName(cust.farmName || '');
         setFormEmail(cust.email || '');
         setFormPhone(cust.phone || '');
         setFormAddress(cust.address || '');
@@ -3093,6 +3096,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           const payload = {
             farrierId: userId,
             name: formName.trim(),
+            farmName: formFarmName.trim(),
             email: formEmail.trim(),
             phone: formPhone.trim(),
             address: formAddress.trim(),
@@ -3148,6 +3152,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         const q = search.toLowerCase();
         const matchSearch = !q ||
           (c.name || '').toLowerCase().includes(q) ||
+          (c.farmName || '').toLowerCase().includes(q) ||
           (c.email || '').toLowerCase().includes(q) ||
           (c.phone || '').includes(q);
         const matchSms = smsFilter === 'all' ||
@@ -3175,6 +3180,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           </div>
           {[
             { label: 'Full Name *', val: formName, set: setFormName, type: 'text', ph: 'Jane Smith' },
+            { label: 'Farm / Business Name', val: formFarmName, set: setFormFarmName, type: 'text', ph: 'Sunny Acres Farm' },
             { label: 'Email', val: formEmail, set: setFormEmail, type: 'email', ph: 'jane@example.com' },
             { label: 'Phone', val: formPhone, set: setFormPhone, type: 'tel', ph: '(555) 555-5555' },
             { label: 'Address', val: formAddress, set: setFormAddress, type: 'text', ph: '123 Main St, City, FL 12345' },
@@ -3215,6 +3221,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 <h2 style={{ margin: '0 0 0.25rem', color: 'var(--primary)', fontSize: '1.6rem' }}>
                   👤 {selectedCustomer.name}
                 </h2>
+                {selectedCustomer.farmName && (
+                  <div style={{ fontSize: '1rem', fontWeight: 600, color: '#555', marginBottom: '0.25rem' }}>
+                    🏠 {selectedCustomer.farmName}
+                  </div>
+                )}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', color: '#555', fontSize: '0.95rem' }}>
                   {selectedCustomer.phone && <span>📞 {selectedCustomer.phone}</span>}
                   {selectedCustomer.email && <span>✉️ {selectedCustomer.email}</span>}
@@ -3237,6 +3248,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button className="btn btn-sm btn-primary" onClick={() => setShowNewAppt(true)}>📋 Add Appointment</button>
                 <button className="btn btn-sm btn-outline" onClick={() => openEdit(selectedCustomer)}>✏️ Edit</button>
                 {userProfile?.smsEnabled && (
                   <button className="btn btn-sm btn-outline" onClick={() => toggleSmsOptOut(selectedCustomer)}
@@ -3355,6 +3367,20 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               </div>
             </div>
           )}
+
+          {/* New Appointment Modal */}
+          {showNewAppt && (
+            <CreateAppointmentModal
+              customer={selectedCustomer}
+              userId={userId}
+              userProfile={userProfile}
+              onClose={() => setShowNewAppt(false)}
+              onSaved={() => {
+                setShowNewAppt(false);
+                openDetail(selectedCustomer); // refresh detail
+              }}
+            />
+          )}
         </div>
       );
 
@@ -3407,7 +3433,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       {(cust.name || '?').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{cust.name || 'Unknown'}</div>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{cust.name || 'Unknown'}{cust.farmName ? ` — ${cust.farmName}` : ''}</div>
                       <div style={{ fontSize: '0.82rem', color: '#666', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                         {cust.phone && <span>📞 {cust.phone}</span>}
                         {cust.email && <span>✉️ {cust.email}</span>}
@@ -4723,6 +4749,7 @@ function ServicesView({ userId }) {
       const [loading, setLoading] = useState(true);
       const [formData, setFormData] = useState({
         name: '',
+        farmName: '',
         phone: '',
         email: '',
         services: [], // Multiple services
@@ -4770,6 +4797,7 @@ function ServicesView({ userId }) {
             await db.collection('appointments').add({
               farrierId: farrierId,
               customerName: formData.name,
+              farmName: formData.farmName,
               phone: formData.phone,
               email: formData.email,
               services: formData.services,
@@ -4786,33 +4814,51 @@ function ServicesView({ userId }) {
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            // Auto-create customer account
+            // Auto-create or update customer record
             try {
-              // Check if customer account already exists
-              const existingCustomer = await db.collection('customers')
-                .where('email', '==', formData.email)
-                .limit(1)
-                .get();
+              const fullAddress = [formData.address, formData.city, formData.state, formData.zip]
+                .filter(Boolean).join(', ').trim();
 
-              if (existingCustomer.empty) {
-                // Create new customer profile (without Firebase Auth for now)
-                // We'll let them sign up via portal or Google when they need to pay
+              const customerPayload = {
+                name: formData.name,
+                farmName: formData.farmName,
+                email: formData.email,
+                phone: formData.phone,
+                address: fullAddress,
+                farrierId: farrierId,
+                smsOptOut: formData.smsConsent ? false : true,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              };
+
+              // Search by email first, fall back to phone
+              let existingSnap = formData.email
+                ? await db.collection('customers')
+                    .where('farrierId', '==', farrierId)
+                    .where('email', '==', formData.email)
+                    .limit(1).get()
+                : { empty: true };
+
+              if (existingSnap.empty && formData.phone) {
+                existingSnap = await db.collection('customers')
+                  .where('farrierId', '==', farrierId)
+                  .where('phone', '==', formData.phone)
+                  .limit(1).get();
+              }
+
+              if (existingSnap.empty) {
                 await db.collection('customers').add({
-                  name: formData.name,
-                  email: formData.email,
-                  phone: formData.phone,
-                  address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zip}`.trim(),
-                  farrierId: farrierId,
+                  ...customerPayload,
                   createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                  source: 'qr_booking'
+                  source: 'qr_booking',
                 });
                 console.log('✅ Customer profile created');
               } else {
-                console.log('✅ Customer already exists');
+                await existingSnap.docs[0].ref.update(customerPayload);
+                console.log('✅ Customer profile updated');
               }
             } catch (error) {
-              console.error('Note: Could not create customer profile:', error);
-              // Don't fail the booking if customer creation fails
+              console.error('Note: Could not save customer profile:', error);
+              // Don't fail the booking if customer save fails
             }
 
             // If Google Calendar is connected, create event
@@ -5019,6 +5065,7 @@ function ServicesView({ userId }) {
                     setStep('landing');
                     setFormData({
                       name: '',
+                      farmName: '',
                       phone: '',
                       email: '',
                       services: [],
@@ -5054,6 +5101,16 @@ function ServicesView({ userId }) {
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
                         placeholder="Your name"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Farm / Business Name</label>
+                      <input 
+                        type="text" 
+                        value={formData.farmName}
+                        onChange={(e) => setFormData({...formData, farmName: e.target.value})}
+                        placeholder="Sunny Acres Farm (optional)"
                       />
                     </div>
                     
@@ -6085,7 +6142,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 {sortedAppointments.map(apt => (
                   <div key={apt.id} className="appointment-item">
                     <div className="appointment-info">
-                      <div className="appointment-customer">{apt.customerName}</div>
+                      <div className="appointment-customer">{apt.customerName}{apt.farmName ? ` — ${apt.farmName}` : ''}</div>
                       <div className="appointment-details">
                         📞 {apt.phone} {apt.email && `• ✉️ ${apt.email}`}
                         {userProfile?.smsEnabled && apt.phone && (() => {
@@ -6159,27 +6216,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                           📱 Send Reminder
                         </button>
                       )}
-                      {userProfile?.smsEnabled && apt.phone && (
-                        <button
-                          className="btn btn-sm btn-outline"
-                          style={{fontSize:'0.75rem'}}
-                          onClick={async () => {
-                            if (!db) return;
-                            const phone = apt.phone.replace(/\D/g,'');
-                            const snap = await db.collection('customers').where('phone','==',phone).where('farrierId','==',userId).get();
-                            if (snap.empty) {
-                              alert('Customer record not found.');
-                              return;
-                            }
-                            const doc = snap.docs[0];
-                            const current = doc.data().smsOptOut || false;
-                            await doc.ref.update({ smsOptOut: !current });
-                            alert(!current ? `🚫 SMS disabled for ${apt.customerName}` : `✅ SMS re-enabled for ${apt.customerName}`);
-                          }}
-                        >
-                          {apt.smsOptOut ? '✅ SMS On' : '🚫 SMS Off'}
-                        </button>
-                      )}
+
                       {apt.status !== 'cancelled' && (
                         <button 
                           className="btn btn-sm btn-outline"
@@ -6215,6 +6252,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             <EditAppointmentModal 
               appointment={editingAppointment}
               userProfile={userProfile}
+              userId={userId}
               onClose={() => {
                 setShowEditModal(false);
                 setEditingAppointment(null);
@@ -6230,8 +6268,187 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       );
     }
 
-    function EditAppointmentModal({ appointment, userProfile, onClose, onSaved }) {
+    function CreateAppointmentModal({ customer, userId, userProfile, onClose, onSaved }) {
+      const [date, setDate] = useState('');
+      const [time, setTime] = useState('');
+      const [farmName, setFarmName] = useState(customer.farmName || '');
+      const [numberOfHorses, setNumberOfHorses] = useState('1');
+      const [services, setServices] = useState([]);
+      const [address, setAddress] = useState(customer.address || '');
+      const [comments, setComments] = useState('');
+      const [saving, setSaving] = useState(false);
+      const [sendConfirmation, setSendConfirmation] = useState(false);
+
+      const smsAvailable = userProfile?.smsEnabled && customer.phone && !customer.smsOptOut;
+
+      const availableServices = [
+        'Trim All Four', 'Reset All Four', 'Hot Shoeing All Four',
+        'Dressage Shoes', 'Corrective Shoeing', 'Studs Installation',
+        'Show Prep', 'Emergency Call'
+      ];
+
+      const fmtTime = (t) => {
+        if (!t) return '';
+        const [h, m] = t.split(':').map(Number);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${ampm}`;
+      };
+
+      const handleSave = async () => {
+        if (!date || !time) return alert('Date and Time are required.');
+        setSaving(true);
+        try {
+          await db.collection('appointments').add({
+            farrierId: userId,
+            customerName: customer.name,
+            farmName: farmName || customer.farmName || '',
+            email: customer.email || '',
+            phone: customer.phone || '',
+            address: address || '',
+            services,
+            numberOfHorses,
+            comments,
+            requestedDate: date,
+            requestedTime: time,
+            status: 'confirmed',
+            source: 'farrier_created',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+
+          if (sendConfirmation && smsAvailable) {
+            try {
+              const bizName = userProfile?.businessName || 'Your Farrier';
+              const serviceList = services.length > 0 ? services.join(', ') : 'your appointment';
+              const msg = `Hi ${customer.name}, your appointment with ${bizName} is confirmed for ${date} at ${fmtTime(time)} for ${serviceList}. Reply STOP to opt out.`;
+              await fetch('/api/send-sms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: customer.phone, body: msg })
+              });
+            } catch (e) { console.error('SMS error:', e); }
+          }
+
+          onSaved();
+        } catch (e) {
+          alert('Error creating appointment: ' + e.message);
+        }
+        setSaving(false);
+      };
+
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 580, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            {/* Header */}
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '2px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+              <h2 style={{ margin: 0, color: 'var(--primary)', fontSize: '1.2rem' }}>📋 New Appointment</h2>
+              <button className="btn btn-sm btn-outline" onClick={onClose} style={{ padding: '0.3rem 0.7rem' }}>✕</button>
+            </div>
+
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+              {/* Customer banner */}
+              <div style={{ padding: '0.9rem 1.1rem', background: '#f0f9ff', borderRadius: 10, border: '1.5px solid #bae6fd' }}>
+                <div style={{ fontWeight: 700, color: '#0369a1' }}>👤 {customer.name}{customer.farmName ? ` — ${customer.farmName}` : ''}</div>
+                <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  {customer.phone && <span>📞 {customer.phone}</span>}
+                  {customer.email && <span>✉️ {customer.email}</span>}
+                </div>
+              </div>
+
+              {/* Farm/Business override */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Farm / Business Name</label>
+                <input type="text" value={farmName} onChange={e => setFarmName(e.target.value)}
+                  placeholder="Sunny Acres Farm (optional)"
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* Date & Time */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label>Date *</label>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label>Time *</label>
+                  <input type="time" value={time} onChange={e => setTime(e.target.value)}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+
+              {/* Horses */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Number of Horses</label>
+                <input type="number" value={numberOfHorses} min="1" onChange={e => setNumberOfHorses(e.target.value)}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* Services */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Services</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: '0.4rem' }}>
+                  {availableServices.map(s => (
+                    <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.7rem', border: '1.5px solid var(--border)', borderRadius: 8, cursor: 'pointer', background: services.includes(s) ? '#dcfce7' : '#fff', fontSize: '0.9rem', fontWeight: services.includes(s) ? 600 : 400 }}>
+                      <input type="checkbox" checked={services.includes(s)}
+                        onChange={() => setServices(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
+                        style={{ cursor: 'pointer' }} />
+                      {s}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Address */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Address</label>
+                <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Service location"
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* Notes */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Notes</label>
+                <textarea value={comments} onChange={e => setComments(e.target.value)}
+                  placeholder="Gate codes, special instructions…" rows={3}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', resize: 'vertical', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* SMS confirmation */}
+              {userProfile?.smsEnabled && customer.phone && (
+                <div style={{ padding: '1rem', borderRadius: 10, border: `2px solid ${smsAvailable ? '#dcfce7' : '#fee2e2'}`, background: smsAvailable ? '#f0fdf4' : '#fff5f5' }}>
+                  {smsAvailable ? (
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={sendConfirmation} onChange={e => setSendConfirmation(e.target.checked)}
+                        style={{ marginTop: 2, width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#16a34a', fontSize: '0.95rem' }}>📱 Send confirmation SMS</div>
+                        <div style={{ fontSize: '0.82rem', color: '#555', marginTop: '0.2rem' }}>Text {customer.phone} with the appointment details.</div>
+                      </div>
+                    </label>
+                  ) : (
+                    <div style={{ color: '#dc2626', fontSize: '0.88rem', fontWeight: 600 }}>🚫 Customer has opted out of SMS.</div>
+                  )}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <button className="btn btn-outline" onClick={onClose} style={{ flex: 1 }} disabled={saving}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleSave} style={{ flex: 2 }} disabled={saving}>
+                  {saving ? '⏳ Saving…' : (sendConfirmation && smsAvailable ? '✅ Create & Send SMS' : '✅ Create Appointment')}
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function EditAppointmentModal({ appointment, userProfile, userId, onClose, onSaved }) {
       const [phone, setPhone] = useState(appointment.phone || '');
+      const [farmName, setFarmName] = useState(appointment.farmName || '');
       const [date, setDate] = useState(appointment.requestedDate || '');
       const [time, setTime] = useState(appointment.requestedTime || '');
       const [numberOfHorses, setNumberOfHorses] = useState(appointment.numberOfHorses || '');
@@ -6242,6 +6459,36 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [zip, setZip] = useState(appointment.zip || '');
       const [comments, setComments] = useState(appointment.comments || '');
       const [saving, setSaving] = useState(false);
+      const [sendNotification, setSendNotification] = useState(false);
+      const [customerSmsOptOut, setCustomerSmsOptOut] = useState(false);
+
+      // Check customer SMS opt-out status on mount
+      useEffect(() => {
+        const checkSmsStatus = async () => {
+          if (!db || !appointment.phone || !userId) return;
+          try {
+            const cleanPhone = appointment.phone.replace(/\D/g, '');
+            const snap = await db.collection('customers')
+              .where('farrierId', '==', userId)
+              .where('phone', '==', cleanPhone)
+              .limit(1).get();
+            if (!snap.empty) {
+              setCustomerSmsOptOut(snap.docs[0].data().smsOptOut || false);
+            }
+          } catch (e) { /* silently ignore */ }
+        };
+        checkSmsStatus();
+      }, []);
+
+      const smsAvailable = userProfile?.smsEnabled && appointment.phone && !customerSmsOptOut;
+
+      const fmtTime = (t) => {
+        if (!t) return '';
+        const [h, m] = t.split(':').map(Number);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+      };
 
       const availableServices = [
         'Trim All Four',
@@ -6329,6 +6576,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         try {
           const updatedData = {
             phone,
+            farmName: farmName || '',
             requestedDate: date,
             requestedTime: time,
             numberOfHorses: numberOfHorses || '',
@@ -6352,10 +6600,32 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             customerName: appointment.customerName
           });
 
+          // Send SMS notification if requested
+          if (sendNotification && smsAvailable) {
+            try {
+              const bizName = userProfile?.businessName || 'Your Farrier';
+              const serviceList = services.length > 0 ? services.join(', ') : 'your appointment';
+              const msg = `Hi ${appointment.customerName}, your appointment with ${bizName} has been updated to ${date} at ${fmtTime(time)} for ${serviceList}. Reply STOP to opt out.`;
+              const res = await fetch('/api/send-sms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: phone, body: msg })
+              });
+              const data = await res.json();
+              if (data.success) {
+                console.log('✅ SMS notification sent');
+              } else {
+                console.warn('⚠️ SMS notification failed:', data);
+              }
+            } catch (smsErr) {
+              console.error('SMS send error:', smsErr);
+            }
+          }
+
           if (calendarUpdated) {
-            alert('✅ Appointment updated successfully and synced to Google Calendar!');
+            alert(`✅ Appointment updated!${sendNotification && smsAvailable ? ' SMS notification sent.' : ''}`);
           } else {
-            alert('⚠️ Appointment updated but failed to sync to Google Calendar. You may need to update it manually.');
+            alert(`⚠️ Appointment updated but failed to sync to Google Calendar.${sendNotification && smsAvailable ? ' SMS notification sent.' : ''}`);
           }
 
           onSaved();
@@ -6377,8 +6647,18 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
             <div style={{padding: '1.5rem', maxHeight: '70vh', overflowY: 'auto'}}>
               <div style={{marginBottom: '1rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px'}}>
-                <div style={{fontWeight: '600', color: '#46C5FF'}}>Customer: {appointment.customerName}</div>
+                <div style={{fontWeight: '600', color: '#46C5FF'}}>Customer: {appointment.customerName}{appointment.farmName ? ` — ${appointment.farmName}` : ''}</div>
                 <div style={{fontSize: '0.875rem', color: '#64748b'}}>Email: {appointment.email || 'Not provided'}</div>
+              </div>
+
+              <div className="form-group">
+                <label>Farm / Business Name</label>
+                <input
+                  type="text"
+                  value={farmName}
+                  onChange={(e) => setFarmName(e.target.value)}
+                  placeholder="Sunny Acres Farm (optional)"
+                />
               </div>
 
               <div className="form-group">
@@ -6507,7 +6787,41 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 />
               </div>
 
-              <div style={{display: 'flex', gap: '1rem', marginTop: '2rem'}}>
+              {/* SMS Notification checkbox */}
+              {userProfile?.smsEnabled && appointment.phone && (
+                <div style={{
+                  marginTop: '1.25rem',
+                  padding: '1rem',
+                  borderRadius: '10px',
+                  border: `2px solid ${smsAvailable ? '#dcfce7' : '#fee2e2'}`,
+                  background: smsAvailable ? '#f0fdf4' : '#fff5f5',
+                }}>
+                  {smsAvailable ? (
+                    <label style={{display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer'}}>
+                      <input
+                        type="checkbox"
+                        checked={sendNotification}
+                        onChange={e => setSendNotification(e.target.checked)}
+                        style={{marginTop: '2px', width: 18, height: 18, cursor: 'pointer', flexShrink: 0}}
+                      />
+                      <div>
+                        <div style={{fontWeight: 600, color: '#16a34a', fontSize: '0.95rem'}}>
+                          📱 Notify customer via SMS
+                        </div>
+                        <div style={{fontSize: '0.82rem', color: '#555', marginTop: '0.2rem'}}>
+                          Sends a text to {appointment.phone} with the updated date &amp; time.
+                        </div>
+                      </div>
+                    </label>
+                  ) : (
+                    <div style={{display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#dc2626', fontSize: '0.88rem', fontWeight: 600}}>
+                      🚫 SMS notifications unavailable — customer has opted out.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{display: 'flex', gap: '1rem', marginTop: '1.25rem'}}>
                 <button 
                   className="btn btn-outline"
                   onClick={onClose}
@@ -6522,7 +6836,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                   style={{flex: 1}}
                   disabled={saving}
                 >
-                  {saving ? 'Saving...' : '💾 Save Changes'}
+                  {saving ? 'Saving...' : (sendNotification && smsAvailable ? '💾 Save & Send SMS' : '💾 Save Changes')}
                 </button>
               </div>
             </div>
