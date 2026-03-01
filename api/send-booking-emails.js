@@ -6,14 +6,14 @@
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM = 'FarriTech <welcome@contact.dasdigitalai.com>';
 
-const sendEmail = async ({ to, subject, html }) => {
+const sendEmail = async ({ to, subject, html, replyTo }) => {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${RESEND_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: FROM, to: Array.isArray(to) ? to : [to], subject, html }),
+    body: JSON.stringify({ from: FROM, to: Array.isArray(to) ? to : [to], subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Resend API error');
@@ -123,6 +123,7 @@ export default async function handler(req, res) {
         to: [farrierEmail],
         subject: `🐴 New Booking Request from ${customerName || 'a customer'} — ${displayDate}`,
         html: farrierHtml,
+        replyTo: customerEmail || undefined,  // Reply goes to customer
       });
       console.log('✅ Farrier notification email sent to', farrierEmail);
     } catch(e) {
@@ -175,6 +176,7 @@ export default async function handler(req, res) {
           to: [customerEmail],
           subject: `✅ Booking Request Received — ${bizName}`,
           html: customerHtml,
+          replyTo: farrierEmail || undefined,  // Reply goes to farrier
         });
         console.log('✅ Customer confirmation email sent to', customerEmail);
       } catch(e) {
