@@ -49,6 +49,7 @@ export default async function handler(req, res) {
       requestedDate,
       requestedTime,
       services,
+      bookingUrl,
     } = req.body || {};
 
     if (!customerEmail) return res.status(400).json({ ok: false, error: 'Missing customerEmail' });
@@ -106,9 +107,17 @@ export default async function handler(req, res) {
       We apologize for any inconvenience. Please contact us to reschedule at your earliest convenience.
     </p>
 
+    <!-- Reschedule CTA -->
+    ${bookingUrl ? `
+    <div style="text-align:center;margin:28px 0;">
+      <p style="color:#4b5563;font-size:14px;margin-bottom:14px;">Want to book a new appointment?</p>
+      <a href="${bookingUrl}" style="background:linear-gradient(135deg,#2563eb 0%,#06b6d4 100%);color:#fff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;display:inline-block;font-size:16px;">
+        📅 Book a New Appointment
+      </a>
+    </div>` : ''}
     <!-- Contact farrier -->
     <div style="background:#f0f9ff;border-left:4px solid #2563eb;padding:18px 20px;margin:20px 0;border-radius:4px;">
-      <h3 style="color:#1a365d;margin-top:0;font-size:15px;">📞 Contact us to reschedule</h3>
+      <h3 style="color:#1a365d;margin-top:0;font-size:15px;">📞 Questions? Get in touch</h3>
       ${farrierPhone ? `<p style="margin:4px 0;color:#4b5563;font-size:14px;">📱 ${farrierPhone}</p>` : ''}
       ${farrierEmail ? `<p style="margin:4px 0;font-size:14px;"><a href="mailto:${farrierEmail}" style="color:#2563eb;text-decoration:none;">✉️ ${farrierEmail}</a></p>` : ''}
       <p style="margin:8px 0 0;color:#6b7280;font-size:13px;">Or simply reply to this email.</p>
