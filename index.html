@@ -1375,11 +1375,13 @@
         doc.setFont("helvetica", "normal");
         doc.setFontSize(11);
         const custName = safeText_(invoice.customerName || "");
+        const custFarmName = safeText_(invoice.customerFarmName || "");
         const custEmail = safeText_(invoice.customerEmail || "");
         const custPhone = safeText_(invoice.customerPhone || "");
 
         doc.text(custName, 64, 212);
         let custY = 228;
+        if (custFarmName) { doc.setFont("helvetica", "italic"); doc.text(custFarmName, 64, custY); doc.setFont("helvetica", "normal"); custY += 14; }
         if (custEmail) { doc.text(custEmail, 64, custY); custY += 14; }
         if (custPhone) { doc.text(custPhone, 64, custY); custY += 14; }
 
@@ -3035,30 +3037,55 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         setDetailLoading(true);
         setCustomerDetail(null);
         try {
-          const [apptSnap, invSnap] = await Promise.all([
-            db.collection('appointments')
+          // Load appointments by phone (fallback to email match)
+          const apptPromise = db.collection('appointments')
+            .where('farrierId', '==', userId)
+            .where('phone', '==', cust.phone || '__none__')
+            .orderBy('requestedDate', 'desc')
+            .get()
+            .catch(() => db.collection('appointments')
               .where('farrierId', '==', userId)
-              .where('phone', '==', cust.phone || '__none__')
-              .orderBy('requestedDate', 'desc')
               .get()
-              .catch(() => db.collection('appointments')
-                .where('farrierId', '==', userId)
-                .get()
-                .then(s => ({ docs: s.docs.filter(d => {
-                  const d2 = d.data();
-                  return d2.email === cust.email || d2.phone === cust.phone;
-                })}))
-              ),
-            db.collection('invoices')
-              .where('farrierId', '==', userId)
-              .where('customerEmail', '==', cust.email || '__none__')
-              .orderBy('createdAt', 'desc')
-              .get()
-              .catch(() => ({ docs: [] }))
-          ]);
+              .then(s => ({ docs: s.docs.filter(d => {
+                const d2 = d.data();
+                return d2.email === cust.email || d2.phone === cust.phone;
+              })}))
+            );
+
+          // Load invoices — try email, then name, combine and dedupe
+          const loadInvoices = async () => {
+            const results = new Map();
+            // By email
+            if (cust.email) {
+              try {
+                const snap = await db.collection('invoices')
+                  .where('farrierId', '==', userId)
+                  .where('customerEmail', '==', cust.email)
+                  .get();
+                snap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() }));
+              } catch(e) { console.warn('Invoice email query failed:', e); }
+            }
+            // By name fallback (catches invoices created before email was stored)
+            if (cust.name) {
+              try {
+                const snap = await db.collection('invoices')
+                  .where('farrierId', '==', userId)
+                  .where('customerName', '==', cust.name)
+                  .get();
+                snap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() }));
+              } catch(e) { console.warn('Invoice name query failed:', e); }
+            }
+            // Sort by createdAt desc
+            return Array.from(results.values()).sort((a, b) => {
+              const aT = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+              const bT = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+              return bT - aT;
+            });
+          };
+
+          const [apptSnap, invoices] = await Promise.all([apptPromise, loadInvoices()]);
 
           const appointments = apptSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-          const invoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           const balance = invoices
             .filter(i => i.status === 'outstanding' || i.status === 'partial')
             .reduce((s, i) => s + (i.balanceDue || Math.max(0, (i.total || 0) - ((i.paidAmount || 0) + ((i.payments||[]).reduce((x,p)=>x+(p.amount||0),0))))), 0);
@@ -3454,6 +3481,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               }}
               prefillData={{
                 customerName: invoiceApt.customerName || selectedCustomer.name || '',
+                customerFarmName: invoiceApt.farmName || selectedCustomer.farmName || '',
                 customerEmail: invoiceApt.email || selectedCustomer.email || '',
                 customerPhone: invoiceApt.phone || selectedCustomer.phone || '',
               }}
@@ -6320,6 +6348,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               onCreated={handleInvoiceCreated}
               prefillData={{
                 customerName: selectedAppointment.customerName || '',
+                customerFarmName: selectedAppointment.farmName || '',
                 customerEmail: selectedAppointment.email || '',
                 customerPhone: selectedAppointment.phone || ''
               }}
@@ -7888,6 +7917,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
     function InvoiceCreateModal({ userId, userProfile, onClose, onCreated, prefillData }) {
       const [customerName, setCustomerName] = useState(prefillData?.customerName || '');
+      const [customerFarmName, setCustomerFarmName] = useState(prefillData?.customerFarmName || '');
       const [customerEmail, setCustomerEmail] = useState(prefillData?.customerEmail || '');
       const [customerPhone, setCustomerPhone] = useState(prefillData?.customerPhone || '');
       const [items, setItems] = useState([{ description: '', amount: 0, horseName: '' }]);
@@ -7903,6 +7933,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         if (prefillData) {
           console.log('📝 Prefilling invoice with data:', prefillData);
           if (prefillData.customerName) setCustomerName(prefillData.customerName);
+          if (prefillData.customerFarmName) setCustomerFarmName(prefillData.customerFarmName);
           if (prefillData.customerEmail) setCustomerEmail(prefillData.customerEmail);
           if (prefillData.customerPhone) setCustomerPhone(prefillData.customerPhone);
         }
@@ -7994,6 +8025,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const selectCustomer = async (customerData) => {
         if (customerData) {
           setCustomerName(customerData.name || '');
+          setCustomerFarmName(customerData.farmName || '');
           setCustomerEmail(customerData.email || '');
           setCustomerPhone(customerData.phone || '');
           
@@ -8019,6 +8051,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
         if (customer) {
           setCustomerName(customer.name || '');
+          setCustomerFarmName(customer.farmName || '');
           setCustomerEmail(customer.email || '');
           
           // Load invoice info
@@ -8195,6 +8228,7 @@ useEffect(() => {
             const docRef = await db.collection('invoices').add({
               farrierId: userId,
               customerName: customerName,
+              customerFarmName: customerFarmName,
               customerEmail: customerEmail,
               customerPhone: customerPhone,
               items: cleanedItems,
@@ -8210,6 +8244,7 @@ useEffect(() => {
               id: docRef.id,
               farrierId: userId,
               customerName,
+              customerFarmName,
               customerEmail,
               customerPhone,
               items: cleanedItems,
