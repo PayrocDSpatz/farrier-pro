@@ -5865,6 +5865,8 @@ function CalendarView({ userId }) {
       const [appointmentFilter, setAppointmentFilter] = useState('all'); // all, pending, confirmed, cancelled, invoiced, thisMonth, lastMonth
       const [showEditModal, setShowEditModal] = useState(false);
       const [editingAppointment, setEditingAppointment] = useState(null);
+      const [showCancelApptModal, setShowCancelApptModal] = useState(false);
+      const [cancellingAppointment, setCancellingAppointment] = useState(null);
 
       useEffect(() => {
         loadAppointments();
@@ -6153,7 +6155,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         if (db) {
           await db.collection('appointments').doc(appointmentId).update({
             status: newStatus,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            ...(newStatus === 'confirmed' ? { confirmedAt: firebase.firestore.FieldValue.serverTimestamp() } : {}),
+            ...(newStatus === 'cancelled' ? { cancelledAt: firebase.firestore.FieldValue.serverTimestamp() } : {})
           });
           console.log('✅ Status updated in Firebase');
           
@@ -6197,8 +6201,16 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                     zip: appointment.zip,
                     comments: appointment.comments,
                   })
-                }).then(() => console.log('✅ Confirmation email sent to customer'))
-                  .catch(e => console.warn('⚠️ Confirmation email failed:', e));
+                }).then(async (r) => {
+                  const data = await r.json().catch(() => ({}));
+                  if (r.ok) {
+                    console.log('✅ Confirmation email sent to', appointment.email);
+                  } else {
+                    console.error('❌ Confirmation email API error:', r.status, data);
+                  }
+                }).catch(e => console.error('❌ Confirmation email network error:', e));
+              } else {
+                console.warn('⚠️ No customer email on appointment — skipping confirmation email');
               }
             } else {
               console.error('❌ Appointment not found in local state');
@@ -6410,6 +6422,22 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                         )}
                         <small style={{color: 'var(--text-muted)'}}>
                           Requested: {apt.createdAt?.toDate().toLocaleDateString()}
+                          {apt.confirmedAt && (() => {
+                            const d = apt.confirmedAt.toDate ? apt.confirmedAt.toDate() : new Date(apt.confirmedAt);
+                            return (
+                              <span style={{marginLeft: '0.75rem', color: '#10b981', fontWeight: '500'}}>
+                                ✓ Confirmed: {d.toLocaleDateString()} {d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                              </span>
+                            );
+                          })()}
+                          {apt.cancelledAt && (() => {
+                            const d = apt.cancelledAt.toDate ? apt.cancelledAt.toDate() : new Date(apt.cancelledAt);
+                            return (
+                              <span style={{marginLeft: '0.75rem', color: '#ef4444', fontWeight: '500'}}>
+                                ✕ Cancelled: {d.toLocaleDateString()} {d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                              </span>
+                            );
+                          })()}
                         </small>
                       </div>
                     </div>
@@ -6464,7 +6492,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       {apt.status !== 'cancelled' && (
                         <button 
                           className="btn btn-sm btn-outline"
-                          onClick={() => { if (window.confirm(`Cancel appointment for ${apt.customerName}? This cannot be undone.`)) updateStatus(apt.id, 'cancelled'); }}
+                          onClick={() => { setCancellingAppointment(apt); setShowCancelApptModal(true); }}
                         >
                           ✕ Cancel
                         </button>
@@ -6508,6 +6536,85 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 loadAppointments();
               }}
             />
+          )}
+
+          {/* Cancel Appointment Modal */}
+          {showCancelApptModal && cancellingAppointment && (
+            <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}>
+              <div style={{background:'#fff',borderRadius:'12px',padding:'2rem',maxWidth:'460px',width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+                <h2 style={{margin:'0 0 0.5rem',color:'#1a365d',fontSize:'1.25rem'}}>✕ Cancel Appointment</h2>
+                <p style={{color:'#6b7280',margin:'0 0 1.25rem',fontSize:'0.9rem'}}>
+                  You are about to cancel the appointment for <strong>{cancellingAppointment.customerName}</strong>
+                  {cancellingAppointment.farmName ? ` — ${cancellingAppointment.farmName}` : ''} on{' '}
+                  <strong>{cancellingAppointment.requestedDate} at {cancellingAppointment.requestedTime}</strong>.
+                </p>
+
+                {cancellingAppointment.email && (
+                  <div style={{background:'#fef9f0',border:'1px solid #f59e0b',borderRadius:'8px',padding:'1rem',marginBottom:'1.25rem'}}>
+                    <p style={{margin:'0 0 0.75rem',fontWeight:'600',color:'#92400e',fontSize:'0.9rem'}}>
+                      📧 Send cancellation email to customer?
+                    </p>
+                    <p style={{margin:'0',color:'#78716c',fontSize:'0.82rem'}}>
+                      {cancellingAppointment.email}
+                    </p>
+                  </div>
+                )}
+
+                <div style={{display:'flex',gap:'0.75rem',flexWrap:'wrap'}}>
+                  {cancellingAppointment.email && (
+                    <button
+                      className="btn btn-danger"
+                      style={{flex:1,minWidth:'160px'}}
+                      onClick={async () => {
+                        await updateStatus(cancellingAppointment.id, 'cancelled');
+                        // Send cancellation email
+                        fetch('/api/send-cancellation-email', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            customerEmail: cancellingAppointment.email,
+                            customerName: cancellingAppointment.customerName,
+                            farmName: cancellingAppointment.farmName || '',
+                            farrierBusinessName: userProfile?.businessName || '',
+                            farrierEmail: userProfile?.email || '',
+                            farrierPhone: userProfile?.phone || '',
+                            requestedDate: cancellingAppointment.requestedDate,
+                            requestedTime: cancellingAppointment.requestedTime,
+                            services: cancellingAppointment.services,
+                          })
+                        }).then(async r => {
+                          const d = await r.json().catch(()=>({}));
+                          if (r.ok) console.log('✅ Cancellation email sent');
+                          else console.error('❌ Cancellation email error:', d);
+                        }).catch(e => console.error('❌ Cancellation email failed:', e));
+                        setShowCancelApptModal(false);
+                        setCancellingAppointment(null);
+                      }}
+                    >
+                      ✕ Cancel & Notify Customer
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-outline"
+                    style={{flex:1,minWidth:'140px',borderColor:'#ef4444',color:'#ef4444'}}
+                    onClick={async () => {
+                      await updateStatus(cancellingAppointment.id, 'cancelled');
+                      setShowCancelApptModal(false);
+                      setCancellingAppointment(null);
+                    }}
+                  >
+                    ✕ Cancel Only
+                  </button>
+                  <button
+                    className="btn btn-outline"
+                    style={{minWidth:'100px'}}
+                    onClick={() => { setShowCancelApptModal(false); setCancellingAppointment(null); }}
+                  >
+                    Go Back
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       );
