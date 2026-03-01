@@ -2866,10 +2866,23 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               if (response.access_token) {
                 // Save token to Firestore
                 if (db) {
+                  // Fetch the Google account email for display
+                  let calendarEmail = '';
+                  try {
+                    const meRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                      headers: { 'Authorization': `Bearer ${response.access_token}` }
+                    });
+                    if (meRes.ok) {
+                      const meData = await meRes.json();
+                      calendarEmail = meData.email || '';
+                    }
+                  } catch(e) { console.warn('Could not fetch Google account email', e); }
+
                   await db.collection('farriers').doc(farrierId).update({
                     googleCalendarConnected: true,
                     googleAccessToken: response.access_token,
-                    googleTokenExpiry: Date.now() + (3600 * 1000) // 1 hour
+                    googleTokenExpiry: Date.now() + (3600 * 1000), // 1 hour
+                    googleCalendarEmail: calendarEmail
                   });
                   
                   // Reload profile from Firestore
@@ -2896,6 +2909,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             if (db) {
               await db.collection('farriers').doc(farrierId).update({
                 googleCalendarConnected: false,
+                googleCalendarEmail: firebase.firestore.FieldValue.delete(),
                 googleAccessToken: firebase.firestore.FieldValue.delete(),
                 googleRefreshToken: firebase.firestore.FieldValue.delete(),
                 googleTokenExpiry: firebase.firestore.FieldValue.delete()
@@ -2941,8 +2955,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 </div>
               </div>
               <div className="header-actions">
-                <div className="user-info">
-                  {userProfile?.businessName || user.email}
+                <div className="user-info" style={{textAlign: 'right', lineHeight: '1.3'}}>
+                  <div>{userProfile?.businessName || user.email}</div>
+                  <div style={{fontSize: '0.72rem', opacity: '0.8', fontWeight: '400'}}>
+                    Logged in as {user.email}
+                  </div>
                 </div>
                 <button 
                   className="btn btn-sm" 
@@ -4784,6 +4801,11 @@ function ServicesView({ userId }) {
             <div className={`status-indicator ${userProfile?.googleCalendarConnected ? 'connected' : 'disconnected'}`}></div>
             <span>
               Google Calendar: {userProfile?.googleCalendarConnected ? 'Connected ✓' : 'Not Connected'}
+              {userProfile?.googleCalendarConnected && userProfile?.googleCalendarEmail && (
+                <span style={{marginLeft: '0.5rem', fontSize: '0.8rem', color: '#6b7280', fontWeight: '400'}}>
+                  ({userProfile.googleCalendarEmail})
+                </span>
+              )}
             </span>
             {!userProfile?.googleCalendarConnected ? (
               <button 
@@ -5921,24 +5943,53 @@ function CalendarView({ userId }) {
 
       const sortedAppointments = getSortedAppointments();
 
+      // Auto-refresh Google OAuth token if expired, returns valid token or null
+      const getValidCalendarToken = async (up) => {
+        if (!up?.googleCalendarConnected || !up?.googleAccessToken) return null;
+        // Quick test to see if current token is valid
+        const testRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary', {
+          headers: { 'Authorization': `Bearer ${up.googleAccessToken}` }
+        }).catch(() => null);
+        if (testRes?.ok) return up.googleAccessToken;
+        // Token expired — try to refresh
+        console.log('🔄 Access token expired, attempting refresh...');
+        if (!up?.googleRefreshToken) {
+          console.warn('⚠️ No refresh token — user needs to reconnect Google Calendar');
+          return null;
+        }
+        try {
+          const refreshRes = await fetch('/api/google-calendar-auth?action=refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: up.googleRefreshToken })
+          });
+          if (!refreshRes.ok) return null;
+          const refreshData = await refreshRes.json();
+          const newToken = refreshData.access_token;
+          if (!newToken) return null;
+          if (db && userId) {
+            await db.collection('farriers').doc(userId).update({ googleAccessToken: newToken });
+          }
+          console.log('✅ Token refreshed successfully');
+          return newToken;
+        } catch (e) {
+          console.error('❌ Token refresh failed:', e);
+          return null;
+        }
+      };
+
       const createCalendarEvent = async (appointment, userProfile) => {
         console.log('=== CREATE CALENDAR EVENT START ===');
-        console.log('UserProfile:', userProfile);
-        console.log('Appointment:', appointment);
-        
-        if (!userProfile?.googleCalendarConnected || !userProfile?.googleAccessToken) {
-          console.error('❌ Calendar not connected or no token');
-          alert('Please connect Google Calendar first in the "My QR Code" tab');
+        if (!userProfile?.googleCalendarConnected) {
+          console.log('ℹ️ Google Calendar not connected — skipping sync');
           return false;
         }
-
-        console.log('✅ Calendar connected, token exists');
-
+        const accessToken = await getValidCalendarToken(userProfile);
+        if (!accessToken) {
+          console.warn('⚠️ Could not get valid calendar token — skipping calendar sync');
+          return false;
+        }
         try {
-          // Use existing access token (no refresh for now)
-          const accessToken = userProfile.googleAccessToken;
-          console.log('🔑 Using access token');
-          
           // Create calendar event
           const eventStartTime = new Date(`${appointment.requestedDate}T${appointment.requestedTime}:00`);
           const eventEndTime = new Date(eventStartTime.getTime() + 2 * 60 * 60 * 1000); // 2 hours later
@@ -6026,8 +6077,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           return true;
         } catch (error) {
           console.error('❌ Calendar error:', error);
-          alert('Could not add to calendar. Error: ' + error.message + '\n\nCheck console for details. Your connection may have expired - try reconnecting.');
-          return false;
+          return false; // Silent fail — appointment is already confirmed in Firebase
         }
       };
 
@@ -6082,16 +6132,15 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           
           const appointment = appointments.find(apt => apt.id === appointmentId);
           
-          // If confirming, add to Google Calendar
+          // If confirming, add to Google Calendar + send SMS
           if (newStatus === 'confirmed') {
-            console.log('🟢 Status is confirmed, attempting calendar sync...');
-            
+            console.log('🟢 Status is confirmed');
             if (appointment) {
-              const success = await createCalendarEvent(appointment, userProfile);
-              if (success) {
-                alert('✓ Appointment confirmed and added to your Google Calendar!');
-              } else {
-                alert('⚠️ Appointment confirmed, but failed to add to Google Calendar.');
+              // Calendar sync — silent, non-blocking
+              if (userProfile?.googleCalendarConnected) {
+                createCalendarEvent(appointment, userProfile).then(success => {
+                  console.log(success ? '✅ Added to Google Calendar' : '⚠️ Calendar sync skipped (token may need refresh — reconnect in My QR Code tab)');
+                });
               }
               // Send SMS confirmation if enabled
               if (userProfile?.smsEnabled && appointment.phone) {
