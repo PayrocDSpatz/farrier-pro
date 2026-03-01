@@ -2,10 +2,23 @@
 // Sends two emails after a customer books via the public booking page:
 //   1. Notification to the farrier (new appointment request)
 //   2. Confirmation to the customer (booking received)
-import { Resend } from 'resend';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Uses Resend REST API directly (no npm package needed)
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM = 'FarriTech <welcome@contact.dasdigitalai.com>';
+
+const sendEmail = async ({ to, subject, html }) => {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: FROM, to: Array.isArray(to) ? to : [to], subject, html }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Resend API error');
+  return data;
+};
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -105,13 +118,17 @@ export default async function handler(req, res) {
 </body>
 </html>`;
 
-    const farrierResult = await resend.emails.send({
-      from: FROM,
-      to: [farrierEmail],
-      subject: `🐴 New Booking Request from ${customerName || 'a customer'} — ${displayDate}`,
-      html: farrierHtml,
-    });
-    if (farrierResult.error) errors.push(`Farrier email: ${farrierResult.error.message}`);
+    try {
+      await sendEmail({
+        to: [farrierEmail],
+        subject: `🐴 New Booking Request from ${customerName || 'a customer'} — ${displayDate}`,
+        html: farrierHtml,
+      });
+      console.log('✅ Farrier notification email sent to', farrierEmail);
+    } catch(e) {
+      console.error('❌ Farrier email failed:', e.message);
+      errors.push(`Farrier email: ${e.message}`);
+    }
 
     // ── 2. Email to CUSTOMER ────────────────────────────────────────────
     if (customerEmail) {
@@ -153,13 +170,17 @@ export default async function handler(req, res) {
 </body>
 </html>`;
 
-      const customerResult = await resend.emails.send({
-        from: FROM,
-        to: [customerEmail],
-        subject: `✅ Booking Request Received — ${bizName}`,
-        html: customerHtml,
-      });
-      if (customerResult.error) errors.push(`Customer email: ${customerResult.error.message}`);
+      try {
+        await sendEmail({
+          to: [customerEmail],
+          subject: `✅ Booking Request Received — ${bizName}`,
+          html: customerHtml,
+        });
+        console.log('✅ Customer confirmation email sent to', customerEmail);
+      } catch(e) {
+        console.error('❌ Customer email failed:', e.message);
+        errors.push(`Customer email: ${e.message}`);
+      }
     }
 
     if (errors.length > 0) {
