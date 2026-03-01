@@ -5892,13 +5892,13 @@ function CalendarView({ userId }) {
           }
 
           const event = {
-            summary: `🐴 Farrier - ${appointment.customerName}`,
+            summary: `🐴 Farrier - ${appointment.customerName}${appointment.farmName ? ` (${appointment.farmName})` : ''}`,
             description: `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 APPOINTMENT DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 👤 CUSTOMER INFORMATION:
-   Name: ${appointment.customerName}
+   Name: ${appointment.customerName}${appointment.farmName ? `\n   Farm/Business: ${appointment.farmName}` : ''}
    Phone: ${appointment.phone}
 ${appointment.email ? `   Email: ${appointment.email}` : ''}
 
@@ -6605,8 +6605,8 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           const endDateTime = new Date(new Date(startDateTime).getTime() + 60 * 60 * 1000).toISOString();
 
           const event = {
-            summary: `Farrier - ${updatedAppointment.customerName}`,
-            description: `Services: ${services.join(', ')}\nHorses: ${numberOfHorses || 'Not specified'}\nPhone: ${phone}`,
+            summary: `Farrier - ${updatedAppointment.customerName}${farmName ? ` (${farmName})` : ''}`,
+            description: `Services: ${services.join(', ')}\nHorses: ${numberOfHorses || 'Not specified'}\nPhone: ${phone}${farmName ? `\nFarm/Business: ${farmName}` : ''}`,
             location: `${address}, ${city}, ${state} ${zip}`,
             start: {
               dateTime: new Date(startDateTime).toISOString(),
