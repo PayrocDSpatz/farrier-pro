@@ -3052,30 +3052,28 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               })}))
             );
 
-          // Load invoices — try email, then name, combine and dedupe
+          // Load invoices — try email+farrierId, then name+farrierId, then email-only fallback
           const loadInvoices = async () => {
             const results = new Map();
-            // By email
+
+            const tryQuery = async (q) => {
+              try {
+                const snap = await q.get();
+                snap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() }));
+              } catch(e) { /* silently skip failed queries */ }
+            };
+
+            // By email with farrierId
             if (cust.email) {
-              try {
-                const snap = await db.collection('invoices')
-                  .where('farrierId', '==', userId)
-                  .where('customerEmail', '==', cust.email)
-                  .get();
-                snap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() }));
-              } catch(e) { console.warn('Invoice email query failed:', e); }
+              await tryQuery(db.collection('invoices').where('farrierId', '==', userId).where('customerEmail', '==', cust.email));
+              // Fallback: email only (no farrierId — catches older records)
+              await tryQuery(db.collection('invoices').where('customerEmail', '==', cust.email));
             }
-            // By name fallback (catches invoices created before email was stored)
+            // By name with farrierId
             if (cust.name) {
-              try {
-                const snap = await db.collection('invoices')
-                  .where('farrierId', '==', userId)
-                  .where('customerName', '==', cust.name)
-                  .get();
-                snap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() }));
-              } catch(e) { console.warn('Invoice name query failed:', e); }
+              await tryQuery(db.collection('invoices').where('farrierId', '==', userId).where('customerName', '==', cust.name));
             }
-            // Sort by createdAt desc
+
             return Array.from(results.values()).sort((a, b) => {
               const aT = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
               const bT = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
