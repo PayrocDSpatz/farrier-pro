@@ -6175,6 +6175,31 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 const msg = `Hi ${appointment.customerName}, your appointment with ${bizName} is confirmed for ${appointment.requestedDate} at ${appointment.requestedTime}. Reply CONFIRM to confirm or STOP to opt out.`;
                 await sendSms(appointment.phone, msg);
               }
+              // Send confirmation email to customer (non-blocking)
+              if (appointment.email) {
+                fetch('/api/send-confirmation-email', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    customerEmail: appointment.email,
+                    customerName: appointment.customerName,
+                    farmName: appointment.farmName || '',
+                    farrierBusinessName: userProfile?.businessName || '',
+                    farrierEmail: userProfile?.email || '',
+                    farrierPhone: userProfile?.phone || '',
+                    services: appointment.services,
+                    numberOfHorses: appointment.numberOfHorses,
+                    requestedDate: appointment.requestedDate,
+                    requestedTime: appointment.requestedTime,
+                    address: appointment.address,
+                    city: appointment.city,
+                    state: appointment.state,
+                    zip: appointment.zip,
+                    comments: appointment.comments,
+                  })
+                }).then(() => console.log('✅ Confirmation email sent to customer'))
+                  .catch(e => console.warn('⚠️ Confirmation email failed:', e));
+              }
             } else {
               console.error('❌ Appointment not found in local state');
             }
