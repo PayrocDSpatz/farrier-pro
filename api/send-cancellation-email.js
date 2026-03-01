@@ -108,13 +108,7 @@ export default async function handler(req, res) {
     </p>
 
     <!-- Reschedule CTA -->
-    ${bookingUrl ? `
-    <div style="text-align:center;margin:28px 0;">
-      <p style="color:#4b5563;font-size:14px;margin-bottom:14px;">Want to book a new appointment?</p>
-      <a href="${bookingUrl}" style="background:linear-gradient(135deg,#2563eb 0%,#06b6d4 100%);color:#fff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;display:inline-block;font-size:16px;">
-        📅 Book a New Appointment
-      </a>
-    </div>` : ''}
+    ${bookingUrl ? '<div style="text-align:center;margin:28px 0;"><p style="color:#4b5563;font-size:14px;margin-bottom:14px;">Want to book a new appointment?</p><a href="' + bookingUrl + '" style="background:linear-gradient(135deg,#2563eb 0%,#06b6d4 100%);color:#fff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;display:inline-block;font-size:16px;">📅 Book a New Appointment</a></div>' : ''}
     <!-- Contact farrier -->
     <div style="background:#f0f9ff;border-left:4px solid #2563eb;padding:18px 20px;margin:20px 0;border-radius:4px;">
       <h3 style="color:#1a365d;margin-top:0;font-size:15px;">📞 Questions? Get in touch</h3>
