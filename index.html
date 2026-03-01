@@ -4851,6 +4851,8 @@ function ServicesView({ userId }) {
       const [step, setStep] = useState('landing');
       const [farrierInfo, setFarrierInfo] = useState(null);
       const [loading, setLoading] = useState(true);
+      const [bookedSlots, setBookedSlots] = useState([]);
+      const [loadingSlots, setLoadingSlots] = useState(false);
       const [formData, setFormData] = useState({
         name: '',
         farmName: '',
@@ -4890,6 +4892,24 @@ function ServicesView({ userId }) {
           console.error('Error loading farrier info:', error);
         }
         setLoading(false);
+      };
+
+      const loadBookedSlots = async (date) => {
+        if (!db || !date) return;
+        setLoadingSlots(true);
+        try {
+          const snap = await db.collection('appointments')
+            .where('farrierId', '==', farrierId)
+            .where('requestedDate', '==', date)
+            .where('status', 'in', ['pending', 'confirmed'])
+            .get();
+          const times = snap.docs.map(d => d.data().requestedTime).filter(Boolean);
+          setBookedSlots(times);
+        } catch (error) {
+          console.error('Error loading booked slots:', error);
+          setBookedSlots([]);
+        }
+        setLoadingSlots(false);
       };
 
       const handleSubmit = async (e) => {
@@ -5357,7 +5377,12 @@ function ServicesView({ userId }) {
                         type="date" 
                         required 
                         value={formData.date}
-                        onChange={(e) => setFormData({...formData, date: e.target.value, time: ''})}
+                        onChange={(e) => {
+                          const newDate = e.target.value;
+                          setFormData({...formData, date: newDate, time: ''});
+                          setBookedSlots([]);
+                          loadBookedSlots(newDate);
+                        }}
                         min={new Date().toISOString().split('T')[0]}
                       />
                     </div>
@@ -5365,17 +5390,28 @@ function ServicesView({ userId }) {
                     <div className="form-group">
                       <label>Available Time Slots *</label>
                       {formData.date ? (
-                        availableSlots.length > 0 ? (
+                        loadingSlots ? (
+                          <p style={{color: '#999', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
+                            ⏳ Checking availability...
+                          </p>
+                        ) : availableSlots.length > 0 ? (
                           <div className="time-slots">
-                            {availableSlots.map(slot => (
-                              <div 
-                                key={slot}
-                                className={`time-slot ${formData.time === slot ? 'selected' : ''}`}
-                                onClick={() => setFormData({...formData, time: slot})}
-                              >
-                                {formatTime(slot)}
-                              </div>
-                            ))}
+                            {availableSlots.map(slot => {
+                              const isBooked = bookedSlots.includes(slot);
+                              const isSelected = formData.time === slot;
+                              return (
+                                <div 
+                                  key={slot}
+                                  className={`time-slot ${isSelected ? 'selected' : ''} ${isBooked ? 'booked' : ''}`}
+                                  onClick={() => !isBooked && setFormData({...formData, time: slot})}
+                                  style={isBooked ? {cursor: 'not-allowed', opacity: 0.45, textDecoration: 'line-through'} : {}}
+                                  title={isBooked ? 'This time slot is already booked' : ''}
+                                >
+                                  {formatTime(slot)}
+                                  {isBooked && <span style={{display:'block', fontSize:'0.65rem', color:'#999'}}>Unavailable</span>}
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           <p style={{color: '#999', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
