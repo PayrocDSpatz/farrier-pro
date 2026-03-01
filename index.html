@@ -3006,6 +3006,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const [formName, setFormName] = useState('');
       const [formFarmName, setFormFarmName] = useState('');
       const [formEmail, setFormEmail] = useState('');
+      const [formSource, setFormSource] = useState('referral');
       const [formPhone, setFormPhone] = useState('');
       const [formAddress, setFormAddress] = useState('');
       const [formNotes, setFormNotes] = useState('');
@@ -3074,6 +3075,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const openAdd = () => {
         setEditingCustomer(null);
         setFormName(''); setFormFarmName(''); setFormEmail(''); setFormPhone('');
+        setFormAddress(''); setFormNotes(''); setFormSource('referral');
         setFormAddress(''); setFormNotes('');
         setShowAddEdit(true);
       };
@@ -3086,6 +3088,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         setFormPhone(cust.phone || '');
         setFormAddress(cust.address || '');
         setFormNotes(cust.notes || '');
+        setFormSource(cust.source === 'qr_booking' ? 'qr_booking' : (cust.source || 'referral'));
         setShowAddEdit(true);
       };
 
@@ -3101,6 +3104,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             phone: formPhone.trim(),
             address: formAddress.trim(),
             notes: formNotes.trim(),
+            source: formSource,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           };
           if (editingCustomer) {
@@ -3198,6 +3202,22 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               onChange={e => setFormNotes(e.target.value)} rows={3}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', resize: 'vertical', boxSizing: 'border-box' }} />
           </div>
+          {/* Source — hide the qr_booking option for manual entry; show as read-only if editing a qr_booking customer */}
+          <div className="form-group">
+            <label>How did you get this customer?</label>
+            {editingCustomer?.source === 'qr_booking' ? (
+              <div style={{ padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', background: '#f8fafc', color: '#64748b', fontSize: '0.95rem' }}>
+                📲 QR Booking (set by customer)
+              </div>
+            ) : (
+              <select value={formSource} onChange={e => setFormSource(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', background: '#fff' }}>
+                <option value="referral">🤝 Referral</option>
+                <option value="existing">⭐ Existing</option>
+                <option value="marketing">📣 Marketing</option>
+              </select>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
             <button className="btn btn-primary" onClick={saveCustomer} disabled={saving} style={{ flex: 1 }}>
               {saving ? '⏳ Saving…' : (editingCustomer ? '💾 Save Changes' : '✅ Add Customer')}
@@ -3236,7 +3256,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                     💬 {selectedCustomer.notes}
                   </div>
                 )}
-                <div style={{ marginTop: '0.75rem' }}>
+                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
                     padding: '0.3rem 0.8rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600,
@@ -3245,6 +3265,40 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   }}>
                     {selectedCustomer.smsOptOut ? '🚫 SMS Opted Out' : '✅ SMS Opted In'}
                   </span>
+                  {selectedCustomer.createdAt && (() => {
+                    const d = selectedCustomer.createdAt.toDate ? selectedCustomer.createdAt.toDate() : new Date(selectedCustomer.createdAt);
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    const yyyy = d.getFullYear();
+                    return (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                        padding: '0.3rem 0.8rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600,
+                        background: '#f1f5f9', color: '#475569',
+                      }}>
+                        📅 Customer Since {mm}/{dd}/{yyyy}
+                      </span>
+                    );
+                  })()}
+                  {selectedCustomer.source && (() => {
+                    const sourceMap = {
+                      qr_booking: { label: 'QR Booking', icon: '📲', bg: '#eff6ff', color: '#2563eb' },
+                      referral:   { label: 'Referral',   icon: '🤝', bg: '#fdf4ff', color: '#9333ea' },
+                      existing:   { label: 'Existing',   icon: '⭐', bg: '#fffbeb', color: '#d97706' },
+                      marketing:  { label: 'Marketing',  icon: '📣', bg: '#fff1f2', color: '#e11d48' },
+                      manual:     { label: 'Manual',     icon: '✍️', bg: '#f8fafc', color: '#64748b' },
+                    };
+                    const s = sourceMap[selectedCustomer.source] || { label: selectedCustomer.source, icon: '📌', bg: '#f8fafc', color: '#64748b' };
+                    return (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                        padding: '0.3rem 0.8rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600,
+                        background: s.bg, color: s.color,
+                      }}>
+                        {s.icon} {s.label}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
