@@ -3001,6 +3001,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const [saving, setSaving] = useState(false);
       const [confirmDelete, setConfirmDelete] = useState(null);
       const [showNewAppt, setShowNewAppt] = useState(false);
+      const [invoiceApt, setInvoiceApt] = useState(null);
 
       // Form state
       const [formName, setFormName] = useState('');
@@ -3117,7 +3118,6 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               ...payload,
               smsOptOut: false,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-              source: 'manual',
             });
           }
           setShowAddEdit(false);
@@ -3286,7 +3286,6 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       referral:   { label: 'Referral',   icon: '🤝', bg: '#fdf4ff', color: '#9333ea' },
                       existing:   { label: 'Existing',   icon: '⭐', bg: '#fffbeb', color: '#d97706' },
                       marketing:  { label: 'Marketing',  icon: '📣', bg: '#fff1f2', color: '#e11d48' },
-                      manual:     { label: 'Manual',     icon: '✍️', bg: '#f8fafc', color: '#64748b' },
                     };
                     const s = sourceMap[selectedCustomer.source] || { label: selectedCustomer.source, icon: '📌', bg: '#f8fafc', color: '#64748b' };
                     return (
@@ -3353,12 +3352,19 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       )}
                       {apt.address && <div style={{ fontSize: '0.78rem', color: '#888' }}>📍 {apt.address}</div>}
                     </div>
-                    <span style={{
-                      padding: '0.2rem 0.7rem', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700,
-                      background: `${statusColor[apt.status] || '#94a3b8'}22`,
-                      color: statusColor[apt.status] || '#94a3b8',
-                      textTransform: 'capitalize',
-                    }}>{apt.status || 'pending'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span style={{
+                        padding: '0.2rem 0.7rem', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700,
+                        background: `${statusColor[apt.status] || '#94a3b8'}22`,
+                        color: statusColor[apt.status] || '#94a3b8',
+                        textTransform: 'capitalize',
+                      }}>{apt.status || 'pending'}</span>
+                      <button
+                        className="btn btn-sm btn-outline"
+                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.65rem', color: '#8b5cf6', borderColor: '#8b5cf6' }}
+                        onClick={() => setInvoiceApt(apt)}
+                      >🧾 Invoice</button>
+                    </div>
                   </div>
                 ))}
                 {customerDetail.appointments.length > 10 && (
@@ -3432,6 +3438,24 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               onSaved={() => {
                 setShowNewAppt(false);
                 openDetail(selectedCustomer); // refresh detail
+              }}
+            />
+          )}
+
+          {/* Create Invoice from Appointment */}
+          {invoiceApt && (
+            <InvoiceCreateModal
+              userId={userId}
+              userProfile={userProfile}
+              onClose={() => setInvoiceApt(null)}
+              onCreated={() => {
+                setInvoiceApt(null);
+                openDetail(selectedCustomer); // refresh to show new invoice
+              }}
+              prefillData={{
+                customerName: invoiceApt.customerName || selectedCustomer.name || '',
+                customerEmail: invoiceApt.email || selectedCustomer.email || '',
+                customerPhone: invoiceApt.phone || selectedCustomer.phone || '',
               }}
             />
           )}
