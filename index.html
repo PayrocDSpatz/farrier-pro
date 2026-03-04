@@ -787,7 +787,7 @@
       grid-template-columns: 1.5fr 0.8fr;
       gap: clamp(22px, 4vw, 72px);
       align-items: center;
-      min-height: calc(100vh - 88px);
+      min-height: 100vh;
     }
     .ft-auth-hero{
       color: rgba(226,232,240,0.92);
@@ -2178,19 +2178,7 @@ const [loading, setLoading] = useState(false);
 
 return (
   <div className="ft-auth-shell">
-          <header className="app-header">
-            <div className="header-content">
-              <div className="logo">
-                <img src="/new_farritech_logo.png" alt="FarriTech" style={{height:'56px', width:'auto', imageRendering:'-webkit-optimize-contrast', WebkitFontSmoothing:'antialiased'}} />
-                <div style={{display:'flex', flexDirection:'column', lineHeight:1.1}}>
-                  <span style={{fontFamily:"'Space Mono',monospace", fontSize:'1.8rem', fontWeight:700, color:'#fff', letterSpacing:'-0.01em'}}><span style={{color:'#fff'}}>Farri</span><span style={{color:'#38bdf8'}}>Tech</span></span>
-                  <span style={{fontSize:'0.65rem', letterSpacing:'0.18em', color:'rgba(226,232,240,0.65)', textTransform:'uppercase', fontFamily:"'Outfit',sans-serif", fontWeight:400}}>Advanced Farrier Solutions</span>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <main className="ft-auth-grid">
+          <main className="ft-auth-grid" style={{minHeight:'100vh'}}>
             {/* Hero text — left column */}
             <div>{/* left column spacer — background image has the hero text */}</div>
 
