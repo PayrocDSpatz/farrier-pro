@@ -1213,12 +1213,16 @@
   transform: translateY(-2px) !important;
 }
 </style>
+
+  <!-- Google Places Autocomplete (Address accuracy for Smart Route) -->
+  <!-- IMPORTANT: Replace YOUR_GOOGLE_MAPS_BROWSER_KEY with a browser-restricted key (HTTP referrer restricted to your domain) -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_BROWSER_KEY&libraries=places" async defer></script>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
 
       const BUILD_VERSION = "Ver 3.1";
@@ -4880,6 +4884,81 @@ function ServicesView({ userId }) {
         smsConsent: false
       });
 
+
+      // ---- Address Autocomplete (Google Places) ----
+      const addressInputRef = useRef(null);
+      const [placeMeta, setPlaceMeta] = useState({
+        placeId: '',
+        formattedAddress: '',
+        lat: null,
+        lng: null,
+        source: '' // 'places' when picked from autocomplete
+      });
+
+      useEffect(() => {
+        // Initialize Google Places Autocomplete once the script is loaded
+        let tries = 0;
+        const maxTries = 40; // ~10s at 250ms
+        const timer = setInterval(() => {
+          tries++;
+          if (window.google?.maps?.places && addressInputRef.current) {
+            clearInterval(timer);
+
+            try {
+              const ac = new window.google.maps.places.Autocomplete(addressInputRef.current, {
+                types: ['address'],
+                componentRestrictions: { country: 'us' },
+                fields: ['address_components', 'formatted_address', 'geometry', 'place_id'],
+              });
+
+              const getComponent = (components, type, useShort = false) => {
+                const c = (components || []).find(x => (x.types || []).includes(type));
+                if (!c) return '';
+                return useShort ? (c.short_name || '') : (c.long_name || '');
+              };
+
+              ac.addListener('place_changed', () => {
+                const place = ac.getPlace();
+                const comps = place?.address_components || [];
+
+                const streetNumber = getComponent(comps, 'street_number');
+                const route = getComponent(comps, 'route');
+                const city = getComponent(comps, 'locality') || getComponent(comps, 'sublocality') || getComponent(comps, 'postal_town');
+                const state = getComponent(comps, 'administrative_area_level_1', true);
+                const zip = getComponent(comps, 'postal_code');
+
+                const address1 = [streetNumber, route].filter(Boolean).join(' ').trim();
+
+                setFormData(prev => ({
+                  ...prev,
+                  address: address1 || prev.address,
+                  city: city || prev.city,
+                  state: (state || prev.state || '').toUpperCase(),
+                  zip: zip || prev.zip,
+                }));
+
+                setPlaceMeta({
+                  placeId: place?.place_id || '',
+                  formattedAddress: place?.formatted_address || '',
+                  lat: place?.geometry?.location?.lat?.() ?? null,
+                  lng: place?.geometry?.location?.lng?.() ?? null,
+                  source: 'places',
+                });
+              });
+            } catch (err) {
+              console.warn('Places Autocomplete init failed:', err);
+            }
+          }
+
+          if (tries >= maxTries) {
+            clearInterval(timer);
+          }
+        }, 250);
+
+        return () => clearInterval(timer);
+      }, []);
+
+
       useEffect(() => {
         loadFarrierInfo();
       }, []);
@@ -4924,7 +5003,15 @@ function ServicesView({ userId }) {
 
       const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
+        const isPOBox = (s) => /^\s*p\.?\s*o\.?\s*box\b/i.test(String(s || ''));
+        if (isPOBox(formData.address)) {
+          alert("PO Boxes can't be routed. Please enter the barn/service address.");
+          return;
+        }
+
+        // If customer used Google Places, we keep placeId + lat/lng for accurate Smart Route driving directions
+
         try {
           if (db) {
             // Save appointment request to Firestore
@@ -4945,6 +5032,10 @@ function ServicesView({ userId }) {
               requestedTime: formData.time || '',
               status: 'pending',
               smsConsent: formData.smsConsent === true,
+              // Address normalization (for Smart Route)
+              formattedAddress: placeMeta.formattedAddress || '',
+              placeId: placeMeta.placeId || '',
+              geo: (placeMeta.lat != null && placeMeta.lng != null) ? { lat: placeMeta.lat, lng: placeMeta.lng } : null,
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
@@ -4959,6 +5050,11 @@ function ServicesView({ userId }) {
                 email: formData.email,
                 phone: formData.phone,
                 address: fullAddress,
+
+                // Address normalization (for Smart Route)
+                formattedAddress: placeMeta.formattedAddress || '',
+                placeId: placeMeta.placeId || '',
+                geo: (placeMeta.lat != null && placeMeta.lng != null) ? { lat: placeMeta.lat, lng: placeMeta.lng } : null,
                 farrierId: farrierId,
                 smsOptOut: formData.smsConsent ? false : true,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -5015,6 +5111,9 @@ function ServicesView({ userId }) {
                   city: formData.city,
                   state: formData.state,
                   zip: formData.zip,
+                  formattedAddress: placeMeta.formattedAddress || '',
+                  placeId: placeMeta.placeId || '',
+                  geo: (placeMeta.lat != null && placeMeta.lng != null) ? { lat: placeMeta.lat, lng: placeMeta.lng } : null,
                   requestedDate: formData.date,
                   requestedTime: formData.time,
                   comments: formData.comments,
@@ -5356,11 +5455,20 @@ function ServicesView({ userId }) {
                     <div className="form-group">
                       <label>Address</label>
                       <input 
+                        ref={addressInputRef}
                         type="text" 
                         value={formData.address}
-                        onChange={(e) => setFormData({...formData, address: e.target.value})}
-                        placeholder="123 Main Street"
+                        onChange={(e) => {
+                          // If user manually edits the address, clear Places metadata so we know it wasn't selected
+                          setPlaceMeta({ placeId: '', formattedAddress: '', lat: null, lng: null, source: '' });
+                          setFormData({...formData, address: e.target.value});
+                        }}
+                        placeholder="Start typing an address…"
+                        autoComplete="street-address"
                       />
+                      <div style={{fontSize: '0.85rem', color: '#64748b', marginTop: '0.35rem'}}>
+                        Tip: pick an address from the suggestions for the most accurate routing.
+                      </div>
                     </div>
                     
                     <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem'}}>
@@ -5369,7 +5477,10 @@ function ServicesView({ userId }) {
                         <input 
                           type="text" 
                           value={formData.city}
-                          onChange={(e) => setFormData({...formData, city: e.target.value})}
+                          onChange={(e) => {
+                            setPlaceMeta({ placeId: '', formattedAddress: '', lat: null, lng: null, source: '' });
+                            setFormData({...formData, city: e.target.value});
+                          }}
                           placeholder="City"
                         />
                       </div>
@@ -5379,7 +5490,10 @@ function ServicesView({ userId }) {
                         <input 
                           type="text" 
                           value={formData.state}
-                          onChange={(e) => setFormData({...formData, state: e.target.value})}
+                          onChange={(e) => {
+                            setPlaceMeta({ placeId: '', formattedAddress: '', lat: null, lng: null, source: '' });
+                            setFormData({...formData, state: e.target.value});
+                          }}
                           placeholder="VA"
                           maxLength="2"
                           style={{textTransform: 'uppercase'}}
@@ -5391,7 +5505,10 @@ function ServicesView({ userId }) {
                         <input 
                           type="text" 
                           value={formData.zip}
-                          onChange={(e) => setFormData({...formData, zip: e.target.value})}
+                          onChange={(e) => {
+                            setPlaceMeta({ placeId: '', formattedAddress: '', lat: null, lng: null, source: '' });
+                            setFormData({...formData, zip: e.target.value});
+                          }}
                           placeholder="12345"
                           maxLength="5"
                         />
