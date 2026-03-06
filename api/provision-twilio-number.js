@@ -58,7 +58,7 @@ export default async function handler(req, res) {
         headers,
         body: new URLSearchParams({
           PhoneNumber: phoneNumber,
-          SmsUrl: `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://farrier-pro.vercel.app'}/api/twilio-webhook`,
+          SmsUrl: `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://app.farritech.com'}/api/twilio-webhook`,
           SmsMethod: 'POST',
           FriendlyName: `FarriTech - ${farrierId}`,
         }).toString(),
