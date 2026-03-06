@@ -4918,56 +4918,82 @@ function ServicesView({ userId }) {
               container.appendChild(pac);
               console.log('✅ Google PlaceAutocompleteElement attached');
 
-              pac.addEventListener('gmp-placeselect', async (e) => {
-                const place = e.placePrediction.toPlace();
-                await place.fetchFields({ fields: ['addressComponents', 'formattedAddress', 'location', 'id'] });
+              // Try both event names - API version determines which fires
+              const handlePlaceSelect = async (e) => {
+                try {
+                  const prediction = e.placePrediction || e.place;
+                  if (!prediction) return;
 
-                const comps = place.addressComponents || [];
-                console.log('📍 raw comps length:', comps.length, comps);
+                  const place = prediction.toPlace ? prediction.toPlace() : prediction;
+                  await place.fetchFields({ fields: ['addressComponents', 'formattedAddress', 'location', 'id'] });
 
-                // The new Places API components have types as an array of strings
-                // but the component objects may be class instances - iterate safely
-                const getComponent = (type, useShort = false) => {
-                  for (const c of comps) {
-                    const types = Array.isArray(c.types) ? c.types : [];
-                    if (types.includes(type)) {
-                      return useShort
-                        ? (c.shortText ?? c.short_name ?? '')
-                        : (c.longText ?? c.long_name ?? '');
+                  // Parse formatted address as reliable fallback: "123 Main St, City, ST 12345, USA"
+                  const formatted = place.formattedAddress || '';
+                  console.log('📍 formattedAddress:', formatted);
+
+                  const comps = place.addressComponents || [];
+                  console.log('📍 comps count:', comps.length);
+
+                  let streetNumber = '', route = '', city = '', state = '', zip = '';
+
+                  if (comps.length > 0) {
+                    const get = (type, short = false) => {
+                      for (const c of comps) {
+                        const types = c.types || [];
+                        if (types.includes(type)) return short ? (c.shortText || c.short_name || '') : (c.longText || c.long_name || '');
+                      }
+                      return '';
+                    };
+                    streetNumber = get('street_number');
+                    route = get('route');
+                    city = get('locality') || get('sublocality') || get('postal_town');
+                    state = get('administrative_area_level_1', true);
+                    zip = get('postal_code');
+                  }
+
+                  // Fallback: parse from formatted address string "Street, City, ST ZIP, USA"
+                  if (!city && formatted) {
+                    const parts = formatted.split(',').map(p => p.trim());
+                    // parts[0]=street, parts[1]=city, parts[2]="ST ZIP", parts[3]="USA"
+                    if (parts.length >= 3) {
+                      city = parts[1] || '';
+                      const stateZip = (parts[2] || '').trim().split(' ');
+                      state = stateZip[0] || '';
+                      zip = stateZip[1] || '';
                     }
                   }
-                  return '';
-                };
 
-                const streetNumber = getComponent('street_number');
-                const route = getComponent('route');
-                const city = getComponent('locality') || getComponent('sublocality') || getComponent('postal_town');
-                const state = getComponent('administrative_area_level_1', true);
-                const zip = getComponent('postal_code');
-                const address1 = [streetNumber, route].filter(Boolean).join(' ').trim();
+                  const address1 = [streetNumber, route].filter(Boolean).join(' ').trim()
+                    || (formatted.split(',')[0] || '').trim();
 
-                console.log('📍 parsed:', { address1, city, state, zip });
+                  console.log('📍 parsed:', { address1, city, state, zip });
 
-                // Overwrite the widget's input to show only the street address (not full "City, State, USA")
-                const widgetInput = pac.querySelector('input');
-                if (widgetInput && address1) widgetInput.value = address1;
+                  // Overwrite the widget's input to show only the street address
+                  const widgetInput = pac.querySelector('input');
+                  if (widgetInput && address1) widgetInput.value = address1;
 
-                setFormData(prev => ({
-                  ...prev,
-                  address: address1 || prev.address,
-                  city: city || prev.city,
-                  state: (state || prev.state || '').toUpperCase(),
-                  zip: zip || prev.zip,
-                }));
+                  setFormData(prev => ({
+                    ...prev,
+                    address: address1 || prev.address,
+                    city: city || prev.city,
+                    state: (state || prev.state || '').toUpperCase(),
+                    zip: zip || prev.zip,
+                  }));
 
-                setPlaceMeta({
-                  placeId: place.id || '',
-                  formattedAddress: place.formattedAddress || '',
-                  lat: place.location?.lat?.() ?? null,
-                  lng: place.location?.lng?.() ?? null,
-                  source: 'places',
-                });
-              });
+                  setPlaceMeta({
+                    placeId: place.id || '',
+                    formattedAddress: formatted,
+                    lat: place.location?.lat?.() ?? null,
+                    lng: place.location?.lng?.() ?? null,
+                    source: 'places',
+                  });
+                } catch (err) {
+                  console.warn('Place select handler error:', err);
+                }
+              };
+
+              pac.addEventListener('gmp-placeselect', handlePlaceSelect);
+              pac.addEventListener('gmp-select', handlePlaceSelect);
             } catch (err) {
               console.warn('PlaceAutocompleteElement init failed:', err);
             }
