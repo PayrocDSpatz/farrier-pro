@@ -4918,23 +4918,32 @@ function ServicesView({ userId }) {
               container.appendChild(pac);
               console.log('✅ Google PlaceAutocompleteElement attached');
 
-              const getComponent = (components, type, useShort = false) => {
-                const c = (components || []).find(x => (x.types || []).includes(type));
-                if (!c) return '';
-                return useShort ? (c.short_name || '') : (c.long_name || '');
-              };
-
               pac.addEventListener('gmp-placeselect', async (e) => {
                 const place = e.placePrediction.toPlace();
                 await place.fetchFields({ fields: ['addressComponents', 'formattedAddress', 'location', 'id'] });
 
                 const comps = place.addressComponents || [];
+                console.log('📍 address components:', JSON.stringify(comps));
+
+                // New Places API uses longText/shortText instead of long_name/short_name
+                const getComponent = (components, type, useShort = false) => {
+                  const c = components.find(x => (x.types || []).includes(type));
+                  if (!c) return '';
+                  return useShort ? (c.shortText || c.short_name || '') : (c.longText || c.long_name || '');
+                };
+
                 const streetNumber = getComponent(comps, 'street_number');
                 const route = getComponent(comps, 'route');
                 const city = getComponent(comps, 'locality') || getComponent(comps, 'sublocality') || getComponent(comps, 'postal_town');
                 const state = getComponent(comps, 'administrative_area_level_1', true);
                 const zip = getComponent(comps, 'postal_code');
                 const address1 = [streetNumber, route].filter(Boolean).join(' ').trim();
+
+                console.log('📍 parsed:', { address1, city, state, zip });
+
+                // Overwrite the widget's input to show only the street address (not full "City, State, USA")
+                const widgetInput = pac.querySelector('input');
+                if (widgetInput && address1) widgetInput.value = address1;
 
                 setFormData(prev => ({
                   ...prev,
