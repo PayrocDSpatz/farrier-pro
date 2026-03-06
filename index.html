@@ -6627,9 +6627,18 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           {appointments.length === 0 ? (
             <div className="card">
               <h2>No Appointments Yet</h2>
-              <p style={{color: 'var(--text-muted)'}}>
+              <p style={{color: 'var(--text-muted)', marginBottom: '1.25rem'}}>
                 Appointments booked through your QR code will appear here. Share your QR code to start receiving bookings!
               </p>
+              <div style={{ padding: '1rem 1.25rem', background: '#f0f9ff', borderRadius: 10, border: '1.5px solid #bae6fd', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                <span style={{ fontSize: '1.4rem', lineHeight: 1 }}>💡</span>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#0369a1', marginBottom: '0.25rem' }}>Want to schedule an appointment manually?</div>
+                  <div style={{ color: '#374151', fontSize: '0.92rem', lineHeight: 1.5 }}>
+                    Go to the <strong>Customers</strong> tab, select a customer, then click <strong>+ New Appointment</strong> to create one directly from their profile.
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="card">
