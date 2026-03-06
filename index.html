@@ -1217,7 +1217,7 @@
   <!-- Google Places Autocomplete (Address accuracy for Smart Route) -->
   <!-- IMPORTANT: Replace YOUR_GOOGLE_MAPS_BROWSER_KEY with a browser-restricted key (HTTP referrer restricted to your domain) -->
 <script async
-src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hkTyzbvbUc&libraries=places&callback=initAutocomplete">
+src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hkTyzbvbUc&libraries=places&loading=async">
 </script>
 </head>
 <body>
@@ -9487,24 +9487,6 @@ setUserProfile({
 
     ReactDOM.render(<App />, document.getElementById('root'));
   </script>
-  <script>
-function initAutocomplete() {
-  const input = document.getElementById("address");
 
-  if (!input) {
-    console.log("Address input not found");
-    return;
-  }
-
-  const autocomplete = new google.maps.places.Autocomplete(input, {
-    types: ["address"]
-  });
-
-  autocomplete.addListener("place_changed", () => {
-    const place = autocomplete.getPlace();
-    console.log("Selected:", place.formatted_address);
-  });
-}
-</script>
 </body>
 </html>
