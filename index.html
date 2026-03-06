@@ -1217,7 +1217,7 @@
   <!-- Google Places Autocomplete (Address accuracy for Smart Route) -->
   <!-- IMPORTANT: Replace YOUR_GOOGLE_MAPS_BROWSER_KEY with a browser-restricted key (HTTP referrer restricted to your domain) -->
 <script async
-src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hkTyzbvbUc&libraries=places&loading=async">
+src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hkTyzbvbUc&libraries=places&v=beta&loading=async">
 </script>
 </head>
 <body>
@@ -4898,21 +4898,25 @@ function ServicesView({ userId }) {
       });
 
       useEffect(() => {
-        // Initialize Google Places Autocomplete once the script is loaded
+        // Use new PlaceAutocompleteElement API (required for keys created after March 1 2025)
         let tries = 0;
-        const maxTries = 40; // ~10s at 250ms
+        const maxTries = 40;
         const timer = setInterval(() => {
           tries++;
-          if (window.google?.maps?.places && addressInputRef.current) {
+          const container = addressInputRef.current;
+          if (window.google?.maps?.places?.PlaceAutocompleteElement && container) {
             clearInterval(timer);
-
             try {
-              const ac = new window.google.maps.places.Autocomplete(addressInputRef.current, {
+              const pac = new window.google.maps.places.PlaceAutocompleteElement({
                 types: ['address'],
                 componentRestrictions: { country: 'us' },
-                fields: ['address_components', 'formatted_address', 'geometry', 'place_id'],
               });
-              console.log('✅ Google Places Autocomplete attached');
+
+              // Style the widget to match the rest of the form
+              pac.style.cssText = 'width:100%;display:block;';
+
+              container.appendChild(pac);
+              console.log('✅ Google PlaceAutocompleteElement attached');
 
               const getComponent = (components, type, useShort = false) => {
                 const c = (components || []).find(x => (x.types || []).includes(type));
@@ -4920,16 +4924,16 @@ function ServicesView({ userId }) {
                 return useShort ? (c.short_name || '') : (c.long_name || '');
               };
 
-              ac.addListener('place_changed', () => {
-                const place = ac.getPlace();
-                const comps = place?.address_components || [];
+              pac.addEventListener('gmp-placeselect', async (e) => {
+                const place = e.placePrediction.toPlace();
+                await place.fetchFields({ fields: ['addressComponents', 'formattedAddress', 'location', 'id'] });
 
+                const comps = place.addressComponents || [];
                 const streetNumber = getComponent(comps, 'street_number');
                 const route = getComponent(comps, 'route');
                 const city = getComponent(comps, 'locality') || getComponent(comps, 'sublocality') || getComponent(comps, 'postal_town');
                 const state = getComponent(comps, 'administrative_area_level_1', true);
                 const zip = getComponent(comps, 'postal_code');
-
                 const address1 = [streetNumber, route].filter(Boolean).join(' ').trim();
 
                 setFormData(prev => ({
@@ -4941,21 +4945,18 @@ function ServicesView({ userId }) {
                 }));
 
                 setPlaceMeta({
-                  placeId: place?.place_id || '',
-                  formattedAddress: place?.formatted_address || '',
-                  lat: place?.geometry?.location?.lat?.() ?? null,
-                  lng: place?.geometry?.location?.lng?.() ?? null,
+                  placeId: place.id || '',
+                  formattedAddress: place.formattedAddress || '',
+                  lat: place.location?.lat?.() ?? null,
+                  lng: place.location?.lng?.() ?? null,
                   source: 'places',
                 });
               });
             } catch (err) {
-              console.warn('Places Autocomplete init failed:', err);
+              console.warn('PlaceAutocompleteElement init failed:', err);
             }
           }
-
-          if (tries >= maxTries) {
-            clearInterval(timer);
-          }
+          if (tries >= maxTries) clearInterval(timer);
         }, 250);
 
         return () => clearInterval(timer);
@@ -5457,18 +5458,7 @@ function ServicesView({ userId }) {
                     
                     <div className="form-group">
                       <label>Address</label>
-                      <input 
-                        ref={addressInputRef}
-                        type="text" 
-                        value={formData.address}
-                        onChange={(e) => {
-                          // If user manually edits the address, clear Places metadata so we know it wasn't selected
-                          setPlaceMeta({ placeId: '', formattedAddress: '', lat: null, lng: null, source: '' });
-                          setFormData({...formData, address: e.target.value});
-                        }}
-                        placeholder="Start typing an address…"
-                        autoComplete="off"
-                      />
+                      <div ref={addressInputRef} style={{width:'100%'}}></div>
                       <div style={{fontSize: '0.85rem', color: '#64748b', marginTop: '0.35rem'}}>
                         Tip: pick an address from the suggestions for the most accurate routing.
                       </div>
