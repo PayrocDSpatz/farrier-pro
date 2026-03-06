@@ -6926,6 +6926,8 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [numberOfHorses, setNumberOfHorses] = useState('1');
       const [services, setServices] = useState([]);
       const [address, setAddress] = useState(customer.address || '');
+      const [city, setCity] = useState(customer.city || '');
+      const [state, setState] = useState(customer.state || '');
       const [comments, setComments] = useState('');
       const [saving, setSaving] = useState(false);
       const [sendConfirmation, setSendConfirmation] = useState(false);
@@ -6956,6 +6958,8 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             email: customer.email || '',
             phone: customer.phone || '',
             address: address || '',
+            city: city || '',
+            state: state || '',
             services,
             numberOfHorses,
             comments,
@@ -7055,6 +7059,20 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 <label>Address</label>
                 <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Service location"
                   style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* City & State */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: '0.75rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label>City</label>
+                  <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="City"
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label>State</label>
+                  <input type="text" value={state} onChange={e => setState(e.target.value.toUpperCase())} placeholder="FL" maxLength={2}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box', textTransform: 'uppercase' }} />
+                </div>
               </div>
 
               {/* Notes */}
