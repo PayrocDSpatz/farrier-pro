@@ -3049,7 +3049,97 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const [formSource, setFormSource] = useState('referral');
       const [formPhone, setFormPhone] = useState('');
       const [formAddress, setFormAddress] = useState('');
+      const [formCity, setFormCity] = useState('');
+      const [formState, setFormState] = useState('');
+      const [formZip, setFormZip] = useState('');
       const [formNotes, setFormNotes] = useState('');
+      const custAddressRef = useRef(null);
+      const custAddressPacRef = useRef(null); // holds the PAC widget instance
+
+      // ---- Customer Address Autocomplete (Google Places) ----
+      useEffect(() => {
+        if (!showAddEdit) return; // only mount when form is open
+        let tries = 0;
+        const maxTries = 40;
+        const timer = setInterval(() => {
+          tries++;
+          const container = custAddressRef.current;
+          if (window.google?.maps?.places?.PlaceAutocompleteElement && container && !custAddressPacRef.current) {
+            clearInterval(timer);
+            try {
+              const pac = new window.google.maps.places.PlaceAutocompleteElement({
+                types: ['address'],
+                componentRestrictions: { country: 'us' },
+              });
+              pac.style.cssText = 'width:100%;display:block;';
+              container.appendChild(pac);
+              custAddressPacRef.current = pac;
+
+              const handlePlaceSelect = async (e) => {
+                try {
+                  const prediction = e.placePrediction || e.place;
+                  if (!prediction) return;
+                  const place = prediction.toPlace ? prediction.toPlace() : prediction;
+                  await place.fetchFields({ fields: ['addressComponents', 'formattedAddress', 'location', 'id'] });
+
+                  const formatted = place.formattedAddress || '';
+                  const comps = place.addressComponents || [];
+
+                  let streetNumber = '', route = '', city = '', state = '', zip = '';
+                  if (comps.length > 0) {
+                    const get = (type, short = false) => {
+                      for (const c of comps) {
+                        const types = c.types || [];
+                        if (types.includes(type)) return short ? (c.shortText || c.short_name || '') : (c.longText || c.long_name || '');
+                      }
+                      return '';
+                    };
+                    streetNumber = get('street_number');
+                    route = get('route');
+                    city = get('locality') || get('sublocality') || get('postal_town');
+                    state = get('administrative_area_level_1', true);
+                    zip = get('postal_code');
+                  }
+                  if (!city && formatted) {
+                    const parts = formatted.split(',').map(p => p.trim());
+                    if (parts.length >= 3) {
+                      city = parts[1] || '';
+                      const stateZip = (parts[2] || '').trim().split(' ');
+                      state = stateZip[0] || '';
+                      zip = stateZip[1] || '';
+                    }
+                  }
+                  const address1 = [streetNumber, route].filter(Boolean).join(' ').trim()
+                    || (formatted.split(',')[0] || '').trim();
+
+                  const widgetInput = pac.querySelector('input');
+                  if (widgetInput && address1) widgetInput.value = address1;
+
+                  setFormAddress(address1);
+                  setFormCity(city);
+                  setFormState((state || '').toUpperCase());
+                  setFormZip(zip);
+                } catch (err) {
+                  console.error('Customer PAC error:', err);
+                }
+              };
+              pac.addEventListener('gmp-placeselect', handlePlaceSelect);
+              pac.addEventListener('gmp-select', handlePlaceSelect);
+            } catch (err) {
+              console.error('Failed to init customer PAC:', err);
+            }
+          } else if (tries >= maxTries) {
+            clearInterval(timer);
+          }
+        }, 200);
+        return () => {
+          clearInterval(timer);
+          if (custAddressPacRef.current && custAddressRef.current) {
+            try { custAddressRef.current.removeChild(custAddressPacRef.current); } catch(_) {}
+          }
+          custAddressPacRef.current = null;
+        };
+      }, [showAddEdit]);
 
       const loadCustomers = async () => {
         if (!db) return;
@@ -3138,8 +3228,8 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const openAdd = () => {
         setEditingCustomer(null);
         setFormName(''); setFormFarmName(''); setFormEmail(''); setFormPhone('');
-        setFormAddress(''); setFormNotes(''); setFormSource('referral');
-        setFormAddress(''); setFormNotes('');
+        setFormAddress(''); setFormCity(''); setFormState(''); setFormZip('');
+        setFormNotes(''); setFormSource('referral');
         setShowAddEdit(true);
       };
 
@@ -3150,6 +3240,9 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         setFormEmail(cust.email || '');
         setFormPhone(cust.phone || '');
         setFormAddress(cust.address || '');
+        setFormCity(cust.city || '');
+        setFormState(cust.state || '');
+        setFormZip(cust.zip || '');
         setFormNotes(cust.notes || '');
         setFormSource(cust.source === 'qr_booking' ? 'qr_booking' : (cust.source || 'referral'));
         setShowAddEdit(true);
@@ -3166,6 +3259,9 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             email: formEmail.trim(),
             phone: formPhone.trim(),
             address: formAddress.trim(),
+            city: formCity.trim(),
+            state: formState.trim().toUpperCase(),
+            zip: formZip.trim(),
             notes: formNotes.trim(),
             source: formSource,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3249,7 +3345,6 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             { label: 'Farm / Business Name', val: formFarmName, set: setFormFarmName, type: 'text', ph: 'Sunny Acres Farm' },
             { label: 'Email', val: formEmail, set: setFormEmail, type: 'email', ph: 'jane@example.com' },
             { label: 'Phone', val: formPhone, set: setFormPhone, type: 'tel', ph: '(555) 555-5555' },
-            { label: 'Address', val: formAddress, set: setFormAddress, type: 'text', ph: '123 Main St, City, FL 12345' },
           ].map(f => (
             <div className="form-group" key={f.label}>
               <label>{f.label}</label>
@@ -3258,6 +3353,42 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
             </div>
           ))}
+
+          {/* Address with Google Places Autocomplete */}
+          <div className="form-group">
+            <label>Street Address</label>
+            <div ref={custAddressRef} style={{ width: '100%' }}>
+              {/* Google PlaceAutocompleteElement mounts here */}
+            </div>
+            {/* Fallback manual input shown if PAC didn't mount (e.g. slow load) */}
+            {!custAddressPacRef.current && (
+              <input type="text" value={formAddress} placeholder="123 Main St"
+                onChange={e => setFormAddress(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box', marginTop: 4 }} />
+            )}
+          </div>
+
+          {/* City / State / Zip row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 110px', gap: '0.75rem' }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>City</label>
+              <input type="text" value={formCity} placeholder="Orlando"
+                onChange={e => setFormCity(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>State</label>
+              <input type="text" value={formState} placeholder="FL" maxLength={2}
+                onChange={e => setFormState(e.target.value.toUpperCase())}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box', textTransform: 'uppercase' }} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Zip Code</label>
+              <input type="text" value={formZip} placeholder="32801" maxLength={10}
+                onChange={e => setFormZip(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+            </div>
+          </div>
           <div className="form-group">
             <label>Notes</label>
             <textarea value={formNotes} placeholder="Horse names, special instructions, preferences…"
@@ -3311,7 +3442,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', color: '#555', fontSize: '0.95rem' }}>
                   {selectedCustomer.phone && <span>📞 {selectedCustomer.phone}</span>}
                   {selectedCustomer.email && <span>✉️ {selectedCustomer.email}</span>}
-                  {selectedCustomer.address && <span>📍 {selectedCustomer.address}</span>}
+                  {(selectedCustomer.address || selectedCustomer.city) && <span>📍 {[selectedCustomer.address, selectedCustomer.city, selectedCustomer.state, selectedCustomer.zip].filter(Boolean).join(', ')}</span>}
                 </div>
                 {selectedCustomer.notes && (
                   <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.9rem', background: '#f8fafc', borderRadius: 8, fontSize: '0.9rem', color: '#444', borderLeft: '3px solid var(--primary)' }}>
