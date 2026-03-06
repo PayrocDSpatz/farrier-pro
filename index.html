@@ -4912,6 +4912,7 @@ function ServicesView({ userId }) {
                 componentRestrictions: { country: 'us' },
                 fields: ['address_components', 'formatted_address', 'geometry', 'place_id'],
               });
+              console.log('✅ Google Places Autocomplete attached');
 
               const getComponent = (components, type, useShort = false) => {
                 const c = (components || []).find(x => (x.types || []).includes(type));
@@ -5466,7 +5467,7 @@ function ServicesView({ userId }) {
                           setFormData({...formData, address: e.target.value});
                         }}
                         placeholder="Start typing an address…"
-                        autoComplete="street-address"
+                        autoComplete="off"
                       />
                       <div style={{fontSize: '0.85rem', color: '#64748b', marginTop: '0.35rem'}}>
                         Tip: pick an address from the suggestions for the most accurate routing.
