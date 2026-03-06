@@ -1830,7 +1830,14 @@ async function ensureFarriTechfile_(uid, profile) {
               setUserProfile(null);
             }
           } else {
-            setUserProfile(profileDoc.data());
+            const profileData = profileDoc.data();
+            // Backfill email if missing (e.g. Google sign-in users whose doc predates email capture)
+            if (!profileData.email && u?.email) {
+              await db.collection('farriers').doc(farrierIdToUse).update({ email: u.email });
+              profileData.email = u.email;
+              console.log('✅ Backfilled missing email into farrier profile:', u.email);
+            }
+            setUserProfile(profileData);
           }
 } else {
           setUserProfile(null);
@@ -5138,13 +5145,14 @@ function ServicesView({ userId }) {
             }
 
             // Send booking notification emails (farrier + customer)
+            console.log('📧 farrierInfo at booking time:', JSON.stringify(farrierInfo));
             try {
               await fetch('/api/send-booking-emails', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   // Farrier
-                  farrierEmail: farrierInfo?.email || '',
+                  farrierEmail: farrierInfo?.email || farrierInfo?.contactEmail || farrierInfo?.notificationEmail || '',
                   farrierBusinessName: farrierInfo?.businessName || '',
                   // Customer / booking
                   customerName: formData.name,
