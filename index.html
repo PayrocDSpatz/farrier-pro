@@ -3003,6 +3003,21 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'reports' && <ReportsView userId={farrierId} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
             {tab === 'about' && <AboutView />}
+            <footer style={{
+              textAlign: 'center',
+              padding: '16px',
+              marginTop: '24px',
+              borderTop: '1px solid #e5e7eb',
+              fontSize: '0.78rem',
+              color: '#9ca3af',
+            }}>
+              <span>© {new Date().getFullYear()} FarriTech &nbsp;·&nbsp; </span>
+              <a href="https://farritech.com/privacy" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Privacy Policy</a>
+              <span> &nbsp;·&nbsp; </span>
+              <a href="https://farritech.com/terms" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Terms of Service</a>
+              <span> &nbsp;·&nbsp; </span>
+              <a href="https://farritech.com/refund-policy" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Refund Policy</a>
+            </footer>
           </main>
         </div>
       );
@@ -4492,21 +4507,6 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               </div>
             </div>
           )}
-          <footer style={{
-            textAlign: 'center',
-            padding: '16px',
-            marginTop: '24px',
-            borderTop: '1px solid #e5e7eb',
-            fontSize: '0.78rem',
-            color: '#9ca3af',
-          }}>
-            <span>© {new Date().getFullYear()} FarriTech &nbsp;·&nbsp; </span>
-            <a href="https://farritech.com/privacy" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Privacy Policy</a>
-            <span> &nbsp;·&nbsp; </span>
-            <a href="https://farritech.com/terms" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Terms of Service</a>
-            <span> &nbsp;·&nbsp; </span>
-            <a href="https://farritech.com/refund" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Refund Policy</a>
-          </footer>
         </div>
       );
     }
