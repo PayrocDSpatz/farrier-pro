@@ -48,7 +48,9 @@ export default async function handler(req, res) {
       comments,
     } = req.body || {};
 
-    if (!farrierEmail) return res.status(400).json({ ok: false, error: 'Missing farrierEmail' });
+    if (!farrierEmail) {
+      console.warn('⚠️ farrierEmail missing — skipping farrier notification, will still send customer email');
+    }
 
     const servicesList = Array.isArray(services) ? services.join(', ') : (services || 'Not specified');
     const fullAddress = [address, city, state, zip].filter(Boolean).join(', ') || 'Not provided';
