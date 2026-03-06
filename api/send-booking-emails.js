@@ -108,7 +108,7 @@ export default async function handler(req, res) {
     </div>
 
     <div style="text-align:center;margin:30px 0;">
-      <a href="https://farrier-pro.vercel.app" style="background:linear-gradient(135deg,#2563eb 0%,#06b6d4 100%);color:#fff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;display:inline-block;font-size:16px;">
+      <a href="https://app.farritech.com" style="background:linear-gradient(135deg,#2563eb 0%,#06b6d4 100%);color:#fff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;display:inline-block;font-size:16px;">
         View & Confirm Appointment →
       </a>
     </div>
