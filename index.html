@@ -3942,7 +3942,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               ${a.comments ? `<div style="font-size:0.82em;color:#888;font-style:italic">Notes: ${a.comments}</div>` : ''}
             </td>
             <td style="padding:10px 8px;white-space:nowrap;vertical-align:top;font-weight:600">${fmtTime(a.requestedTime)}</td>
-            <td style="padding:10px 8px;vertical-align:top">${fmtPhone(a.phone)}</td>
+            <td style="padding:10px 8px;vertical-align:top;white-space:nowrap">${fmtPhone(a.phone)}</td>
           </tr>`;
         }).join('');
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Route Sheet — ${dateStr}</title>
