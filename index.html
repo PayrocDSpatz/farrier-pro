@@ -3855,6 +3855,14 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`;
       };
 
+      const fmtPhone = (p) => {
+        if (!p) return '';
+        const d = p.replace(/\D/g, '');
+        if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
+        if (d.length === 11 && d[0] === '1') return `+1 (${d.slice(1,4)}) ${d.slice(4,7)}-${d.slice(7)}`;
+        return p;
+      };
+
       const fullAddr = (a) => [a.address, a.city, a.state, a.zip].filter(Boolean).join(', ');
 
       // Smart Route — Google Directions API waypoint optimisation
@@ -3910,6 +3918,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           const addr = fullAddr(a);
           if (addr) txt += `   📍 ${addr}\n`;
           if (a.services?.length) txt += `   🐴 ${a.services.join(', ')}\n`;
+          if (a.phone) txt += `   📞 ${fmtPhone(a.phone)}\n`;
           if (a.numberOfHorses) txt += `   Horses: ${a.numberOfHorses}\n`;
           if (a.comments) txt += `   Notes: ${a.comments}\n`;
           txt += '\n';
@@ -3933,7 +3942,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               ${a.comments ? `<div style="font-size:0.82em;color:#888;font-style:italic">Notes: ${a.comments}</div>` : ''}
             </td>
             <td style="padding:10px 8px;white-space:nowrap;vertical-align:top;font-weight:600">${fmtTime(a.requestedTime)}</td>
-            <td style="padding:10px 8px;vertical-align:top">${a.phone || ''}</td>
+            <td style="padding:10px 8px;vertical-align:top">${fmtPhone(a.phone)}</td>
           </tr>`;
         }).join('');
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Route Sheet — ${dateStr}</title>
@@ -4072,7 +4081,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                     <div style={{ fontWeight: 700 }}>{a.customerName}{a.farmName ? <span style={{ fontWeight: 400, color: '#666' }}> — {a.farmName}</span> : ''}</div>
                     <div style={{ fontSize: '0.87rem', color: '#555', marginTop: 2 }}>
                       <span style={{ marginRight: '0.75rem' }}>⏰ {fmtTime(a.requestedTime)}</span>
-                      {a.phone && <span style={{ marginRight: '0.75rem' }}>📞 {a.phone}</span>}
+                      {a.phone && <span style={{ marginRight: '0.75rem' }}>📞 {fmtPhone(a.phone)}</span>}
                     </div>
                     {addr && (
                       <div style={{ fontSize: '0.85rem', color: '#2563eb', marginTop: 2 }}>
