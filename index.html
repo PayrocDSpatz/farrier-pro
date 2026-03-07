@@ -3871,37 +3871,27 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         setRouting(true);
         setSendResult('');
         try {
-          const waypoints = withAddr.map(a => ({ location: fullAddr(a), stopover: true }));
-          const directionsService = new window.google.maps.DirectionsService();
-          directionsService.route({
-            origin: effectiveStart,
-            destination: effectiveStart,
-            waypoints,
-            optimizeWaypoints: true,
-            travelMode: window.google.maps.TravelMode.DRIVING,
-          }, (result, status) => {
-            if (status === 'OK') {
-              const order = result.routes[0].waypoint_order;
-              const ordered = order.map(i => withAddr[i]);
-              // Append any appointments without an address at the end (unrouted)
-              const unrouted = appointments.filter(a => !fullAddr(a));
-              setRouteOrder([...ordered, ...unrouted]);
-              // Total distance & duration
-              const legs = result.routes[0].legs;
-              let distM = 0, durS = 0;
-              legs.forEach(l => { distM += l.distance.value; durS += l.duration.value; });
-              setTotalDistance((distM / 1609.34).toFixed(1));
-              setTotalDuration(Math.round(durS / 60));
-              setRouteGenerated(true);
-            } else {
-              alert('Could not calculate route: ' + status);
-            }
-            setRouting(false);
+          const res = await fetch('/api/smart-route', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              origin: effectiveStart,
+              stops: withAddr.map(a => fullAddr(a)),
+            }),
           });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Route API error');
+
+          const ordered = data.order.map(i => withAddr[i]);
+          const unrouted = appointments.filter(a => !fullAddr(a));
+          setRouteOrder([...ordered, ...unrouted]);
+          setTotalDistance(data.distanceMiles);
+          setTotalDuration(data.durationMinutes);
+          setRouteGenerated(true);
         } catch(e) {
           alert('Route error: ' + e.message);
-          setRouting(false);
         }
+        setRouting(false);
       };
 
       const displayList = routeGenerated ? routeOrder : appointments;
