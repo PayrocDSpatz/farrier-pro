@@ -3982,10 +3982,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           }
           if (sendEmail && userProfile?.email) {
             const dateStr = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-            const res = await fetch('/api/send-route-sheet', {
+            const res = await fetch('/api/send-email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
+                action: 'route-sheet',
                 to: userProfile.email,
                 subject: `Route Sheet — ${dateStr}`,
                 html: routeHtml,
@@ -6849,10 +6850,11 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               }
               // Send confirmation email to customer (non-blocking)
               if (appointment.email) {
-                fetch('/api/send-confirmation-email', {
+                fetch('/api/send-email', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
+                    action: 'confirmation',
                     customerEmail: appointment.email,
                     customerName: appointment.customerName,
                     farmName: appointment.farmName || '',
@@ -7245,10 +7247,11 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       onClick={async () => {
                         await updateStatus(cancellingAppointment.id, 'cancelled');
                         // Send cancellation email
-                        fetch('/api/send-cancellation-email', {
+                        fetch('/api/send-email', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
+                            action: 'cancellation',
                             customerEmail: cancellingAppointment.email,
                             customerName: cancellingAppointment.customerName,
                             farmName: cancellingAppointment.farmName || '',
@@ -7673,10 +7676,11 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
           // Send update email to customer if requested
           if (sendUpdateEmail && appointment.email) {
-            fetch('/api/send-update-email', {
+            fetch('/api/send-email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
+                action: 'update',
                 customerEmail: appointment.email,
                 customerName: appointment.customerName,
                 farmName: farmName || appointment.farmName || '',
