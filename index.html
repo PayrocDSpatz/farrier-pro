@@ -2944,6 +2944,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         { id: 'customers', label: 'Customers', icon: '👥' },
         { id: 'services', label: 'Services', icon: '🧾' },
         { id: 'reports', label: 'Reports', icon: '📈' },
+        { id: 'route', label: 'Route Sheet', icon: '🗺️' },
         { id: 'settings', label: 'Settings', icon: '⚙️' },
         { id: 'about', label: 'About', icon: 'ℹ️' }
       ];
@@ -3005,6 +3006,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'customers' && <CustomersView userId={farrierId} userProfile={userProfile} />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
             {tab === 'reports' && <ReportsView userId={farrierId} />}
+            {tab === 'route' && <RouteSheetView userId={farrierId} userProfile={userProfile} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
             {tab === 'about' && <AboutView />}
             <footer style={{
@@ -3749,6 +3751,384 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   <button className="btn btn-sm" style={{ background: '#ef4444', color: '#fff' }} onClick={() => deleteCustomer(confirmDelete)}>🗑️ Delete</button>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ─────────────────────────────────────────
+    // ROUTE SHEET VIEW
+    // ─────────────────────────────────────────
+    function RouteSheetView({ userId, userProfile }) {
+      const today = new Date().toISOString().split('T')[0];
+      const [date, setDate] = React.useState(today);
+      const [useDefaultAddress, setUseDefaultAddress] = React.useState(true);
+      const [startAddress, setStartAddress] = React.useState('');
+      const [sendSms, setSendSms] = React.useState(false);
+      const [sendEmail, setSendEmail] = React.useState(false);
+      const [appointments, setAppointments] = React.useState([]);
+      const [routeOrder, setRouteOrder] = React.useState([]); // ordered list after smart route
+      const [loading, setLoading] = React.useState(false);
+      const [routing, setRouting] = React.useState(false);
+      const [routeGenerated, setRouteGenerated] = React.useState(false);
+      const [sending, setSending] = React.useState(false);
+      const [sendResult, setSendResult] = React.useState('');
+      const [totalDistance, setTotalDistance] = React.useState(null);
+      const [totalDuration, setTotalDuration] = React.useState(null);
+      const startAddressRef = React.useRef(null);
+      const startAddressPacRef = React.useRef(null);
+
+      // Google Places for start address
+      React.useEffect(() => {
+        if (useDefaultAddress) return;
+        let tries = 0;
+        const timer = setInterval(() => {
+          tries++;
+          const container = startAddressRef.current;
+          if (window.google?.maps?.places?.PlaceAutocompleteElement && container && !startAddressPacRef.current) {
+            clearInterval(timer);
+            try {
+              const pac = new window.google.maps.places.PlaceAutocompleteElement({
+                types: ['address'], componentRestrictions: { country: 'us' }
+              });
+              pac.style.cssText = 'width:100%;display:block;';
+              container.appendChild(pac);
+              startAddressPacRef.current = pac;
+              const handleSelect = async (e) => {
+                try {
+                  const pred = e.placePrediction || e.place;
+                  if (!pred) return;
+                  const place = pred.toPlace ? pred.toPlace() : pred;
+                  await place.fetchFields({ fields: ['formattedAddress'] });
+                  setStartAddress(place.formattedAddress || '');
+                  const inp = pac.querySelector('input');
+                  if (inp) inp.value = place.formattedAddress || '';
+                } catch(err) { console.error(err); }
+              };
+              pac.addEventListener('gmp-placeselect', handleSelect);
+              pac.addEventListener('gmp-select', handleSelect);
+            } catch(err) { console.error(err); }
+          } else if (tries >= 40) clearInterval(timer);
+        }, 200);
+        return () => {
+          clearInterval(timer);
+          if (startAddressPacRef.current && startAddressRef.current) {
+            try { startAddressRef.current.removeChild(startAddressPacRef.current); } catch(_){}
+          }
+          startAddressPacRef.current = null;
+        };
+      }, [useDefaultAddress]);
+
+      const defaultAddress = [
+        userProfile?.address, userProfile?.city, userProfile?.state, userProfile?.zip
+      ].filter(Boolean).join(', ');
+
+      const effectiveStart = useDefaultAddress ? defaultAddress : startAddress;
+
+      // Load appointments for selected date
+      const loadAppointments = async () => {
+        if (!db || !date) return;
+        setLoading(true);
+        setRouteGenerated(false);
+        setRouteOrder([]);
+        setSendResult('');
+        try {
+          const snap = await db.collection('appointments')
+            .where('farrierId', '==', userId)
+            .where('requestedDate', '==', date)
+            .get();
+          const appts = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(a => a.status !== 'cancelled')
+            .sort((a, b) => (a.requestedTime || '').localeCompare(b.requestedTime || ''));
+          setAppointments(appts);
+        } catch(e) { console.error(e); }
+        setLoading(false);
+      };
+
+      React.useEffect(() => { loadAppointments(); }, [date, userId]);
+
+      const fmtTime = (t) => {
+        if (!t) return '—';
+        const [h, m] = t.split(':').map(Number);
+        return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`;
+      };
+
+      const fullAddr = (a) => [a.address, a.city, a.state, a.zip].filter(Boolean).join(', ');
+
+      // Smart Route — Google Directions API waypoint optimisation
+      const runSmartRoute = async () => {
+        const withAddr = appointments.filter(a => fullAddr(a));
+        if (withAddr.length < 2) {
+          alert('Need at least 2 appointments with addresses to optimise the route.');
+          return;
+        }
+        if (!effectiveStart) {
+          alert('Please enter a start address or enable the default farrier address in Settings.');
+          return;
+        }
+        setRouting(true);
+        setSendResult('');
+        try {
+          const waypoints = withAddr.map(a => ({ location: fullAddr(a), stopover: true }));
+          const directionsService = new window.google.maps.DirectionsService();
+          directionsService.route({
+            origin: effectiveStart,
+            destination: effectiveStart,
+            waypoints,
+            optimizeWaypoints: true,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          }, (result, status) => {
+            if (status === 'OK') {
+              const order = result.routes[0].waypoint_order;
+              const ordered = order.map(i => withAddr[i]);
+              // Append any appointments without an address at the end (unrouted)
+              const unrouted = appointments.filter(a => !fullAddr(a));
+              setRouteOrder([...ordered, ...unrouted]);
+              // Total distance & duration
+              const legs = result.routes[0].legs;
+              let distM = 0, durS = 0;
+              legs.forEach(l => { distM += l.distance.value; durS += l.duration.value; });
+              setTotalDistance((distM / 1609.34).toFixed(1));
+              setTotalDuration(Math.round(durS / 60));
+              setRouteGenerated(true);
+            } else {
+              alert('Could not calculate route: ' + status);
+            }
+            setRouting(false);
+          });
+        } catch(e) {
+          alert('Route error: ' + e.message);
+          setRouting(false);
+        }
+      };
+
+      const displayList = routeGenerated ? routeOrder : appointments;
+
+      const buildRouteText = () => {
+        const dateStr = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        const bizName = userProfile?.businessName || 'FarriTech';
+        let txt = `${bizName} — Route Sheet\n${dateStr}\n`;
+        if (effectiveStart) txt += `Starting from: ${effectiveStart}\n`;
+        if (totalDistance) txt += `Est. drive: ${totalDistance} mi · ${totalDuration} min\n`;
+        txt += '\n';
+        displayList.forEach((a, i) => {
+          txt += `${i + 1}. ${fmtTime(a.requestedTime)}  ${a.customerName}`;
+          if (a.farmName) txt += ` — ${a.farmName}`;
+          txt += '\n';
+          const addr = fullAddr(a);
+          if (addr) txt += `   📍 ${addr}\n`;
+          if (a.services?.length) txt += `   🐴 ${a.services.join(', ')}\n`;
+          if (a.numberOfHorses) txt += `   Horses: ${a.numberOfHorses}\n`;
+          if (a.comments) txt += `   Notes: ${a.comments}\n`;
+          txt += '\n';
+        });
+        return txt;
+      };
+
+      const buildRouteHtml = () => {
+        const dateStr = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        const bizName = userProfile?.businessName || 'FarriTech';
+        const rows = displayList.map((a, i) => {
+          const addr = fullAddr(a);
+          const mapsUrl = addr ? `https://maps.google.com/?q=${encodeURIComponent(addr)}` : null;
+          return `<tr style="border-bottom:1px solid #e5e7eb">
+            <td style="padding:10px 8px;font-weight:700;color:#2563eb;vertical-align:top">${i + 1}</td>
+            <td style="padding:10px 8px;vertical-align:top">
+              <div style="font-weight:700">${a.customerName}${a.farmName ? ` <span style="font-weight:400;color:#666">— ${a.farmName}</span>` : ''}</div>
+              ${addr ? `<div style="font-size:0.85em;color:#555;margin-top:2px">📍 ${mapsUrl ? `<a href="${mapsUrl}" style="color:#2563eb">${addr}</a>` : addr}</div>` : ''}
+              ${a.services?.length ? `<div style="font-size:0.85em;color:#555;margin-top:2px">🐴 ${a.services.join(', ')}</div>` : ''}
+              ${a.numberOfHorses ? `<div style="font-size:0.82em;color:#888">Horses: ${a.numberOfHorses}</div>` : ''}
+              ${a.comments ? `<div style="font-size:0.82em;color:#888;font-style:italic">Notes: ${a.comments}</div>` : ''}
+            </td>
+            <td style="padding:10px 8px;white-space:nowrap;vertical-align:top;font-weight:600">${fmtTime(a.requestedTime)}</td>
+            <td style="padding:10px 8px;vertical-align:top">${a.phone || ''}</td>
+          </tr>`;
+        }).join('');
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Route Sheet — ${dateStr}</title>
+          <style>body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:24px;color:#111}
+          h1{color:#1e3a5f;margin-bottom:4px}table{width:100%;border-collapse:collapse}
+          th{text-align:left;background:#f0f9ff;padding:8px;color:#0369a1;font-size:0.85em;text-transform:uppercase}
+          @media print{a{color:#111;text-decoration:none}}</style></head><body>
+          <h1>🗺️ Route Sheet</h1>
+          <p style="margin:0;color:#555"><strong>${bizName}</strong> · ${dateStr}</p>
+          ${effectiveStart ? `<p style="margin:4px 0 0;color:#555;font-size:0.9em">📍 Start: ${effectiveStart}</p>` : ''}
+          ${totalDistance ? `<p style="margin:4px 0 0;color:#555;font-size:0.9em">🚗 Est. ${totalDistance} mi · ${totalDuration} min driving</p>` : ''}
+          <br>
+          <table><thead><tr><th>#</th><th>Client / Stop</th><th>Time</th><th>Phone</th></tr></thead>
+          <tbody>${rows}</tbody></table>
+          </body></html>`;
+      };
+
+      const downloadPdf = () => {
+        const html = buildRouteHtml();
+        const win = window.open('', '_blank');
+        if (!win) { alert('Popup blocked — please allow popups.'); return; }
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+        setTimeout(() => { win.print(); }, 600);
+      };
+
+      const handleSend = async () => {
+        if (!sendSms && !sendEmail) { alert('Please select at least one delivery method.'); return; }
+        setSending(true);
+        setSendResult('');
+        const routeText = buildRouteText();
+        const routeHtml = buildRouteHtml();
+        let results = [];
+        try {
+          if (sendSms && userProfile?.smsEnabled && userProfile?.phone) {
+            const msg = routeText.length > 1500 ? routeText.substring(0, 1490) + '…' : routeText;
+            const res = await fetch('/api/send-sms', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ to: userProfile.phone, body: msg })
+            });
+            results.push(res.ok ? '✅ SMS sent' : '❌ SMS failed');
+          } else if (sendSms) {
+            results.push('⚠️ SMS not available (SMS disabled or no phone in Settings)');
+          }
+          if (sendEmail && userProfile?.email) {
+            const dateStr = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+            const res = await fetch('/api/send-route-sheet', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: userProfile.email,
+                subject: `Route Sheet — ${dateStr}`,
+                html: routeHtml,
+              })
+            });
+            results.push(res.ok ? '✅ Email sent' : '❌ Email failed');
+          } else if (sendEmail) {
+            results.push('⚠️ Email not available (no email in Settings)');
+          }
+          setSendResult(results.join('  '));
+        } catch(e) {
+          setSendResult('❌ Error: ' + e.message);
+        }
+        setSending(false);
+      };
+
+      const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' };
+      const cardStyle = { background: '#fff', borderRadius: 12, padding: '1.5rem', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', marginBottom: '1.25rem', border: '1px solid var(--border)' };
+
+      return (
+        <div style={{ maxWidth: 680, margin: '0 auto' }}>
+          <h2 style={{ color: 'var(--primary)', marginBottom: '0.25rem' }}>🗺️ Route Sheet</h2>
+          <p style={{ color: 'var(--text-muted)', marginTop: 0, marginBottom: '1.5rem' }}>Build a daily stop list, optimise the drive order, then send or print.</p>
+
+          {/* Date picker */}
+          <div style={cardStyle}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label style={{ fontWeight: 700 }}>📅 Select Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, maxWidth: 220 }} />
+            </div>
+          </div>
+
+          {/* Start address */}
+          <div style={cardStyle}>
+            <label style={{ fontWeight: 700, display: 'block', marginBottom: '0.75rem' }}>📍 Start Address</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: useDefaultAddress ? 0 : '0.75rem' }}>
+              <input type="checkbox" checked={useDefaultAddress} onChange={e => setUseDefaultAddress(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+              <span style={{ fontWeight: 600 }}>Use my default address</span>
+              {defaultAddress && <span style={{ color: '#555', fontSize: '0.9em' }}>({defaultAddress})</span>}
+            </label>
+            {!useDefaultAddress && (
+              <div style={{ marginTop: '0.75rem' }}>
+                <div ref={startAddressRef} style={{ width: '100%' }} />
+                {!startAddressPacRef.current && (
+                  <input type="text" value={startAddress} placeholder="123 Main St, City, FL 12345"
+                    onChange={e => setStartAddress(e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Appointments list */}
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <span style={{ fontWeight: 700 }}>
+                {loading ? '⏳ Loading…' : `${appointments.length} appointment${appointments.length !== 1 ? 's' : ''} on this date`}
+              </span>
+              {appointments.length >= 2 && (
+                <button className="btn btn-primary" onClick={runSmartRoute} disabled={routing || !effectiveStart}
+                  style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}>
+                  {routing ? '⏳ Optimising…' : '✨ Smart Route'}
+                </button>
+              )}
+            </div>
+
+            {!loading && appointments.length === 0 && (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>No appointments found for this date.</p>
+            )}
+
+            {routeGenerated && totalDistance && (
+              <div style={{ padding: '0.6rem 1rem', background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 8, marginBottom: '1rem', fontSize: '0.9rem', color: '#166534', fontWeight: 600 }}>
+                🚗 Optimised route · {totalDistance} mi · ~{totalDuration} min driving
+              </div>
+            )}
+
+            {!loading && displayList.map((a, i) => {
+              const addr = fullAddr(a);
+              const mapsUrl = addr ? `https://maps.google.com/?q=${encodeURIComponent(addr)}` : null;
+              return (
+                <div key={a.id} style={{ display: 'flex', gap: '0.75rem', padding: '0.85rem 0', borderBottom: i < displayList.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <div style={{ minWidth: 28, height: 28, borderRadius: '50%', background: routeGenerated ? '#2563eb' : '#94a3b8', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>{i + 1}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700 }}>{a.customerName}{a.farmName ? <span style={{ fontWeight: 400, color: '#666' }}> — {a.farmName}</span> : ''}</div>
+                    <div style={{ fontSize: '0.87rem', color: '#555', marginTop: 2 }}>
+                      <span style={{ marginRight: '0.75rem' }}>⏰ {fmtTime(a.requestedTime)}</span>
+                      {a.phone && <span style={{ marginRight: '0.75rem' }}>📞 {a.phone}</span>}
+                    </div>
+                    {addr && (
+                      <div style={{ fontSize: '0.85rem', color: '#2563eb', marginTop: 2 }}>
+                        {mapsUrl ? <a href={mapsUrl} target="_blank" rel="noopener noreferrer">📍 {addr}</a> : `📍 ${addr}`}
+                      </div>
+                    )}
+                    {a.services?.length > 0 && <div style={{ fontSize: '0.82rem', color: '#666', marginTop: 2 }}>🐴 {a.services.join(', ')}</div>}
+                    {!addr && <div style={{ fontSize: '0.8rem', color: '#f59e0b', marginTop: 2 }}>⚠️ No address — cannot route</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Send / PDF options */}
+          {appointments.length > 0 && (
+            <div style={cardStyle}>
+              <label style={{ fontWeight: 700, display: 'block', marginBottom: '0.75rem' }}>📤 Send or Export</label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.6rem' }}>
+                <input type="checkbox" checked={sendSms} onChange={e => setSendSms(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+                <span>📱 Send via SMS to my phone</span>
+                {userProfile?.phone && <span style={{ color: '#888', fontSize: '0.85em' }}>({userProfile.phone})</span>}
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.6rem' }}>
+                <input type="checkbox" checked={sendEmail} onChange={e => setSendEmail(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+                <span>✉️ Send via Email to myself</span>
+                {userProfile?.email && <span style={{ color: '#888', fontSize: '0.85em' }}>({userProfile.email})</span>}
+              </label>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                {(sendSms || sendEmail) && (
+                  <button className="btn btn-primary" onClick={handleSend} disabled={sending} style={{ flex: 1, minWidth: 140 }}>
+                    {sending ? '⏳ Sending…' : '📤 Send Route Sheet'}
+                  </button>
+                )}
+                <button className="btn btn-outline" onClick={downloadPdf} style={{ flex: 1, minWidth: 140 }}>
+                  🖨️ Print / Save PDF
+                </button>
+              </div>
+
+              {sendResult && (
+                <div style={{ marginTop: '0.75rem', padding: '0.7rem 1rem', background: '#f0fdf4', borderRadius: 8, border: '1.5px solid #86efac', fontSize: '0.92rem', fontWeight: 600 }}>
+                  {sendResult}
+                </div>
+              )}
             </div>
           )}
         </div>
