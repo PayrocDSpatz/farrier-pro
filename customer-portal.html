@@ -517,10 +517,30 @@
       const [phone, setPhone] = useState('');
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
+      const [successMsg, setSuccessMsg] = useState('');
+
+      const friendlyError = (code) => {
+        switch (code) {
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':
+            return 'Incorrect password. Please try again or use "Forgot Password" below.';
+          case 'auth/user-not-found':
+            return 'No account found with that email. Please sign up first.';
+          case 'auth/invalid-email':
+            return 'Please enter a valid email address.';
+          case 'auth/too-many-requests':
+            return 'Too many attempts. Please wait a few minutes and try again.';
+          case 'auth/weak-password':
+            return 'Password must be at least 6 characters.';
+          default:
+            return 'Something went wrong. Please try again.';
+        }
+      };
 
       const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setSuccessMsg('');
         setLoading(true);
 
         try {
@@ -528,8 +548,6 @@
             await auth.signInWithEmailAndPassword(email, password);
           } else {
             const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-            
-            // Create customer profile
             if (db) {
               await db.collection('customers').doc(userCredential.user.uid).set({
                 name: name,
@@ -540,9 +558,36 @@
             }
           }
         } catch (err) {
-          setError(err.message);
+          if (err.code === 'auth/email-already-in-use') {
+            // Account was pre-created at booking — switch to login and guide them
+            setIsLogin(true);
+            setError('An account with this email already exists. Sign in below using the password from your booking confirmation email, or use "Forgot Password" to set a new one.');
+          } else {
+            setError(friendlyError(err.code));
+          }
         }
 
+        setLoading(false);
+      };
+
+      const handleForgotPassword = async () => {
+        if (!email) {
+          setError('Please enter your email address above, then click "Forgot Password".');
+          return;
+        }
+        setError('');
+        setSuccessMsg('');
+        setLoading(true);
+        try {
+          await auth.sendPasswordResetEmail(email);
+          setSuccessMsg(`Password reset email sent to ${email}. Check your inbox (and spam folder).`);
+        } catch (err) {
+          if (err.code === 'auth/user-not-found') {
+            setError('No account found with that email address.');
+          } else {
+            setError(friendlyError(err.code));
+          }
+        }
         setLoading(false);
       };
 
@@ -592,6 +637,12 @@
             {error && (
               <div className="alert alert-error">
                 {error}
+              </div>
+            )}
+
+            {successMsg && (
+              <div className="alert" style={{background:'#f0fdf4',border:'1px solid #10b981',color:'#065f46',padding:'0.875rem 1rem',borderRadius:'6px',fontSize:'0.9rem',marginBottom:'1rem'}}>
+                ✅ {successMsg}
               </div>
             )}
 
@@ -694,6 +745,19 @@
                   minLength="6"
                 />
               </div>
+
+              {isLogin && (
+                <div style={{textAlign:'right', marginTop:'-0.5rem', marginBottom:'1rem'}}>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={loading}
+                    style={{background:'none',border:'none',color:'var(--primary)',cursor:'pointer',fontSize:'0.85rem',textDecoration:'underline',padding:0}}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              )}
 
               <button 
                 type="submit" 
