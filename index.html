@@ -5671,6 +5671,32 @@ function ServicesView({ userId }) {
               // Don't fail the booking if customer save fails
             }
 
+            // Auto-create a Firebase Auth account for the customer so they can access the portal
+            let portalPassword = null;
+            let portalAccountCreated = false;
+            if (formData.email && auth) {
+              try {
+                // Generate a random readable password: e.g. "Horse#4B2x9"
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+                portalPassword = 'Horse#' + Array.from({length: 6}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+                await auth.createUserWithEmailAndPassword(formData.email, portalPassword);
+                portalAccountCreated = true;
+                console.log('✅ Customer portal account created for', formData.email);
+                // Sign back out — we don't want to leave the customer signed in on the farrier's booking page
+                await auth.signOut();
+              } catch (authErr) {
+                if (authErr.code === 'auth/email-already-in-use') {
+                  // Account already exists — they can use "Forgot Password" on the portal
+                  portalAccountCreated = false;
+                  portalPassword = null;
+                  console.log('ℹ️ Customer portal account already exists for', formData.email);
+                } else {
+                  console.warn('⚠️ Could not create customer portal account:', authErr.message);
+                  portalPassword = null;
+                }
+              }
+            }
+
             // Send booking notification emails (farrier + customer)
             console.log('📧 farrierInfo at booking time:', JSON.stringify(farrierInfo));
             try {
@@ -5698,6 +5724,10 @@ function ServicesView({ userId }) {
                   requestedDate: formData.date,
                   requestedTime: formData.time,
                   comments: formData.comments,
+                  // Portal credentials (only present if a new account was just created)
+                  portalPassword: portalPassword,
+                  portalAccountCreated: portalAccountCreated,
+                  portalUrl: window.location.origin + '/customer-portal.html',
                 })
               });
               console.log('✅ Booking emails sent');
@@ -5880,20 +5910,14 @@ function ServicesView({ userId }) {
                     textAlign: 'left'
                   }}>
                     <div style={{fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--primary)'}}>
-                      🎉 Your Customer Account is Ready!
+                      💳 View Invoices &amp; Pay Online
                     </div>
                     <p style={{fontSize: '0.9rem', marginBottom: '0.75rem', color: 'var(--text)'}}>
-                      We've created an account for you. You can now view invoices and pay online!
-                    </p>
-                    <p style={{fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-muted)'}}>
-                      <strong>Portal:</strong> {window.location.origin}/customer-portal.html
-                    </p>
-                    <p style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>
-                      <strong>Email:</strong> {formData.email}
+                      Check your confirmation email — it includes your login details for the customer portal where you can view invoices and pay online at any time.
                     </p>
                     <button 
                       className="btn btn-success"
-                      style={{width: '100%', marginTop: '1rem'}}
+                      style={{width: '100%', marginTop: '0.5rem'}}
                       onClick={() => {
                         window.location.href = window.location.origin + '/customer-portal.html';
                       }}
