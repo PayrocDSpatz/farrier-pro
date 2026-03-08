@@ -46,6 +46,9 @@ export default async function handler(req, res) {
       requestedDate,
       requestedTime,
       comments,
+      portalPassword,
+      portalAccountCreated,
+      portalUrl,
     } = req.body || {};
 
     if (!farrierEmail) {
@@ -163,6 +166,34 @@ export default async function handler(req, res) {
     <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:16px 20px;margin:20px 0;border-radius:4px;">
       <p style="margin:0;color:#92400e;font-size:14px;">⏳ <strong>Status: Pending Confirmation</strong> — Your farrier will review and confirm your appointment shortly.</p>
     </div>
+
+    ${portalAccountCreated && portalPassword ? `
+    <div style="background:#f0fdf4;border:2px solid #10b981;padding:24px;margin:24px 0;border-radius:8px;">
+      <h3 style="color:#065f46;margin-top:0;font-size:16px;">💳 Your Customer Portal Access</h3>
+      <p style="color:#374151;font-size:14px;margin-bottom:16px;">
+        Log in to your customer portal to view invoices and pay online at any time. Here are your login details:
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:16px;">
+        <tr><td style="padding:6px 0;width:100px;color:#6b7280;">Portal</td><td><a href="${portalUrl}" style="color:#2563eb;">${portalUrl}</a></td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280;">Email</td><td><strong>${customerEmail || ''}</strong></td></tr>
+        <tr><td style="padding:6px 0;color:#6b7280;">Password</td><td><strong style="font-family:monospace;font-size:15px;letter-spacing:1px;">${portalPassword}</strong></td></tr>
+      </table>
+      <div style="text-align:center;">
+        <a href="${portalUrl}" style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:600;display:inline-block;font-size:15px;">
+          View My Invoices →
+        </a>
+      </div>
+      <p style="color:#6b7280;font-size:12px;margin-top:16px;margin-bottom:0;">
+        You can change your password at any time from the portal. Keep this email for your records.
+      </p>
+    </div>
+    ` : portalUrl ? `
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:16px 20px;margin:20px 0;border-radius:6px;">
+      <p style="margin:0;color:#475569;font-size:14px;">
+        💳 <strong>Customer Portal:</strong> Already have an account? <a href="${portalUrl}" style="color:#2563eb;">Log in to view invoices and pay online</a>. If you forgot your password, use the reset link on the login page.
+      </p>
+    </div>
+    ` : ''}
 
     <p style="color:#4b5563;font-size:14px;">Questions? Reply to this email or contact us directly.</p>
   </div>
