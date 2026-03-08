@@ -169,7 +169,14 @@ export default async function handler(req, res) {
     const body = req.body || {};
     const { action } = body;
 
-    if (!action) return res.status(400).json({ ok: false, error: 'Missing action' });
+    if (!action) {
+      // Direct pass-through: { to, subject, html }
+      const { to, subject, html } = body;
+      if (!to) return res.status(400).json({ ok: false, error: 'Missing to' });
+      if (!html) return res.status(400).json({ ok: false, error: 'Missing html' });
+      await sendEmail({ to, subject: subject || 'Message from FarriTech', html });
+      return res.status(200).json({ ok: true });
+    }
 
     // ── Route sheet: pass-through (html + subject + to already built client-side) ──
     if (action === 'route-sheet') {
