@@ -1759,6 +1759,9 @@ async function ensureFarriTechfile_(uid, profile) {
     let hasEverSignedIn = false;
     const unsubscribe = auth.onAuthStateChanged(async (u) => {
       try {
+        // Ignore auth state changes caused by the booking page auto-creating a customer portal account
+        if (window._creatingCustomerPortalAccount) return;
+
         if (!u) {
           const delay = hasEverSignedIn ? 5000 : 0;
           console.warn("⚠️ onAuthStateChanged fired NULL. hasEverSignedIn:", hasEverSignedIn, "Stack:", new Error().stack.split("\n").slice(1,4).join(" | "));
@@ -5671,10 +5674,12 @@ function ServicesView({ userId }) {
               // Don't fail the booking if customer save fails
             }
 
-            // Auto-create a Firebase Auth account for the customer so they can access the portal
+            // Auto-create a Firebase Auth account for the customer so they can access the portal.
+            // We set a flag first so onAuthStateChanged ignores these transient sign-in/sign-out events.
             let portalPassword = null;
             let portalAccountCreated = false;
             if (formData.email && auth) {
+              window._creatingCustomerPortalAccount = true;
               try {
                 // Generate a random readable password: e.g. "Horse#4B2x9"
                 const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -5694,6 +5699,8 @@ function ServicesView({ userId }) {
                   console.warn('⚠️ Could not create customer portal account:', authErr.message);
                   portalPassword = null;
                 }
+              } finally {
+                window._creatingCustomerPortalAccount = false;
               }
             }
 
