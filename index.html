@@ -3046,27 +3046,55 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
       return (
         <div className="app-container">
-          <header className="app-header">
-            <div className="header-content">
-              <div className="logo">
-                <img src="/farritech_logo_square.png" alt="FarriTech" style={{height:'38px',width:'auto',objectFit:'contain'}} />
-                <span style={{fontSize:'0.65rem',color:'rgba(255,255,255,0.75)',fontWeight:'400',marginLeft:'4px',alignSelf:'flex-end',paddingBottom:'2px'}}>{BUILD_VERSION}</span>
-              </div>
-              <div className="header-actions">
-                <div className="user-info" style={{textAlign: 'right', lineHeight: '1.3'}}>
-                  <div>{userProfile?.businessName || user.email}</div>
-                  <div style={{fontSize: '0.72rem', opacity: '0.8', fontWeight: '400'}}>
-                    Logged in as {user.email}
-                  </div>
+          <header style={{
+            backgroundColor: '#2683FB',
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            height: '80px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 1.5rem'
+          }}>
+            <div style={{minWidth: '200px'}}></div>
+            <div style={{flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+              <img
+                src="/public/farritech_logo_letters_white.png"
+                alt="FarriTech"
+                style={{height: '60px', width: 'auto', objectFit: 'contain'}}
+              />
+            </div>
+            <div style={{minWidth: '200px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem'}}>
+              <div style={{textAlign: 'right', lineHeight: '1.3', color: 'white'}}>
+                <div style={{fontWeight: '600', fontSize: '0.95rem'}}>{userProfile?.businessName || user.email}</div>
+                <div style={{fontSize: '0.72rem', opacity: '0.8', fontWeight: '400'}}>
+                  Logged in as {user.email}
                 </div>
-                <button 
-                  className="btn btn-sm" 
-                  onClick={handleLogout}
-                  style={{background: 'white', color: 'var(--primary)', fontWeight: '600'}}
-                >
-                  🚪 Logout
-                </button>
               </div>
+              <button
+                onClick={handleLogout}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: 'rgba(255,255,255,0.18)',
+                  backdropFilter: 'blur(4px)',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  color: 'white',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
+                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
+              >
+                🚪 Logout
+              </button>
             </div>
           </header>
 
