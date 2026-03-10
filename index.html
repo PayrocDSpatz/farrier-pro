@@ -5941,22 +5941,26 @@ function ServicesView({ userId }) {
       return (
         <div className="app-container">
           <header style={{
-            backgroundImage: 'url(/public/farritech_logo_letters_white.png)',
-            backgroundSize: 'auto 65%',
-            backgroundPosition: 'center center',
-            backgroundRepeat: 'no-repeat',
             backgroundColor: '#2683FB',
             position: 'sticky',
             top: 0,
             zIndex: 100,
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            height: '120px',
+            height: '80px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
             padding: '0 1.5rem'
           }}>
-            <a 
+            <div style={{minWidth: '120px'}}></div>
+            <div style={{flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+              <img
+                src="/public/farritech_logo_letters_white.png"
+                alt="FarriTech"
+                style={{height: '60px', width: 'auto', objectFit: 'contain'}}
+              />
+            </div>
+            <div style={{minWidth: '120px', display: 'flex', justifyContent: 'flex-end'}}>
               href={window.location.origin + '/customer-portal.html'}
               style={{
                 padding: '0.5rem 1rem',
@@ -5978,6 +5982,7 @@ function ServicesView({ userId }) {
             >
               💳 Pay Invoices
             </a>
+            </div>
           </header>
 
           <main className="main-content">
