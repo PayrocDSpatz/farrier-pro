@@ -744,12 +744,28 @@
       };
 
       return (
-        <div className="auth-container">
+        <div style={{minHeight: '100vh', display: 'flex', flexDirection: 'column'}}>
+          <header style={{
+            backgroundColor: '#2683FB',
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            height: '80px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 1.5rem'
+          }}>
+            <img
+              src="/public/farritech_logo_letters_white.png"
+              alt="FarriTech"
+              style={{height: '60px', width: 'auto', objectFit: 'contain'}}
+            />
+          </header>
+          <div className="auth-container">
           <div className="auth-card">
             <div className="auth-header">
-              <div className="logo" style={{justifyContent: 'center', marginBottom: '1rem'}}>
-                <img src="https://farritech.vercel.app/new_farritech_logo.png" alt="FarriTech" style={{height: '120px', objectFit: 'contain', display: 'block'}} onError={(e) => { e.target.replaceWith(Object.assign(document.createElement('span'), {textContent: 'FarriTech'})); }} />
-              </div>
               <h1>{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
               <p>{isLogin ? 'Sign in to view your invoices' : 'Sign up to manage your invoices'}</p>
             </div>
@@ -901,10 +917,9 @@
             </div>
           </div>
         </div>
+        </div>
       );
     }
-
-    // PDF Helper functions
     const formatDate_ = (tsOrDate) => {
       try {
         const d = tsOrDate?.toDate ? tsOrDate.toDate() : (tsOrDate instanceof Date ? tsOrDate : new Date(tsOrDate));
