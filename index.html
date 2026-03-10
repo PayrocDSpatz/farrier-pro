@@ -5943,8 +5943,13 @@ function ServicesView({ userId }) {
           <header className="app-header">
             <div className="header-content">
               <div className="logo">
-                <span className="logo-icon">🐴</span>
-                <span>{farrierInfo.businessName}</span>
+                <img 
+                  src="/farritech_logo_letters.png" 
+                  alt="FarriTech" 
+                  style={{height: '40px', width: 'auto', objectFit: 'contain'}}
+                  onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='inline'; }}
+                />
+                <span style={{display:'none'}}>{farrierInfo.businessName}</span>
               </div>
               <a 
                 href={window.location.origin + '/customer-portal.html'}
