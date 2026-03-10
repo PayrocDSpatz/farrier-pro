@@ -5940,38 +5940,44 @@ function ServicesView({ userId }) {
 
       return (
         <div className="app-container">
-          <header className="app-header">
-            <div className="header-content">
-              <div className="logo">
-                <img 
-                  src="/public/farritech_logo_letters.png" 
-                  alt="FarriTech" 
-                  style={{height: '40px', width: 'auto', objectFit: 'contain'}}
-                  onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='inline'; }}
-                />
-                <span style={{display:'none'}}>{farrierInfo.businessName}</span>
-              </div>
-              <a 
-                href={window.location.origin + '/customer-portal.html'}
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: 'var(--primary)',
-                  color: 'white',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  fontSize: '0.9rem',
-                  fontWeight: '500',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  transition: 'all 0.2s'
-                }}
-                onMouseOver={(e) => e.target.style.background = 'var(--primary-dark)'}
-                onMouseOut={(e) => e.target.style.background = 'var(--primary)'}
-              >
-                💳 Pay Invoices
-              </a>
-            </div>
+          <header style={{
+            backgroundImage: 'url(/public/farritech_logo_letters_white.png)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            backgroundColor: '#2683FB',
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            minHeight: '72px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            padding: '0 1.5rem'
+          }}>
+            <a 
+              href={window.location.origin + '/customer-portal.html'}
+              style={{
+                padding: '0.5rem 1rem',
+                background: 'rgba(255,255,255,0.18)',
+                backdropFilter: 'blur(4px)',
+                border: '1px solid rgba(255,255,255,0.4)',
+                color: 'white',
+                borderRadius: '8px',
+                textDecoration: 'none',
+                fontSize: '0.9rem',
+                fontWeight: '500',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
+              onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
+            >
+              💳 Pay Invoices
+            </a>
           </header>
 
           <main className="main-content">
