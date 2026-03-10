@@ -1250,23 +1250,49 @@
 
       return (
         <div className="app-container">
-          <header className="header">
-            <div className="header-content">
-              <div className="logo">
-                <img src="https://farritech.vercel.app/new_farritech_logo.png" alt="FarriTech" style={{height: '52px', objectFit: 'contain'}} onError={(e) => { e.target.style.display='none'; }} /><span style={{fontWeight: 'bold', fontSize: '1.2rem', marginLeft: '0.5rem', color: '#1a6fc4'}}>FarriTech</span>
-              </div>
-              <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
-                <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>
-                  {farrierBusinessName || customerProfile?.name || user.email}
-                </span>
-                <button 
-                  onClick={handleLogout}
-                  className="btn btn-outline"
-                  style={{padding: '0.5rem 1rem', fontSize: '0.9rem'}}
-                >
-                  Sign Out
-                </button>
-              </div>
+          <header style={{
+            backgroundColor: '#2683FB',
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            height: '80px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 1.5rem'
+          }}>
+            <div style={{minWidth: '160px'}}></div>
+            <div style={{flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+              <img
+                src="/public/farritech_logo_letters_white.png"
+                alt="FarriTech"
+                style={{height: '60px', width: 'auto', objectFit: 'contain'}}
+              />
+            </div>
+            <div style={{minWidth: '160px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem'}}>
+              <span style={{color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem'}}>
+                {farrierBusinessName || customerProfile?.name || user.email}
+              </span>
+              <button
+                onClick={handleLogout}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: 'rgba(255,255,255,0.18)',
+                  backdropFilter: 'blur(4px)',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  color: 'white',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
+                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
+              >
+                Sign Out
+              </button>
             </div>
           </header>
 
