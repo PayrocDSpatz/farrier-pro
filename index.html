@@ -5961,27 +5961,28 @@ function ServicesView({ userId }) {
               />
             </div>
             <div style={{minWidth: '120px', display: 'flex', justifyContent: 'flex-end'}}>
-              href={window.location.origin + '/customer-portal.html'}
-              style={{
-                padding: '0.5rem 1rem',
-                background: 'rgba(255,255,255,0.18)',
-                backdropFilter: 'blur(4px)',
-                border: '1px solid rgba(255,255,255,0.4)',
-                color: 'white',
-                borderRadius: '8px',
-                textDecoration: 'none',
-                fontSize: '0.9rem',
-                fontWeight: '500',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                transition: 'all 0.2s'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
-              onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
-            >
-              💳 Pay Invoices
-            </a>
+              <a
+                href={window.location.origin + '/customer-portal.html'}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: 'rgba(255,255,255,0.18)',
+                  backdropFilter: 'blur(4px)',
+                  border: '1px solid rgba(255,255,255,0.4)',
+                  color: 'white',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontSize: '0.9rem',
+                  fontWeight: '500',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
+                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
+              >
+                💳 Pay Invoices
+              </a>
             </div>
           </header>
 
