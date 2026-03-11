@@ -1,51 +1,57 @@
-/* FarriTech Legal Page Styling */
-
 body {
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;
   background: #f4f6f9;
+  color: #1f2937;
 }
 
-/* Top Blue Bar */
 .farritech-header {
-  background: linear-gradient(90deg, #2c6ed5, #3b82f6);
+  background: linear-gradient(90deg, #1d4ed8, #3b82f6);
   padding: 18px 0;
   text-align: center;
-  color: white;
-  font-size: 26px;
-  font-weight: bold;
-  letter-spacing: 1px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+  color: #fff;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .farritech-sub {
   font-size: 12px;
-  opacity: .85;
-  margin-top: 2px;
+  opacity: 0.9;
+  margin-top: 4px;
+  font-weight: 400;
 }
 
-/* Legal container */
 .legal-container {
-  max-width: 900px;
+  max-width: 920px;
   margin: 40px auto;
-  background: white;
+  background: #fff;
   padding: 40px;
-  border-radius: 10px;
-  box-shadow: 0 4px 18px rgba(0,0,0,.08);
+  border-radius: 12px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.08);
 }
 
 h1 {
   margin-top: 0;
+  color: #111827;
 }
 
 h2 {
-  margin-top: 30px;
+  margin-top: 28px;
+  color: #1e3a8a;
 }
 
-ul {
+p,
+li {
   line-height: 1.7;
 }
 
-p {
-  line-height: 1.7;
+a {
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
 }
