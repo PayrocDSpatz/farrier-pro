@@ -8771,19 +8771,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 if (createdInvoice) {
                   // Auto-open PDF after create (toggle in Settings)
                   openInvoicePdf(createdInvoice, userProfile, userProfile?.autoPrintPdf ?? true);
-                  // Send SMS invoice notification if enabled
-                  if (userProfile?.smsEnabled && createdInvoice.customerPhone) {
-                    const bizName = userProfile?.businessName || 'Your Farrier';
-                    const payLink = createdInvoice.paymentUrl || '';
-                    const msg = `Hi ${createdInvoice.customerName}, you have a new invoice #${createdInvoice.invoiceNumber} for $${createdInvoice.total?.toFixed(2)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''} Reply STOP to opt out.`;
-                    try {
-                      await fetch('/api/send-sms', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ to: createdInvoice.customerPhone, body: msg })
-                      });
-                    } catch(e) { console.error('Invoice SMS error:', e); }
-                  }
+                  // SMS + email sent inside InvoiceCreateModal after payment link is generated
                 }
               }}
             />
@@ -9533,7 +9521,39 @@ useEffect(() => {
             });
 
             console.log('✅ Invoice created with ID:', docRef.id);
-            alert('✅ Invoice created successfully! Customer can now pay using the "Pay Now" button.');
+
+            // Generate Stripe Payment Link if farrier has Stripe connected
+            let paymentUrl = '';
+            const stripeKey = userProfile?.stripeSecretKey || '';
+            if (stripeKey && total > 0) {
+              try {
+                const plRes = await fetch('/api/stripe-payment', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'payment_link',
+                    stripeSecretKey: stripeKey,
+                    amount: total,
+                    invoiceId: docRef.id,
+                    invoiceNumber,
+                    customerEmail,
+                    customerName,
+                    farrierId: userId,
+                  }),
+                });
+                const plData = await plRes.json();
+                if (plData.success && plData.paymentUrl) {
+                  paymentUrl = plData.paymentUrl;
+                  await db.collection('invoices').doc(docRef.id).update({ paymentUrl });
+                  console.log('✅ Payment link generated:', paymentUrl);
+                } else {
+                  console.warn('⚠️ Payment link failed:', plData.error);
+                }
+              } catch (plErr) {
+                console.error('Payment link error:', plErr);
+              }
+            }
+
             const createdInvoice = {
               id: docRef.id,
               farrierId: userId,
@@ -9545,10 +9565,38 @@ useEffect(() => {
               total,
               invoiceNumber,
               status: 'outstanding',
-              paymentUrl: '',
+              paymentUrl,
               createdAt: new Date()
             };
-                      onCreated(createdInvoice);
+
+            // Send SMS invoice notification
+            if (userProfile?.smsEnabled && customerPhone) {
+              try {
+                const bizName = userProfile?.businessName || 'Your Farrier';
+                const msg = `Hi ${customerName}, you have a new invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName}.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
+                await fetch('/api/send-sms', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ to: customerPhone, body: msg }),
+                });
+                console.log('✅ Invoice SMS sent');
+              } catch (smsErr) {
+                console.error('Invoice SMS error:', smsErr);
+              }
+            }
+
+            // Send email invoice if customer has email
+            if (customerEmail) {
+              try {
+                await emailInvoiceLink(createdInvoice);
+                console.log('✅ Invoice email sent');
+              } catch (emailErr) {
+                console.error('Invoice email error:', emailErr);
+              }
+            }
+
+            alert(`✅ Invoice created!${paymentUrl ? ' Payment link generated and sent to customer.' : ' Add Stripe in Settings to enable Pay Now links.'}`);
+            onCreated(createdInvoice);
           } else {
             console.error('❌ Database not initialized');
             setError('Database not available');
