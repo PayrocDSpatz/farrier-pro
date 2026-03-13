@@ -68,11 +68,24 @@ export default async function handler(req, res) {
       });
 
       if (paymentIntent.status === 'succeeded') {
+        // Retrieve the charge to get card details
+        let last4 = '';
+        let brand = 'Card';
+        try {
+          const charges = await stripe.charges.list({ payment_intent: paymentIntent.id, limit: 1 });
+          const charge = charges.data[0];
+          last4 = charge?.payment_method_details?.card?.last4 || '';
+          brand = charge?.payment_method_details?.card?.brand || 'Card';
+          // Capitalize brand (visa → Visa)
+          brand = brand.charAt(0).toUpperCase() + brand.slice(1);
+        } catch (e) {
+          console.error('Could not retrieve charge details:', e.message);
+        }
         return res.status(200).json({
           success: true,
           transactionId: paymentIntent.id,
-          last4: paymentIntent.payment_method_details?.card?.last4 || '',
-          brand: paymentIntent.payment_method_details?.card?.brand || 'card',
+          last4,
+          brand,
         });
       } else {
         return res.status(400).json({ success: false, error: `Payment status: ${paymentIntent.status}` });
