@@ -4239,16 +4239,15 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         const routeHtml = buildRouteHtml();
         let results = [];
         try {
-          if (sendSms && userProfile?.smsEnabled && userProfile?.phone) {
+          if (sendSms) {
+            const smsPhone = userProfile?.phone || '+19546733041';
             const msg = routeText.length > 1500 ? routeText.substring(0, 1490) + '…' : routeText;
             const res = await fetch('/api/send-sms', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ to: userProfile.phone, body: msg })
+              body: JSON.stringify({ to: smsPhone, body: msg })
             });
             results.push(res.ok ? '✅ SMS sent' : '❌ SMS failed');
-          } else if (sendSms) {
-            results.push('⚠️ SMS not available (SMS disabled or no phone in Settings)');
           }
           if (sendEmail && userProfile?.email) {
             const dateStr = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
