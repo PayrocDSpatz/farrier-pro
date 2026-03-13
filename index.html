@@ -1440,7 +1440,8 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         }, 0);
 
         for (const it of items) {
-          const desc = safeText_(it.serviceNameSnapshot || it.description || "");
+          const rawDesc = safeText_(it.serviceNameSnapshot || it.description || "");
+          const desc = rawDesc === 'Custom Service (enter manually)' ? 'Custom Service' : rawDesc;
           const horse = safeText_(it.horseName || "");
           const qty = Number(it.qty || 1);
           const rate = Number(it.amount ?? it.unitPriceSnapshot ?? 0);
@@ -1503,9 +1504,10 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
             if (y > pageH - 100) { doc.addPage(); y = 72; }
             const dateStr = p.date ? new Date(p.date).toLocaleDateString() : '';
             const methodStr = methodLabels[p.method] || p.method || '';
-            const memoStr = p.memo ? ` — ${p.memo}` : '';
+            // Use memo if it has card details (e.g. "Visa ending 4242"), otherwise fall back to method label
+            const detailStr = p.memo && p.memo !== 'Credit card' && p.memo !== 'Credit Card' ? p.memo : methodStr;
             doc.setTextColor(60);
-            doc.text(`${dateStr}  ${methodStr}${memoStr}`, 48, y);
+            doc.text(`${dateStr}  ${detailStr}`, 48, y);
             doc.setTextColor(0);
             doc.text(money_(p.amount || 0), pageW - 48, y, { align: 'right' });
             y += 16;
