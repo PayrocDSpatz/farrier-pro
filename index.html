@@ -13,6 +13,7 @@
   <!-- Authorize.Net integration via backend functions -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://js.stripe.com/v3/"></script>
   
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -8780,6 +8781,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           {showPaymentModal && selectedInvoice && (
             <PaymentModal 
               invoice={selectedInvoice}
+              userProfile={userProfile}
               onClose={() => {
                 setShowPaymentModal(false);
                 setSelectedInvoice(null);
@@ -8879,67 +8881,93 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       );
     }
 
-    function PaymentModal({ invoice, onClose, onPaymentSuccess }) {
+    function PaymentModal({ invoice, onClose, onPaymentSuccess, userProfile }) {
       const paidSoFar = (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0);
       const remaining = Math.max(0, (invoice.total || 0) - paidSoFar);
-      const [cardNumber, setCardNumber] = useState('');
-      const [expiryMonth, setExpiryMonth] = useState('');
-      const [expiryYear, setExpiryYear] = useState('');
-      const [cvv, setCvv] = useState('');
       const [chargeAmount, setChargeAmount] = useState(remaining.toFixed(2));
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
+      const [stripeReady, setStripeReady] = useState(false);
+      const cardElementRef = React.useRef(null);
+      const stripeRef = React.useRef(null);
+      const cardRef = React.useRef(null);
 
-      const handlePayment = async (e) => {
-        e.preventDefault();
+      const publishableKey = userProfile?.stripePublishableKey || '';
+      const secretKey = userProfile?.stripeSecretKey || '';
+      const hasStripe = publishableKey && secretKey;
+
+      React.useEffect(() => {
+        if (!hasStripe || !window.Stripe) return;
+        const stripe = window.Stripe(publishableKey);
+        stripeRef.current = stripe;
+        const elements = stripe.elements();
+        const card = elements.create('card', {
+          style: {
+            base: {
+              fontSize: '16px',
+              color: '#1a1a2e',
+              fontFamily: 'system-ui, sans-serif',
+              '::placeholder': { color: '#aab7c4' }
+            },
+            invalid: { color: '#dc2626' }
+          }
+        });
+        cardRef.current = card;
+        card.mount(cardElementRef.current);
+        card.on('ready', () => setStripeReady(true));
+        return () => card.destroy();
+      }, [hasStripe, publishableKey]);
+
+      const handlePayment = async () => {
+        if (!hasStripe) return;
         setProcessing(true);
         setError('');
-
         try {
-          // Format expiration date as MMYY
-          const expirationDate = `${expiryMonth.padStart(2, '0')}${expiryYear.slice(-2)}`;
+          const amt = parseFloat(chargeAmount);
+          if (!amt || amt <= 0) { setError('Please enter a valid amount.'); setProcessing(false); return; }
 
-          // Call Vercel function to process payment
-          const response = await fetch('/api/authorize-net-payment', {
+          // Create payment method from card element
+          const { paymentMethod, error: pmError } = await stripeRef.current.createPaymentMethod({
+            type: 'card',
+            card: cardRef.current,
+            billing_details: {
+              name: invoice.customerName || '',
+              email: invoice.customerEmail || ''
+            }
+          });
+
+          if (pmError) { setError(pmError.message); setProcessing(false); return; }
+
+          // Charge via our API using the farrier's secret key
+          const res = await fetch('/api/stripe-payment', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               action: 'charge',
-              paymentData: {
-                cardNumber: cardNumber.replace(/\s/g, ''),
-                expirationDate: expirationDate,
-                cardCode: cvv,
-                amount: parseFloat(chargeAmount) || invoice.total,
-                customerEmail: invoice.customerEmail || 'customer@example.com',
-                customerName: invoice.customerName,
-                invoiceNumber: invoice.invoiceNumber,
-                description: `FarriTech Invoice #${invoice.invoiceNumber}`
-              },
-              invoiceData: {
-                invoiceId: invoice.id,
-                farrierId: invoice.farrierId
-              }
+              paymentMethodId: paymentMethod.id,
+              amount: amt,
+              farrierId: invoice.farrierId,
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.invoiceNumber,
+              customerEmail: invoice.customerEmail || '',
+              customerName: invoice.customerName || '',
+              stripeSecretKey: secretKey
             })
           });
 
-          const result = await response.json();
+          const result = await res.json();
 
           if (result.success) {
             if (db) {
-              const amt = parseFloat(chargeAmount) || invoice.total;
-              // Fetch fresh from Firestore to avoid stale payments array
               const freshDoc = await db.collection('invoices').doc(invoice.id).get();
               const freshData = freshDoc.exists ? freshDoc.data() : {};
               const existingPayments = freshData.payments || [];
               const newPayment = {
                 amount: amt,
                 method: 'credit_card',
-                memo: result.accountNumber ? `Card ending ${result.accountNumber}` : 'Credit card',
+                memo: result.last4 ? `${result.brand || 'Card'} ending ${result.last4}` : 'Credit card',
                 date: new Date().toISOString(),
-                transactionId: result.transactionId,
-                authCode: result.authCode
+                transactionId: result.transactionId
               };
               const allPayments = [...existingPayments, newPayment];
               const totalPaid = allPayments.reduce((s,p) => s + (p.amount||0), 0);
@@ -8950,9 +8978,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 paidAmount: totalPaid,
                 balanceDue: Math.max(0, invoice.total - totalPaid),
                 paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null),
-                transactionId: result.transactionId,
-                authCode: result.authCode,
-                accountNumber: result.accountNumber
+                transactionId: result.transactionId
               });
             }
             alert('✅ Payment successful!');
@@ -8964,136 +8990,86 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           console.error('Payment error:', err);
           setError('Payment processing failed. Please try again.');
         }
-
         setProcessing(false);
-      };
-
-      // Format card number with spaces
-      const formatCardNumber = (value) => {
-        const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-        const matches = v.match(/\d{4,16}/g);
-        const match = (matches && matches[0]) || '';
-        const parts = [];
-        
-        for (let i = 0, len = match.length; i < len; i += 4) {
-          parts.push(match.substring(i, i + 4));
-        }
-        
-        return parts.length ? parts.join(' ') : value;
       };
 
       return (
         <div className="modal-overlay" onClick={onClose}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '500px'}}>
             <h2 style={{marginBottom: '1.5rem'}}>💳 Pay Invoice</h2>
-            
+
             <div style={{background: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem'}}>
-              <div style={{fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem'}}>
+              <div style={{fontSize: '0.875rem', color: '#666', marginBottom: '0.25rem'}}>
                 Invoice #{invoice.invoiceNumber} • {invoice.customerName}
               </div>
               <div style={{fontSize: '0.875rem', color: '#666'}}>
-                Invoice Total: ${invoice.total?.toFixed(2)}
-                {paidSoFar > 0 && <> • Already Paid: ${paidSoFar.toFixed(2)} • <strong>Balance: ${remaining.toFixed(2)}</strong></>}
+                Total: ${invoice.total?.toFixed(2)}
+                {paidSoFar > 0 && <> • Paid: ${paidSoFar.toFixed(2)} • <strong>Balance: ${remaining.toFixed(2)}</strong></>}
               </div>
-            </div>
-            <div className="form-group">
-              <label>Amount to Charge *</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                max={invoice.total}
-                required
-                value={chargeAmount}
-                onChange={(e) => setChargeAmount(e.target.value)}
-              />
             </div>
 
-            {error && (
-              <div className="error-message" style={{marginBottom: '1rem'}}>
-                {error}
+            {!hasStripe ? (
+              <div style={{background: '#fff7ed', border: '1px solid #fdba74', borderRadius: '8px', padding: '1rem', textAlign: 'center'}}>
+                <div style={{fontSize: '1.5rem', marginBottom: '0.5rem'}}>⚠️</div>
+                <strong>Stripe not connected</strong>
+                <p style={{fontSize: '0.875rem', color: '#666', marginTop: '0.5rem'}}>
+                  Go to <strong>Settings → Stripe Payments</strong> and add your Stripe keys to accept card payments.
+                </p>
               </div>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label>Amount to Charge *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={chargeAmount}
+                    onChange={(e) => setChargeAmount(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Card Details *</label>
+                  <div
+                    ref={cardElementRef}
+                    style={{
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      padding: '12px',
+                      background: '#fff',
+                      minHeight: '44px'
+                    }}
+                  />
+                  <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
+                    Test: 4242 4242 4242 4242 • any future date • any CVV
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="error-message" style={{marginBottom: '1rem'}}>{error}</div>
+                )}
+
+                <div style={{display: 'flex', gap: '0.75rem', marginTop: '1.5rem'}}>
+                  <button type="button" onClick={onClose} className="btn btn-outline" disabled={processing} style={{flex: 1}}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    disabled={processing || !stripeReady}
+                    onClick={handlePayment}
+                    style={{flex: 1}}
+                  >
+                    {processing ? <span className="spinner"></span> : `Pay $${parseFloat(chargeAmount || 0).toFixed(2)}`}
+                  </button>
+                </div>
+
+                <div style={{marginTop: '1.5rem', padding: '0.75rem 1rem', background: '#f0f9ff', borderRadius: '8px', fontSize: '0.8rem', color: '#555'}}>
+                  🔒 <strong>Secured by Stripe</strong> — card details never touch our servers
+                </div>
+              </>
             )}
-
-            <form onSubmit={handlePayment}>
-              <div className="form-group">
-                <label>Card Number *</label>
-                <input 
-                  type="text"
-                  required
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                  placeholder="1234 5678 9012 3456"
-                  maxLength="19"
-                />
-                <div style={{fontSize: '0.75rem', color: '#666', marginTop: '0.25rem'}}>
-                  Test: 4111 1111 1111 1111
-                </div>
-              </div>
-
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem'}}>
-                <div className="form-group">
-                  <label>Month *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={expiryMonth}
-                    onChange={(e) => setExpiryMonth(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                    placeholder="MM"
-                    maxLength="2"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Year *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={expiryYear}
-                    onChange={(e) => setExpiryYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="YYYY"
-                    maxLength="4"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>CVV *</label>
-                  <input 
-                    type="text"
-                    required
-                    value={cvv}
-                    onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="123"
-                    maxLength="4"
-                  />
-                </div>
-              </div>
-
-              <div style={{display: 'flex', gap: '0.75rem', marginTop: '1.5rem'}}>
-                <button 
-                  type="button"
-                  onClick={onClose}
-                  className="btn btn-outline"
-                  disabled={processing}
-                  style={{flex: 1}}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="btn btn-success"
-                  disabled={processing}
-                  style={{flex: 1}}
-                >
-                  {processing ? <span className="spinner"></span> : `Pay $${parseFloat(chargeAmount || 0).toFixed(2)}`}
-                </button>
-              </div>
-            </form>
-
-            <div style={{marginTop: '1.5rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px', fontSize: '0.875rem'}}>
-              🔒 <strong>Secure Payment</strong><br/>
-              Your payment is processed securely by Authorize.Net
-            </div>
           </div>
         </div>
       );
@@ -9922,6 +9898,13 @@ useEffect(() => {
       const [loading, setLoading] = useState(false);
       const [successMessage, setSuccessMessage] = useState('');
       const [error, setError] = useState('');
+
+      // Stripe settings
+      const [stripePublishableKey, setStripePublishableKey] = useState(userProfile?.stripePublishableKey || '');
+      const [stripeSecretKey, setStripeSecretKey] = useState(userProfile?.stripeSecretKey || '');
+      const [stripeValidating, setStripeValidating] = useState(false);
+      const [stripeStatus, setStripeStatus] = useState(userProfile?.stripePublishableKey ? 'connected' : 'none');
+      const [stripeAccountName, setStripeAccountName] = useState(userProfile?.stripeAccountName || '');
       
       // Availability settings with defaults
       const defaultAvailability = {
@@ -10327,6 +10310,110 @@ useEffect(() => {
               }}>
                 Save SMS Settings
               </button>
+            </div>
+          </div>
+
+          {/* Stripe Payments Settings */}
+          <div className="card" style={{marginTop: '1.5rem'}}>
+            <h2>💳 Stripe Payments</h2>
+            <p style={{color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem'}}>
+              Connect your Stripe account to accept credit card payments on invoices. Your keys are stored securely and never shared.
+            </p>
+
+            {stripeStatus === 'connected' && (
+              <div style={{background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                <span style={{fontSize: '1.1rem'}}>✅</span>
+                <span style={{color: '#16a34a', fontWeight: 600}}>Stripe connected{stripeAccountName ? ` — ${stripeAccountName}` : ''}</span>
+              </div>
+            )}
+
+            {stripeStatus === 'error' && (
+              <div style={{background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem'}}>
+                <span style={{color: '#dc2626'}}>❌ Invalid keys — please check and try again.</span>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label>Publishable Key <span style={{color:'var(--text-muted)', fontWeight:400}}>(starts with pk_)</span></label>
+              <input
+                type="text"
+                value={stripePublishableKey}
+                onChange={(e) => { setStripePublishableKey(e.target.value); setStripeStatus('none'); }}
+                placeholder="pk_live_..."
+                style={{fontFamily: 'monospace', fontSize: '0.85rem'}}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Secret Key <span style={{color:'var(--text-muted)', fontWeight:400}}>(starts with sk_)</span></label>
+              <input
+                type="password"
+                value={stripeSecretKey}
+                onChange={(e) => { setStripeSecretKey(e.target.value); setStripeStatus('none'); }}
+                placeholder="sk_live_..."
+                style={{fontFamily: 'monospace', fontSize: '0.85rem'}}
+              />
+              <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
+                Find these at <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noreferrer" style={{color:'var(--primary)'}}>dashboard.stripe.com/apikeys</a>
+              </div>
+            </div>
+
+            <div style={{display: 'flex', gap: '0.75rem', flexWrap: 'wrap'}}>
+              <button
+                className="btn btn-primary"
+                disabled={stripeValidating || !stripePublishableKey || !stripeSecretKey}
+                onClick={async () => {
+                  if (!stripePublishableKey.startsWith('pk_')) { alert('Publishable key must start with pk_'); return; }
+                  if (!stripeSecretKey.startsWith('sk_')) { alert('Secret key must start with sk_'); return; }
+                  setStripeValidating(true);
+                  try {
+                    const res = await fetch('/api/stripe-payment', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'validate', stripeSecretKey })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      await ensureFarriTechfile_(safeFarrierId, {
+                        stripePublishableKey,
+                        stripeSecretKey,
+                        stripeAccountName: data.accountName || ''
+                      });
+                      setUserProfile(prev => ({ ...prev, stripePublishableKey, stripeSecretKey, stripeAccountName: data.accountName || '' }));
+                      setStripeAccountName(data.accountName || '');
+                      setStripeStatus('connected');
+                    } else {
+                      setStripeStatus('error');
+                    }
+                  } catch (e) {
+                    setStripeStatus('error');
+                  }
+                  setStripeValidating(false);
+                }}
+              >
+                {stripeValidating ? <span className="spinner"></span> : '✓ Validate & Save'}
+              </button>
+
+              {stripeStatus === 'connected' && (
+                <button
+                  className="btn btn-outline"
+                  onClick={async () => {
+                    if (!confirm('Remove your Stripe connection?')) return;
+                    await ensureFarriTechfile_(safeFarrierId, { stripePublishableKey: '', stripeSecretKey: '', stripeAccountName: '' });
+                    setUserProfile(prev => ({ ...prev, stripePublishableKey: '', stripeSecretKey: '', stripeAccountName: '' }));
+                    setStripePublishableKey('');
+                    setStripeSecretKey('');
+                    setStripeAccountName('');
+                    setStripeStatus('none');
+                  }}
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
+
+            <div style={{marginTop: '1rem', padding: '0.75rem', background: '#f8f9fa', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-muted)'}}>
+              💡 Use <strong>test keys</strong> (pk_test_ / sk_test_) while testing, then switch to live keys when ready to accept real payments.
             </div>
           </div>
 
