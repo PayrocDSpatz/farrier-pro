@@ -131,6 +131,40 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, refundId: refund.id });
     }
 
+    if (action === 'payment_link') {
+      const { amount, invoiceId, invoiceNumber, customerEmail, customerName, farrierId } = body;
+      if (!amount || !invoiceId) {
+        return res.status(400).json({ success: false, error: 'Missing amount or invoiceId.' });
+      }
+      const amountCents = Math.round(parseFloat(amount) * 100);
+      if (!amountCents || amountCents <= 0) {
+        return res.status(400).json({ success: false, error: 'Invalid amount.' });
+      }
+
+      // Create a one-time Price
+      const price = await stripe.prices.create({
+        unit_amount: amountCents,
+        currency: 'usd',
+        product_data: {
+          name: `Invoice #${invoiceNumber || invoiceId}`,
+          metadata: { farrierId: farrierId || '', invoiceId },
+        },
+      });
+
+      // Create a Payment Link
+      const paymentLink = await stripe.paymentLinks.create({
+        line_items: [{ price: price.id, quantity: 1 }],
+        after_completion: {
+          type: 'redirect',
+          redirect: { url: `https://app.farritech.com/customer-portal.html` },
+        },
+        metadata: { farrierId: farrierId || '', invoiceId, invoiceNumber: invoiceNumber || '' },
+        ...(customerEmail ? { customer_creation: 'always' } : {}),
+      });
+
+      return res.status(200).json({ success: true, paymentUrl: paymentLink.url, paymentLinkId: paymentLink.id });
+    }
+
     if (action === 'validate') {
       const account = await stripe.accounts.retrieve();
       // Encrypt the key now that we've confirmed it's valid
