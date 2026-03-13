@@ -17,6 +17,8 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Stripe.js -->
+  <script src="https://js.stripe.com/v3/"></script>
 
   <!-- SheetJS for Excel export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -1077,6 +1079,10 @@
       const [loading, setLoading] = useState(true);
       const [selectedInvoice, setSelectedInvoice] = useState(null);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
+      const [selectedInvoices, setSelectedInvoices] = useState({});
+      const [showMultiPayModal, setShowMultiPayModal] = useState(false);
+      const [farrierStripeKey, setFarrierStripeKey] = useState('');
+      const [farrierStripeSecret, setFarrierStripeSecret] = useState('');
       const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, ytd, unpaid, custom
       const [customStart, setCustomStart] = useState('');
       const [customEnd, setCustomEnd] = useState('');
@@ -1115,7 +1121,10 @@
                 try {
                   const farrierDoc = await db.collection('farriers').doc(firstFarrierId).get();
                   if (farrierDoc.exists) {
-                    setFarrierBusinessName(farrierDoc.data().businessName || '');
+                    const fd = farrierDoc.data();
+                    setFarrierBusinessName(fd.businessName || '');
+                    setFarrierStripeKey(fd.stripePublishableKey || '');
+                    setFarrierStripeSecret(fd.stripeSecretKey || '');
                   }
                 } catch(e) {}
               }
@@ -1630,16 +1639,31 @@
                     )}
 
                     {invoice.status === 'outstanding' && (
-                      <button 
-                        className="btn btn-success"
-                        style={{width: '100%', marginTop: '1rem'}}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePayInvoice(invoice);
-                        }}
-                      >
-                        💳 Pay Now
-                      </button>
+                      <div style={{marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center'}}>
+                        <label style={{display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', flex: 1, padding: '0.6rem 0.75rem', border: '2px solid', borderColor: selectedInvoices[invoice.id] ? 'var(--primary)' : 'var(--border)', borderRadius: '8px', background: selectedInvoices[invoice.id] ? '#eff6ff' : 'transparent', transition: 'all 0.15s'}}>
+                          <input
+                            type="checkbox"
+                            checked={!!selectedInvoices[invoice.id]}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setSelectedInvoices(prev => ({
+                                ...prev,
+                                [invoice.id]: e.target.checked ? invoice : null
+                              }));
+                            }}
+                            onClick={e => e.stopPropagation()}
+                            style={{width: '18px', height: '18px', cursor: 'pointer'}}
+                          />
+                          <span style={{fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)'}}>Select</span>
+                        </label>
+                        <button
+                          className="btn btn-success"
+                          style={{whiteSpace: 'nowrap'}}
+                          onClick={(e) => { e.stopPropagation(); handlePayInvoice(invoice); }}
+                        >
+                          💳 Pay Now
+                        </button>
+                      </div>
                     )}
                     <button
                       className="btn btn-outline"
@@ -1659,98 +1683,146 @@
           </main>
 
           {showPaymentModal && selectedInvoice && (
-            <PaymentModal 
+            <PaymentModal
               invoice={selectedInvoice}
-              onClose={() => {
-                setShowPaymentModal(false);
-                setSelectedInvoice(null);
-              }}
-              onSuccess={() => {
-                setShowPaymentModal(false);
-                setSelectedInvoice(null);
-                loadData();
-              }}
+              stripePublishableKey={farrierStripeKey}
+              stripeSecretKey={farrierStripeSecret}
+              onClose={() => { setShowPaymentModal(false); setSelectedInvoice(null); }}
+              onSuccess={() => { setShowPaymentModal(false); setSelectedInvoice(null); loadData(); }}
             />
           )}
+
+          {showMultiPayModal && (
+            <MultiPayModal
+              invoices={Object.values(selectedInvoices).filter(Boolean)}
+              stripePublishableKey={farrierStripeKey}
+              stripeSecretKey={farrierStripeSecret}
+              onClose={() => setShowMultiPayModal(false)}
+              onSuccess={() => { setShowMultiPayModal(false); setSelectedInvoices({}); loadData(); }}
+            />
+          )}
+
+          {/* Sticky Pay Selected bar */}
+          {(() => {
+            const selected = Object.values(selectedInvoices).filter(Boolean);
+            if (selected.length === 0) return null;
+            const total = selected.reduce((sum, inv) => sum + (inv.total || 0), 0);
+            return (
+              <div style={{position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--primary)', color: '#fff', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1000, boxShadow: '0 -4px 20px rgba(0,0,0,0.2)'}}>
+                <div>
+                  <div style={{fontWeight: 700, fontSize: '1rem'}}>{selected.length} invoice{selected.length > 1 ? 's' : ''} selected</div>
+                  <div style={{fontSize: '0.85rem', opacity: 0.85}}>Total: ${total.toFixed(2)}</div>
+                </div>
+                <div style={{display: 'flex', gap: '0.75rem'}}>
+                  <button className="btn" style={{background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)'}} onClick={() => setSelectedInvoices({})}>
+                    Clear
+                  </button>
+                  <button className="btn" style={{background: '#fff', color: 'var(--primary)', fontWeight: 700}} onClick={() => setShowMultiPayModal(true)}>
+                    💳 Pay ${total.toFixed(2)}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       );
     }
 
-    // Payment Modal Component
-    function PaymentModal({ invoice, onClose, onSuccess }) {
-      const [cardNumber, setCardNumber] = useState('');
-      const [expiryMonth, setExpiryMonth] = useState('');
-      const [expiryYear, setExpiryYear] = useState('');
-      const [cvv, setCvv] = useState('');
+    // Shared Stripe card form
+    function StripeCardForm({ stripePublishableKey, onToken, processing }) {
+      const cardRef = React.useRef(null);
+      const [cardElement, setCardElement] = React.useState(null);
+      const [stripe, setStripe] = React.useState(null);
+      const [cardError, setCardError] = React.useState('');
+
+      React.useEffect(() => {
+        if (!stripePublishableKey || !window.Stripe) return;
+        const s = window.Stripe(stripePublishableKey);
+        setStripe(s);
+        const elements = s.elements();
+        const card = elements.create('card', {
+          style: {
+            base: { fontSize: '16px', color: '#1A2332', fontFamily: 'DM Sans, sans-serif', '::placeholder': { color: '#9ca3af' } },
+            invalid: { color: '#ef4444' },
+          },
+          hidePostalCode: true,
+        });
+        card.on('change', (e) => setCardError(e.error ? e.error.message : ''));
+        setTimeout(() => {
+          if (cardRef.current) { card.mount(cardRef.current); setCardElement(card); }
+        }, 100);
+        return () => { try { card.unmount(); } catch(e) {} };
+      }, [stripePublishableKey]);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!stripe || !cardElement) return;
+        const { paymentMethod, error } = await stripe.createPaymentMethod({ type: 'card', card: cardElement });
+        if (error) { setCardError(error.message); return; }
+        onToken(paymentMethod);
+      };
+
+      return (
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label style={{fontWeight: 600, marginBottom: '0.5rem', display: 'block'}}>Card Details</label>
+            <div ref={cardRef} style={{border: '1px solid var(--border)', borderRadius: '8px', padding: '0.85rem 1rem', background: '#fff', minHeight: '44px'}} />
+            {cardError && <div style={{color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem'}}>{cardError}</div>}
+          </div>
+          <div style={{display: 'flex', gap: '1rem', marginTop: '1.5rem'}}>
+            <button type="submit" className="btn btn-success" disabled={processing} style={{flex: 1, fontSize: '1rem'}}>
+              {processing ? <span className="spinner"></span> : 'Pay Now'}
+            </button>
+          </div>
+          <div style={{marginTop: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center'}}>
+            Secured by Stripe
+          </div>
+        </form>
+      );
+    }
+
+    // Single invoice PaymentModal
+    function PaymentModal({ invoice, stripePublishableKey, stripeSecretKey, onClose, onSuccess }) {
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
 
-      const formatCardNumber = (value) => {
-        const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-        const matches = v.match(/\d{4,16}/g);
-        const match = (matches && matches[0]) || '';
-        const parts = [];
-        
-        for (let i = 0, len = match.length; i < len; i += 4) {
-          parts.push(match.substring(i, i + 4));
-        }
-        
-        return parts.length ? parts.join(' ') : value;
-      };
-
-      const handlePayment = async (e) => {
-        e.preventDefault();
+      const handleToken = async (paymentMethod) => {
         setProcessing(true);
         setError('');
-
         try {
-          const expirationDate = `${expiryMonth.padStart(2, '0')}${expiryYear.slice(-2)}`;
-
-          const response = await fetch('/api/authorize-net-payment', {
+          const res = await fetch('/api/stripe-payment', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               action: 'charge',
-              paymentData: {
-                cardNumber: cardNumber.replace(/\s/g, ''),
-                expirationDate: expirationDate,
-                cardCode: cvv,
-                amount: invoice.total,
-                customerEmail: invoice.customerEmail,
-                customerName: invoice.customerName,
-                invoiceNumber: invoice.invoiceNumber,
-                description: `Farrier Services`
-              }
-            })
+              stripeSecretKey,
+              paymentMethodId: paymentMethod.id,
+              amount: invoice.total,
+              customerEmail: invoice.customerEmail,
+              customerName: invoice.customerName,
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.invoiceNumber,
+              farrierId: invoice.farrierId,
+            }),
           });
-
-          const result = await response.json();
-
+          const result = await res.json();
           if (result.success) {
-            // Update invoice status
-            if (db) {
-              await db.collection('invoices').doc(invoice.id).update({
-                status: 'paid',
-                paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-                transactionId: result.transactionId,
-                authCode: result.authCode,
-                cardLast4: result.accountNumber, // Last 4 digits (e.g., "XXXX1111")
-                cardType: result.accountType // Card type (e.g., "Visa", "Mastercard")
-              });
-            }
-
-            alert('✅ Payment successful! Thank you for your payment.');
+            await db.collection('invoices').doc(invoice.id).update({
+              status: 'paid',
+              paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+              transactionId: result.transactionId,
+              cardLast4: result.last4 || '',
+              cardType: result.brand || '',
+              paidVia: 'stripe_card',
+            });
+            alert('Payment successful! Thank you.');
             onSuccess();
           } else {
             setError(result.error || 'Payment failed. Please try again.');
           }
         } catch (err) {
-          console.error('Payment error:', err);
           setError('Payment processing failed. Please try again.');
         }
-
         setProcessing(false);
       };
 
@@ -1759,99 +1831,105 @@
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Pay Invoice</h2>
-              <button className="close-btn" onClick={onClose}>×</button>
+              <button className="close-btn" onClick={onClose}>&times;</button>
             </div>
-
-            <div style={{background: 'var(--background)', padding: '1.5rem', borderRadius: '12px', marginBottom: '2rem'}}>
-              <div style={{fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.5rem'}}>
-                {invoice.invoiceNumber}
-              </div>
-              <div style={{fontSize: '2.5rem', fontWeight: '700', color: 'var(--primary)', fontFamily: "'DM Serif Display', serif"}}>
-                ${invoice.total?.toFixed(2)}
-              </div>
+            <div style={{background: 'var(--background)', padding: '1.25rem', borderRadius: '10px', marginBottom: '1.5rem'}}>
+              <div style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem'}}>{invoice.invoiceNumber}</div>
+              <div style={{fontSize: '2.2rem', fontWeight: 700, color: 'var(--primary)', fontFamily: "'DM Serif Display', serif"}}>${invoice.total?.toFixed(2)}</div>
+              {invoice.customerName && <div style={{fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>{invoice.customerName}</div>}
             </div>
-
-            {error && (
-              <div className="alert alert-error">
-                {error}
-              </div>
+            {error && <div className="alert alert-error" style={{marginBottom: '1rem'}}>{error}</div>}
+            {stripePublishableKey ? (
+              <StripeCardForm stripePublishableKey={stripePublishableKey} onToken={handleToken} processing={processing} />
+            ) : (
+              <div style={{textAlign: 'center', color: 'var(--text-muted)', padding: '2rem'}}>Payment not configured. Please contact your farrier.</div>
             )}
+            <button className="btn btn-outline" style={{width: '100%', marginTop: '0.75rem'}} onClick={onClose} disabled={processing}>Cancel</button>
+          </div>
+        </div>
+      );
+    }
 
-            <form onSubmit={handlePayment}>
-              <div className="form-group">
-                <label>Card Number</label>
-                <input 
-                  type="text"
-                  required
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                  placeholder="1234 5678 9012 3456"
-                  maxLength="19"
-                />
-              </div>
+    // Multi-invoice PaymentModal
+    function MultiPayModal({ invoices, stripePublishableKey, stripeSecretKey, onClose, onSuccess }) {
+      const [processing, setProcessing] = useState(false);
+      const [error, setError] = useState('');
+      const total = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+      const invoiceNumbers = invoices.map(i => i.invoiceNumber).join(', ');
 
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem'}}>
-                <div className="form-group">
-                  <label>Month</label>
-                  <input 
-                    type="text"
-                    required
-                    value={expiryMonth}
-                    onChange={(e) => setExpiryMonth(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                    placeholder="MM"
-                    maxLength="2"
-                  />
-                </div>
+      const handleToken = async (paymentMethod) => {
+        setProcessing(true);
+        setError('');
+        try {
+          const res = await fetch('/api/stripe-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'charge',
+              stripeSecretKey,
+              paymentMethodId: paymentMethod.id,
+              amount: total,
+              customerEmail: invoices[0]?.customerEmail || '',
+              customerName: invoices[0]?.customerName || '',
+              invoiceId: invoices.map(i => i.id).join(','),
+              invoiceNumber: invoiceNumbers,
+              farrierId: invoices[0]?.farrierId || '',
+            }),
+          });
+          const result = await res.json();
+          if (result.success) {
+            await Promise.all(invoices.map(inv =>
+              db.collection('invoices').doc(inv.id).update({
+                status: 'paid',
+                paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+                transactionId: result.transactionId,
+                cardLast4: result.last4 || '',
+                cardType: result.brand || '',
+                paidVia: 'stripe_card_multi',
+              })
+            ));
+            alert('Payment of $' + total.toFixed(2) + ' successful! ' + invoices.length + ' invoice' + (invoices.length > 1 ? 's' : '') + ' marked as paid.');
+            onSuccess();
+          } else {
+            setError(result.error || 'Payment failed. Please try again.');
+          }
+        } catch (err) {
+          setError('Payment processing failed. Please try again.');
+        }
+        setProcessing(false);
+      };
 
-                <div className="form-group">
-                  <label>Year</label>
-                  <input 
-                    type="text"
-                    required
-                    value={expiryYear}
-                    onChange={(e) => setExpiryYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="YYYY"
-                    maxLength="4"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>CVV</label>
-                  <input 
-                    type="text"
-                    required
-                    value={cvv}
-                    onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="123"
-                    maxLength="4"
-                  />
-                </div>
-              </div>
-
-              <div style={{display: 'flex', gap: '1rem', marginTop: '2rem'}}>
-                <button 
-                  type="button"
-                  onClick={onClose}
-                  className="btn btn-outline"
-                  disabled={processing}
-                  style={{flex: 1}}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="btn btn-success"
-                  disabled={processing}
-                  style={{flex: 1}}
-                >
-                  {processing ? <span className="spinner"></span> : `Pay $${invoice.total?.toFixed(2)}`}
-                </button>
-              </div>
-            </form>
-
-            <div style={{marginTop: '2rem', padding: '1rem', background: 'var(--background)', borderRadius: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center'}}>
-              🔒 Secure payment processed by Authorize.Net
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Pay {invoices.length} Invoice{invoices.length > 1 ? 's' : ''}</h2>
+              <button className="close-btn" onClick={onClose}>&times;</button>
             </div>
+            <div style={{background: 'var(--background)', padding: '1.25rem', borderRadius: '10px', marginBottom: '1rem'}}>
+              <div style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem'}}>{invoiceNumbers}</div>
+              <div style={{fontSize: '2.2rem', fontWeight: 700, color: 'var(--primary)', fontFamily: "'DM Serif Display', serif"}}>${total.toFixed(2)}</div>
+              <div style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem'}}>{invoices.length} invoice{invoices.length > 1 ? 's' : ''} &middot; 1 combined charge</div>
+            </div>
+            <div style={{marginBottom: '1.25rem', fontSize: '0.9rem'}}>
+              {invoices.map(inv => (
+                <div key={inv.id} style={{display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)'}}>
+                  <span style={{color: 'var(--text-muted)'}}>{inv.invoiceNumber}</span>
+                  <span style={{fontWeight: 600}}>${inv.total?.toFixed(2)}</span>
+                </div>
+              ))}
+              <div style={{display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', fontWeight: 700, fontSize: '1rem'}}>
+                <span>Total</span>
+                <span style={{color: 'var(--primary)'}}>${total.toFixed(2)}</span>
+              </div>
+            </div>
+            {error && <div className="alert alert-error" style={{marginBottom: '1rem'}}>{error}</div>}
+            {stripePublishableKey ? (
+              <StripeCardForm stripePublishableKey={stripePublishableKey} onToken={handleToken} processing={processing} />
+            ) : (
+              <div style={{textAlign: 'center', color: 'var(--text-muted)', padding: '2rem'}}>Payment not configured. Please contact your farrier.</div>
+            )}
+            <button className="btn btn-outline" style={{width: '100%', marginTop: '0.75rem'}} onClick={onClose} disabled={processing}>Cancel</button>
           </div>
         </div>
       );
