@@ -2763,13 +2763,22 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
 
   return (
     <div className="app-container">
-      <header className="app-header">
-        <div className="header-content">
-          <div className="logo">
-            <span className="logo-icon">🐴</span>
-            <span>FarriTech</span>
-          </div>
-        </div>
+      <header style={{
+        backgroundColor: '#2683FB',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        height: '80px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <img
+          src="/public/farritech_logo_letters_white.png"
+          alt="FarriTech"
+          style={{height: '60px', width: 'auto', objectFit: 'contain'}}
+        />
       </header>
 
       <div className="auth-container">
