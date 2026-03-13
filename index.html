@@ -8696,6 +8696,34 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       >
                         ✉️ Email
                       </button>
+                      {invoice.customerPhone && (
+                        <button
+                          className="btn btn-sm btn-outline"
+                          title="Send invoice via SMS"
+                          onClick={async () => {
+                            const bizName = userProfile?.businessName || 'Your Farrier';
+                            const payLink = invoice.paymentUrl || '';
+                            const msg = `Hi ${invoice.customerName}, you have invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''} Reply STOP to opt out.`;
+                            try {
+                              const res = await fetch('/api/send-sms', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ to: invoice.customerPhone, body: msg }),
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                alert('✅ Invoice SMS sent to ' + invoice.customerPhone);
+                              } else {
+                                alert('❌ SMS failed: ' + (data.error || 'Unknown error'));
+                              }
+                            } catch (e) {
+                              alert('❌ SMS error: ' + e.message);
+                            }
+                          }}
+                        >
+                          📱 SMS
+                        </button>
+                      )}
                       {invoice.paymentUrl && (
                         <button
                           className="btn btn-sm btn-outline"
