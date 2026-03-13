@@ -10376,12 +10376,14 @@ useEffect(() => {
                     });
                     const data = await res.json();
                     if (data.success) {
+                      // Store the encrypted key returned by the server, not the plaintext
+                      const keyToStore = data.encryptedKey || stripeSecretKey;
                       await ensureFarriTechfile_(safeFarrierId, {
                         stripePublishableKey,
-                        stripeSecretKey,
+                        stripeSecretKey: keyToStore,
                         stripeAccountName: data.accountName || ''
                       });
-                      setUserProfile(prev => ({ ...prev, stripePublishableKey, stripeSecretKey, stripeAccountName: data.accountName || '' }));
+                      setUserProfile(prev => ({ ...prev, stripePublishableKey, stripeSecretKey: keyToStore, stripeAccountName: data.accountName || '' }));
                       setStripeAccountName(data.accountName || '');
                       setStripeStatus('connected');
                     } else {
