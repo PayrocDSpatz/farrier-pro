@@ -867,7 +867,25 @@
       if (invoice.customerEmail) { doc.text(safeText_(invoice.customerEmail), 64, custY); custY += 14; }
       if (invoice.customerPhone) { doc.text(safeText_(invoice.customerPhone), 64, custY); custY += 14; }
       const payUrl = buildInvoicePayUrl_(invoice);
-      if (payUrl) {
+      const isPaid = invStatus === 'paid';
+      if (isPaid) {
+        // Show payment details instead of QR code
+        doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+        doc.text("PAYMENT INFO", pageW - 150, 192, { align: "center" });
+        doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+        const cardLine = invoice.cardType && invoice.cardLast4
+          ? safeText_(invoice.cardType) + ' ending ' + safeText_(invoice.cardLast4)
+          : invoice.paidVia === 'stripe_payment_link' ? 'Paid via payment link' : 'Card on file';
+        let paidDateLine = '';
+        if (invoice.paidAt) {
+          try {
+            const d = invoice.paidAt.toDate ? invoice.paidAt.toDate() : new Date(invoice.paidAt);
+            paidDateLine = 'Paid: ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          } catch(e) {}
+        }
+        doc.text(cardLine, pageW - 150, 212, { align: "center" });
+        if (paidDateLine) doc.text(paidDateLine, pageW - 150, 228, { align: "center" });
+      } else if (payUrl) {
         try {
           const qr = await qrToDataUrl_(payUrl);
           if (qr) {
@@ -891,7 +909,8 @@
       items.forEach(item => {
         const desc = safeText_(item.description || item.name || "");
         const qty = Number(item.quantity || 1);
-        const price = Number(item.unitPrice || item.price || 0);
+        const rawPrice = item.unitPrice || item.price || 0;
+        const price = Number(String(rawPrice).replace(/[^0-9.]/g, '')) || 0;
         const lineTotal = qty * price;
         y = pdfWrapText_(doc, desc, 48, y, 260, 14);
         doc.text(String(qty), pageW - 220, y - 14, { align: "right" });
@@ -1678,6 +1697,11 @@
               cardType: result.brand || '',
               paidVia: 'stripe_card',
             });
+            // Deactivate the payment link so it can't be used again
+            if (invoice.paymentLinkId && stripeSecretKey) {
+              fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'deactivate_link', stripeSecretKey, paymentLinkId: invoice.paymentLinkId }) }).catch(() => {});
+            }
             alert('Payment successful! Thank you.');
             onSuccess();
           } else {
