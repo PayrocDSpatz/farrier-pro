@@ -9637,6 +9637,7 @@ useEffect(() => {
             // Generate Stripe Payment Link if farrier has Stripe connected
             let paymentUrl = '';
             const stripeKey = userProfile?.stripeSecretKey || '';
+            console.log('💳 Stripe key present:', !!stripeKey, '| prefix:', stripeKey.substring(0,10));
             if (stripeKey && total > 0) {
               try {
                 const plRes = await fetch('/api/stripe-payment', {
@@ -9654,12 +9655,14 @@ useEffect(() => {
                   }),
                 });
                 const plData = await plRes.json();
+                console.log('💳 Stripe API response:', JSON.stringify(plData));
                 if (plData.success && plData.paymentUrl) {
                   paymentUrl = plData.paymentUrl;
                   await db.collection('invoices').doc(docRef.id).update({ paymentUrl, paymentLinkId: plData.paymentLinkId || '' });
                   console.log('✅ Payment link generated:', paymentUrl);
                 } else {
-                  console.warn('⚠️ Payment link failed:', plData.error);
+                  console.error('❌ Payment link failed:', plData.error);
+                  alert('⚠️ Payment link failed: ' + (plData.error || 'Unknown Stripe error') + '\n\nInvoice was still created but no payment link was generated.');
                 }
               } catch (plErr) {
                 console.error('Payment link error:', plErr);
