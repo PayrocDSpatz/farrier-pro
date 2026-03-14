@@ -1727,7 +1727,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               to: customerEmail,
-              subject: `Invoice #${invoiceNum} from ${safeText_(userProfile?.businessName || "Your Farrier")}`,
+              subject: `Invoice #${invoiceNum} from ${safeText_(_userProfile?.businessName || "Your Farrier")}`,
               html,
             }),
           });
