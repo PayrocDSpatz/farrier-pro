@@ -891,10 +891,10 @@ async function loadCustomerDetail(c) {
     const aSnap = await db.collection('appointments')
       .where('farrierId', '==', state.user.uid)
       .where('customerName', '==', c.name)
-      .orderBy('requestedDate', 'desc')
-      .limit(5)
       .get();
-    const appts = aSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const appts = aSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (b.requestedDate||'').localeCompare(a.requestedDate||''))
+      .slice(0, 5);
 
     if (appts.length) {
       const last = appts[0];
@@ -918,10 +918,9 @@ async function loadCustomerDetail(c) {
     const iSnap = await db.collection('invoices')
       .where('farrierId', '==', state.user.uid)
       .where('customerName', '==', c.name)
-      .orderBy('createdAt', 'desc')
-      .limit(10)
       .get();
-    const invs = iSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const invs = iSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
     const open = invs.filter(i => i.status === 'outstanding');
     const all = invs;
 
@@ -1116,6 +1115,22 @@ async function createInvoice() {
         await db.collection('invoices').doc(docRef.id).update({ paymentUrl, paymentLinkId: plData.paymentLinkId || '' });
       }
     } catch(e) { console.warn('Payment link error:', e); }
+  }
+
+  // Send SMS with payment link if customer has phone
+  if (c.phone && (paymentUrl || total > 0)) {
+    try {
+      const bizName = state.userProfile?.businessName || 'Your Farrier';
+      const msg = paymentUrl
+        ? `Hi ${c.name}, your invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName} is ready. Pay here: ${paymentUrl} Reply STOP to opt out.`
+        : `Hi ${c.name}, your invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName} has been created. Reply STOP to opt out.`;
+      await fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: c.phone, body: msg })
+      });
+      console.log('✅ SMS sent to', c.phone);
+    } catch(e) { console.warn('SMS error:', e); }
   }
 
   return { id: docRef.id, invoiceNumber, total, paymentUrl, customerName: c.name, customerPhone: c.phone||'', customerEmail: c.email||'' };
