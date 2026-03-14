@@ -10545,7 +10545,7 @@ useEffect(() => {
                     const data = await res.json();
                     if (data.success) {
                       // Store the encrypted key returned by the server, not the plaintext
-                      const keyToStore = data.encryptedKey || stripeSecretKey;
+                      const keyToStore = stripeSecretKey;
                       await ensureFarriTechfile_(safeFarrierId, {
                         stripePublishableKey,
                         stripeSecretKey: keyToStore,
