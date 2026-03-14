@@ -1635,7 +1635,8 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         }
       }
 
-      async function emailInvoiceLink(invoice) {
+      async function emailInvoiceLink(invoice, profileOverride) {
+        const _userProfile = profileOverride || (typeof userProfile !== 'undefined' ? userProfile : null);
         const customerEmail = safeText_(invoice.customerEmail || "");
         if (!customerEmail) {
           alert("No customer email on this invoice.");
@@ -1672,12 +1673,12 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;">
   <div style="text-align:center;padding:28px 30px;background:linear-gradient(135deg,#1a365d 0%,#2563eb 100%);border-radius:8px 8px 0 0;">
     <h1 style="color:#fff;margin:0;font-size:26px;font-weight:700;">🐴 FarriTech</h1>
-    <p style="color:#06b6d4;margin:6px 0 0;font-size:14px;">Invoice from ${safeText_(userProfile?.businessName || "Your Farrier")}</p>
+    <p style="color:#06b6d4;margin:6px 0 0;font-size:14px;">Invoice from ${safeText_(_userProfile?.businessName || "Your Farrier")}</p>
   </div>
 
   <div style="background:#fff;padding:32px 30px;border:1px solid #e5e7eb;border-top:none;">
     <p style="font-size:16px;color:#374151;">Hi ${firstName},</p>
-    <p style="font-size:15px;color:#4b5563;">Here is your invoice from <strong>${safeText_(userProfile?.businessName || "your farrier")}</strong>. You can view and pay it online using the button below.</p>
+    <p style="font-size:15px;color:#4b5563;">Here is your invoice from <strong>${safeText_(_userProfile?.businessName || "your farrier")}</strong>. You can view and pay it online using the button below.</p>
 
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:24px 0;">
       <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:12px;">
@@ -8775,7 +8776,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       </button>
                       <button
                         className="btn btn-sm btn-outline"
-                        onClick={() => emailInvoiceLink(invoice)}
+                        onClick={() => emailInvoiceLink(invoice, userProfile)}
                         title="Email the invoice link"
                       >
                         ✉️ Email
@@ -9699,7 +9700,7 @@ useEffect(() => {
             // Send email invoice if customer has email
             if (customerEmail) {
               try {
-                await emailInvoiceLink(createdInvoice);
+                await emailInvoiceLink(createdInvoice, userProfile);
                 console.log('✅ Invoice email sent');
               } catch (emailErr) {
                 console.error('Invoice email error:', emailErr);
