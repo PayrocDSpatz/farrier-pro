@@ -787,11 +787,11 @@
     .ft-auth-grid{
       width: 100%;
       box-sizing: border-box;
-      padding: clamp(22px, 4vw, 64px) clamp(40px, 7vw, 110px);
+      padding: 8px clamp(40px, 7vw, 110px) 8px;
       display: grid;
       grid-template-columns: 1.5fr 0.8fr;
       gap: clamp(22px, 4vw, 72px);
-      align-items: center;
+      align-items: start;
       min-height: 100vh;
     }
     .ft-auth-hero{
@@ -806,10 +806,10 @@
       margin: 0 0 14px 0;
     }
 .ft-card-logo{
-  width: 150px;
+  width: 90px;
   height: auto;
   display: block;
-  margin: 0 auto 8px;
+  margin: 0 auto 4px;
   image-rendering: -webkit-optimize-contrast;
   transform: translateZ(0);
   filter:
@@ -848,7 +848,9 @@
 
     .ft-auth-container{ max-width: 460px; width: 100%; margin: 0 0 0 auto; }
     .ft-auth-shell .auth-card{
-      padding: 16px;
+      padding: 14px;
+      max-height: calc(100vh - 80px);
+      overflow-y: auto;
       border-radius: 22px;
       background: linear-gradient(180deg, rgba(2,6,23,0.72), rgba(2,6,23,0.58));
       border: 1px solid rgba(148,163,184,0.22);
@@ -862,7 +864,7 @@
       font-size: 1.25rem;
       margin-bottom: 2px;
     }
-    .ft-auth-shell .auth-header p{ color: rgba(226,232,240,0.72); }
+    .ft-auth-shell .auth-header p{ color: rgba(226,232,240,0.72); margin: 0; font-size: 0.85rem; }
 
     .ft-auth-logo{
       width: 150px;
@@ -894,6 +896,8 @@
       background: rgba(2,6,23,0.50);
       border: 1px solid rgba(148,163,184,0.22);
       color: rgba(226,232,240,0.95);
+      padding-top: 0.5rem !important;
+      padding-bottom: 0.5rem !important;
     }
     .ft-auth-shell .form-group input::placeholder{ color: rgba(226,232,240,0.42); }
     .ft-auth-shell .form-group input:focus,
@@ -904,6 +908,7 @@
     }
 
     .ft-auth-shell .btn-primary{
+      padding: 0.55rem 1rem !important;
       background: linear-gradient(90deg, #1d4ed8, #0ea5e9);
       border: 1px solid rgba(96,165,250,0.35);
       box-shadow: 0 18px 46px rgba(14,165,233,0.18);
@@ -1050,9 +1055,9 @@
 }
 
 .ft-card-logo{
-  width: 150px;
+  width: 90px;
   height: auto;
-  margin: 0 auto 8px;
+  margin: 0 auto 4px;
   display:block;
   image-rendering: -webkit-optimize-contrast;
   transform: translateZ(0);
