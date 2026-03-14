@@ -309,11 +309,12 @@
     .btn-google {
       background: white;
       color: #444;
-      border: 2px solid var(--border);
+      border: 2px solid rgba(180,200,220,0.6);
     }
 
     .btn-google:hover {
-      background: #f8f9fa;
+      background: #f0f4f8;
+      border-color: rgba(38,131,251,0.6);
     }
 
     /* QR Code Display */
@@ -951,6 +952,8 @@
     }
 
     .ft-auth-shell .form-group label{ color: rgba(226,232,240,0.86); }
+    .ft-auth-shell .btn-google { background: white !important; color: #333 !important; border: 2px solid rgba(200,215,230,0.7) !important; }
+    .ft-auth-shell .btn-google:hover { background: #f0f4f8 !important; }
     .ft-auth-shell .form-group input,
     .ft-auth-shell .form-group textarea,
     .ft-auth-shell .form-group select{
@@ -2533,9 +2536,9 @@ return (
                   disabled={loading}
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
-                    color: '#444',
-                    border: '1px solid #ddd',
+                    background: 'white',
+                    color: '#333',
+                    border: '1px solid rgba(200,215,230,0.7)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
