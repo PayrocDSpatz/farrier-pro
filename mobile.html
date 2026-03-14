@@ -254,6 +254,15 @@
       <div style="margin-bottom:8px;"></div>
     </div>
 
+    <!-- Stripe warning banner -->
+    <div id="stripe-warning" style="display:none; background:#fef3c7; border:2px solid #f59e0b; border-radius:12px; padding:14px 16px; margin-bottom:12px; display:flex; align-items:center; gap:12px;">
+      <div style="font-size:1.4rem;">⚠️</div>
+      <div style="flex:1;">
+        <div style="font-weight:700; color:#92400e; font-size:0.9rem;">Stripe Not Connected</div>
+        <div style="font-size:0.8rem; color:#b45309; margin-top:2px;">Payment links won't be generated. Add your Stripe keys in Settings on the main app.</div>
+      </div>
+    </div>
+
     <div class="section-label">Actions</div>
     <button class="big-btn" onclick="goTo('screen-search')">
       <div class="big-btn-icon">🔍</div>
@@ -782,6 +791,12 @@ async function loadDashboard() {
   } catch(e) {}
 
   document.getElementById('dash-stats').style.display = 'grid';
+
+  // Show Stripe warning if not connected
+  const stripeWarning = document.getElementById('stripe-warning');
+  if (stripeWarning) {
+    stripeWarning.style.display = state.userProfile?.stripeSecretKey ? 'none' : 'flex';
+  }
 }
 
 // ── SEARCH ──
@@ -1104,6 +1119,7 @@ async function createInvoice() {
   // Try to generate payment link
   let paymentUrl = '';
   const stripeKey = state.userProfile?.stripeSecretKey || '';
+  console.log('💳 Stripe key present:', !!stripeKey, '| key prefix:', stripeKey.substring(0,10));
   if (stripeKey && total > 0) {
     try {
       const plRes = await fetch('/api/stripe-payment', {
@@ -1112,27 +1128,45 @@ async function createInvoice() {
         body: JSON.stringify({ action: 'payment_link', stripeSecretKey: stripeKey, amount: total, invoiceId: docRef.id, invoiceNumber, customerEmail: c.email||'', customerName: c.name, farrierId: state.user.uid }),
       });
       const plData = await plRes.json();
+      console.log('💳 Stripe response:', JSON.stringify(plData));
       if (plData.success && plData.paymentUrl) {
         paymentUrl = plData.paymentUrl;
         await db.collection('invoices').doc(docRef.id).update({ paymentUrl, paymentLinkId: plData.paymentLinkId || '' });
+        console.log('✅ Payment link:', paymentUrl);
+      } else {
+        console.error('❌ Payment link failed:', plData.error);
+        showToast('No payment link: ' + (plData.error || 'Stripe error'), 'error');
       }
-    } catch(e) { console.warn('Payment link error:', e); }
+    } catch(e) {
+      console.error('❌ Stripe exception:', e);
+      showToast('Stripe error: ' + e.message, 'error');
+    }
+  } else if (!stripeKey) {
+    console.warn('⚠️ No Stripe key in profile');
+    showToast('Stripe not connected — no payment link', 'error');
   }
 
-  // Send SMS with payment link if customer has phone
-  if (c.phone && (paymentUrl || total > 0)) {
+  // Send SMS with payment link
+  const smsEnabled = state.userProfile?.smsEnabled;
+  console.log('📱 SMS check — smsEnabled:', smsEnabled, '| phone:', c.phone, '| paymentUrl:', paymentUrl, '| stripeKey present:', !!state.userProfile?.stripeSecretKey);
+  if (smsEnabled && c.phone) {
     try {
       const bizName = state.userProfile?.businessName || 'Your Farrier';
       const msg = paymentUrl
         ? `Hi ${c.name}, your invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName} is ready. Pay here: ${paymentUrl} Reply STOP to opt out.`
         : `Hi ${c.name}, your invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName} has been created. Reply STOP to opt out.`;
-      await fetch('/api/send-sms', {
+      const smsRes = await fetch('/api/send-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: c.phone, body: msg })
       });
-      console.log('✅ SMS sent to', c.phone);
+      const smsData = await smsRes.json();
+      console.log('✅ SMS result:', smsData);
     } catch(e) { console.warn('SMS error:', e); }
+  } else if (!smsEnabled) {
+    console.warn('⚠️ SMS not sent — smsEnabled is false. Enable SMS in Settings on the main app.');
+  } else if (!c.phone) {
+    console.warn('⚠️ SMS not sent — customer has no phone number.');
   }
 
   return { id: docRef.id, invoiceNumber, total, paymentUrl, customerName: c.name, customerPhone: c.phone||'', customerEmail: c.email||'' };
@@ -1193,6 +1227,42 @@ function setBtnsDisabled(v) {
   ['save-inv-btn','pay-inv-btn'].forEach(id => { const el = document.getElementById(id); if(el) el.disabled = v; });
 }
 
+// ── INVOICE EMAIL BUILDER ──
+function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
+  const total = (inv.total || 0).toFixed(2);
+  const items = (inv.items || []).map(i =>
+    `<tr><td style="padding:6px 8px;font-size:14px;color:#374151;">${i.name||i.description||''}</td><td style="padding:6px 8px;font-size:14px;color:#374151;text-align:right;">$${(i.amount||i.price||0).toFixed(2)}</td></tr>`
+  ).join('');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">
+  <div style="text-align:center;padding:28px;background:linear-gradient(135deg,#1a365d,#2563eb);border-radius:8px 8px 0 0;">
+    <h1 style="color:#fff;margin:0;font-size:24px;">🐴 ${bizName}</h1>
+    <p style="color:#06b6d4;margin:6px 0 0;">Invoice from FarriTech</p>
+  </div>
+  <div style="background:#fff;padding:32px;border:1px solid #e5e7eb;border-top:none;">
+    <p style="font-size:16px;">Hi ${firstName},</p>
+    <p>Here is your invoice from <strong>${bizName}</strong>.</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:20px 0;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+        <tr><td style="padding:4px 0;color:#6b7280;width:140px;">Invoice #</td><td><strong>${inv.invoiceNumber}</strong></td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Customer</td><td>${inv.customerName}</td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Total</td><td><strong>$${total}</strong></td></tr>
+      </table>
+      ${items ? `<table style="width:100%;border-collapse:collapse;border-top:1px solid #e2e8f0;margin-top:12px;"><tbody>${items}</tbody></table>` : ''}
+    </div>
+    ${payUrl ? `<div style="text-align:center;margin:28px 0;">
+      <a href="${payUrl}" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 36px;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;display:inline-block;">
+        💳 Pay Invoice — $${total}
+      </a>
+    </div>` : ''}
+    <p style="color:#6b7280;font-size:13px;">Questions? Contact your farrier directly.</p>
+  </div>
+  <div style="background:#f9fafb;padding:16px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;text-align:center;">
+    <p style="color:#9ca3af;font-size:12px;margin:0;">Powered by <a href="https://www.farritech.com" style="color:#6b7280;">FarriTech</a></p>
+  </div>
+</body></html>`;
+}
+
 // ── PAYMENT ──
 function openInvoicePayment(inv) {
   state.currentInvoice = inv;
@@ -1234,19 +1304,57 @@ async function confirmPayment() {
       const sendEmail = document.getElementById('send-email-link')?.checked;
       const payUrl = inv.paymentUrl || '';
 
+      // Must select at least one delivery method
+      if (!sendSms && !sendEmail) {
+        showToast('Please select SMS or Email to send the link', 'error');
+        document.getElementById('confirm-pay-btn').disabled = false;
+        document.getElementById('pay-saving').style.display = 'none';
+        return;
+      }
+
+      // Must have a payment URL
+      if (!payUrl) {
+        showToast('No payment link available — check Stripe is connected in Settings', 'error');
+        document.getElementById('confirm-pay-btn').disabled = false;
+        document.getElementById('pay-saving').style.display = 'none';
+        return;
+      }
+
+      let sent = [];
       if (sendSms && inv.customerPhone) {
         await fetch('/api/send-sms', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${(inv.total||0).toFixed(2)} is ready.${payUrl ? ' Pay here: ' + payUrl : ''} Reply STOP to opt out.` })
+          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${(inv.total||0).toFixed(2)} is ready. Pay here: ${payUrl} Reply STOP to opt out.` })
         });
+        sent.push('SMS');
+      } else if (sendSms && !inv.customerPhone) {
+        showToast('Customer has no phone number on file', 'error');
+        document.getElementById('confirm-pay-btn').disabled = false;
+        document.getElementById('pay-saving').style.display = 'none';
+        return;
       }
       if (sendEmail && inv.customerEmail) {
-        await fetch('/api/send-email', {
+        const bizName = state.userProfile?.businessName || 'Your Farrier';
+        const firstName = (inv.customerName || 'there').split(' ')[0];
+        const invoiceHtml = buildInvoiceEmail(inv, bizName, firstName, payUrl);
+        const emailRes = await fetch('/api/send-email', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'invoice', customerEmail: inv.customerEmail, customerName: inv.customerName, invoiceNumber: inv.invoiceNumber, total: inv.total, paymentUrl: payUrl })
+          body: JSON.stringify({
+            to: inv.customerEmail,
+            subject: `Invoice #${inv.invoiceNumber} from ${bizName}`,
+            html: invoiceHtml
+          })
         });
+        const emailData = await emailRes.json();
+        console.log('📧 Email result:', emailData);
+        sent.push('Email');
+      } else if (sendEmail && !inv.customerEmail) {
+        showToast('Customer has no email on file', 'error');
+        document.getElementById('confirm-pay-btn').disabled = false;
+        document.getElementById('pay-saving').style.display = 'none';
+        return;
       }
-      showSuccess('Link Sent!', `Payment link sent to ${inv.customerName}`);
+      showSuccess('Link Sent!', `Payment link sent via ${sent.join(' & ')} to ${inv.customerName}`);
     } else {
       // Mark as paid
       const updateData = {
