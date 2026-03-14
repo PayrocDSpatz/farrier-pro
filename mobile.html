@@ -691,13 +691,15 @@ async function doLogout() {
 async function loadUserProfile() {
   if (!state.user) return;
   try {
-    const snap = await db.collection('farritech_users').doc(state.user.uid).get();
-    if (snap.exists) state.userProfile = snap.data();
-    else {
-      const snap2 = await db.collection('users').doc(state.user.uid).get();
-      if (snap2.exists) state.userProfile = snap2.data();
+    // Main app stores profiles in 'farriers' collection
+    const snap = await db.collection('farriers').doc(state.user.uid).get();
+    if (snap.exists) {
+      state.userProfile = snap.data();
+      console.log('✅ Profile loaded, Stripe connected:', !!state.userProfile?.stripeSecretKey);
+    } else {
+      console.warn('⚠️ No profile found in farriers collection for', state.user.uid);
     }
-  } catch(e) { console.warn('Profile load:', e); }
+  } catch(e) { console.warn('Profile load error:', e); }
 }
 
 // ── LOAD SERVICES ──
