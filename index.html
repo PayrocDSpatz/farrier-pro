@@ -194,7 +194,7 @@
       padding: 2rem;
       box-shadow: 0 4px 24px rgba(0,0,0,0.35);
       margin-bottom: 1.5rem;
-      border: 1.5px solid rgba(38,131,251,0.3);
+      border: 2px solid rgba(38,131,251,0.55);
     }
 
     .card h2 {
@@ -212,6 +212,12 @@
       display: block;
       margin-bottom: 0.5rem;
       font-weight: 600;
+      color: var(--text);
+    }
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      background: rgba(255,255,255,0.07);
       color: var(--text);
     }
 
@@ -354,7 +360,7 @@
       background: var(--surface);
       padding: 1.5rem;
       border-radius: 12px;
-      border: 1.5px solid rgba(38,131,251,0.3);
+      border: 2px solid rgba(38,131,251,0.55);
       box-shadow: 0 2px 16px rgba(0,0,0,0.3);
     }
 
@@ -386,7 +392,7 @@
       background: var(--surface);
       border-radius: 12px;
       padding: 1.5rem;
-      border: 2px solid var(--border);
+      border: 2px solid rgba(38,131,251,0.4);
     }
 
     .calendar-header {
@@ -399,6 +405,7 @@
     .calendar-title {
       font-size: 1.25rem;
       font-weight: 700;
+      color: var(--text);
     }
 
     .calendar-nav {
@@ -409,7 +416,9 @@
     .calendar-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 0.5rem;
+      gap: 0;
+      border-top: 1.5px solid rgba(38,131,251,0.35);
+      border-left: 1.5px solid rgba(38,131,251,0.35);
     }
 
     .calendar-day {
@@ -417,21 +426,25 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 8px;
       cursor: pointer;
       font-weight: 600;
       transition: all 0.2s;
+      border-right: 1.5px solid rgba(38,131,251,0.35);
+      border-bottom: 1.5px solid rgba(38,131,251,0.35);
     }
 
     .calendar-day.header {
-      color: var(--text-muted);
+      color: #46C5FF;
       font-size: 0.75rem;
       text-transform: uppercase;
       cursor: default;
+      background: rgba(38,131,251,0.12);
+      font-weight: 700;
+      letter-spacing: 0.5px;
     }
 
     .calendar-day:not(.header):hover {
-      background: var(--border);
+      background: rgba(38,131,251,0.15);
     }
 
     .calendar-day.today {
@@ -453,7 +466,7 @@
 
     .appointment-item {
       background: var(--surface);
-      border: 1.5px solid rgba(38,131,251,0.3);
+      border: 2px solid rgba(38,131,251,0.55);
       border-radius: 12px;
       padding: 1.25rem;
       display: flex;
@@ -464,8 +477,8 @@
     }
 
     .appointment-item:hover {
-      box-shadow: 0 4px 20px rgba(38,131,251,0.2);
-      border-color: rgba(70,197,255,0.5);
+      box-shadow: 0 4px 20px rgba(38,131,251,0.3);
+      border-color: rgba(70,197,255,0.8);
     }
 
     .appointment-info {
@@ -500,24 +513,28 @@
     }
 
     .badge-success {
-      background: #E6F4EA;
-      color: var(--success);
+      background: #1a3a2a;
+      color: #4ade80;
+      border: 1px solid rgba(74,222,128,0.4);
     }
 
     .badge-warning {
-      background: #FEF3E2;
-      color: var(--warning);
+      background: #2a2010;
+      color: #f59e0b;
+      border: 1px solid rgba(245,158,11,0.4);
     }
 
     .badge-secondary {
-      background: #fee2e2;
-      color: #dc2626;
+      background: #2a1010;
+      color: #f87171;
       font-weight: 600;
+      border: 1px solid rgba(248,113,113,0.4);
     }
 
     .badge-pending {
-      background: #E8EAF6;
-      color: #5E35B1;
+      background: #1a1a30;
+      color: #a78bfa;
+      border: 1px solid rgba(167,139,250,0.4);
     }
 
     /* Modal */
@@ -536,14 +553,36 @@
     }
 
     .modal {
-      background: var(--surface);
+      background: #FFFFFF;
+      color: #0D1320;
       border-radius: 16px;
       padding: 2rem;
       max-width: 600px;
       width: 100%;
       max-height: 90vh;
       overflow-y: auto;
+      border: 2px solid rgba(38,131,251,0.4);
     }
+    .modal .form-group label { color: #1A2332; }
+    .modal .form-group input,
+    .modal .form-group textarea,
+    .modal .form-group select { background: #F5F8FD; color: #0D1320; border-color: #A8BDD8; }
+    .modal p, .modal span, .modal div { color: inherit; }
+    .modal-content {
+      background: #FFFFFF;
+      color: #0D1320;
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      border: 2px solid rgba(38,131,251,0.4);
+    }
+    .modal-content .form-group label { color: #1A2332; }
+    .modal-content .form-group input,
+    .modal-content .form-group textarea,
+    .modal-content .form-group select { background: #F5F8FD; color: #0D1320; border-color: #A8BDD8; }
 
     .modal-header {
       display: flex;
@@ -563,6 +602,24 @@
       font-size: 1.5rem;
       cursor: pointer;
       color: var(--text-muted);
+    }
+
+    /* Route sheet card overrides for dark theme */
+    .card p, .card span, .card div, .card label { color: var(--text); }
+    .card h3 { color: var(--primary-light); }
+    .card h4 { color: var(--primary-light); }
+
+    /* Customer detail inline card overrides */
+    .customer-detail-header { color: var(--text); }
+
+    /* Invoice / appointment list items inside cards */
+    .card .appointment-item { background: rgba(255,255,255,0.04); }
+
+    /* Input fields on dark bg */
+    input[type="date"], input[type="time"], input[type="number"], input[type="text"], textarea, select {
+      background: rgba(22, 32, 50, 0.95);
+      color: var(--text);
+      border-color: rgba(38,131,251,0.45);
     }
 
     .success-message {
@@ -3717,11 +3774,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   👤 {selectedCustomer.name}
                 </h2>
                 {selectedCustomer.farmName && (
-                  <div style={{ fontSize: '1rem', fontWeight: 600, color: '#555', marginBottom: '0.25rem' }}>
+                  <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)', marginBottom: '0.25rem' }}>
                     🏠 {selectedCustomer.farmName}
                   </div>
                 )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', color: '#555', fontSize: '0.95rem' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', color: 'var(--text)', fontSize: '0.95rem' }}>
                   {selectedCustomer.phone && <span>📞 {selectedCustomer.phone}</span>}
                   {selectedCustomer.email && <span>✉️ {selectedCustomer.email}</span>}
                   {(selectedCustomer.address || selectedCustomer.city) && <span>📍 {[selectedCustomer.address, selectedCustomer.city, selectedCustomer.state, selectedCustomer.zip].filter(Boolean).join(', ')}</span>}
@@ -3807,7 +3864,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               ))}
             </div>
           )}
-          {detailLoading && <div style={{ textAlign: 'center', padding: '2rem', color: '#999' }}>⏳ Loading history…</div>}
+          {detailLoading && <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>⏳ Loading history…</div>}
 
           {/* Appointment history */}
           {!detailLoading && customerDetail && customerDetail.appointments.length > 0 && (
@@ -3825,7 +3882,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                           🔧 {Array.isArray(apt.services) ? apt.services.join(', ') : apt.services}
                         </div>
                       )}
-                      {apt.address && <div style={{ fontSize: '0.78rem', color: '#888' }}>📍 {apt.address}</div>}
+                      {apt.address && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>📍 {apt.address}</div>}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span style={{
@@ -3843,7 +3900,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   </div>
                 ))}
                 {customerDetail.appointments.length > 10 && (
-                  <div style={{ textAlign: 'center', color: '#888', fontSize: '0.85rem', paddingTop: '0.5rem' }}>
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', paddingTop: '0.5rem' }}>
                     + {customerDetail.appointments.length - 10} more appointments
                   </div>
                 )}
@@ -3881,7 +3938,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           )}
 
           {!detailLoading && customerDetail && customerDetail.appointments.length === 0 && customerDetail.invoices.length === 0 && (
-            <div className="card" style={{ textAlign: 'center', color: '#888', padding: '2rem' }}>
+            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
               No appointment or invoice history found for this customer yet.
             </div>
           )}
@@ -3964,10 +4021,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             )}
           </div>
 
-          {loading && <div style={{ textAlign: 'center', padding: '3rem', color: '#999' }}>⏳ Loading customers…</div>}
+          {loading && <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>⏳ Loading customers…</div>}
 
           {!loading && filtered.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '3rem', color: '#888' }}>
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
               {customers.length === 0
                 ? 'No customers yet. They\'ll appear here after booking or you can add them manually.'
                 : 'No customers match your search.'}
@@ -3988,7 +4045,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                     </div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{cust.name || 'Unknown'}{cust.farmName ? ` — ${cust.farmName}` : ''}</div>
-                      <div style={{ fontSize: '0.82rem', color: '#666', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                         {cust.phone && <span>📞 {cust.phone}</span>}
                         {cust.email && <span>✉️ {cust.email}</span>}
                       </div>
@@ -4010,7 +4067,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       <button className="btn btn-sm btn-outline" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', borderColor: '#ef4444', color: '#ef4444' }}
                         onClick={() => setConfirmDelete(cust)}>🗑️</button>
                     </div>
-                    <span style={{ color: '#aaa', fontSize: '1.2rem' }}>›</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '1.2rem' }}>›</span>
                   </div>
                 </div>
               ))}
@@ -4313,7 +4370,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: useDefaultAddress ? 0 : '0.75rem' }}>
               <input type="checkbox" checked={useDefaultAddress} onChange={e => setUseDefaultAddress(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
               <span style={{ fontWeight: 600 }}>Use my default address</span>
-              {defaultAddress && <span style={{ color: '#555', fontSize: '0.9em' }}>({defaultAddress})</span>}
+              {defaultAddress && <span style={{ color: 'var(--text)', fontSize: '0.9em' }}>({defaultAddress})</span>}
             </label>
             {!useDefaultAddress && (
               <div style={{ marginTop: '0.75rem' }}>
@@ -4345,7 +4402,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             )}
 
             {routeGenerated && totalDistance && (
-              <div style={{ padding: '0.6rem 1rem', background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 8, marginBottom: '1rem', fontSize: '0.9rem', color: '#166534', fontWeight: 600 }}>
+              <div style={{ padding: '0.6rem 1rem', background: '#0d2a15', border: '1.5px solid #4ade80', borderRadius: 8, marginBottom: '1rem', fontSize: '0.9rem', color: '#4ade80', fontWeight: 600 }}>
                 🚗 Optimised route · {totalDistance} mi · ~{totalDuration} min driving
               </div>
             )}
@@ -4357,8 +4414,8 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 <div key={a.id} style={{ display: 'flex', gap: '0.75rem', padding: '0.85rem 0', borderBottom: i < displayList.length - 1 ? '1px solid var(--border)' : 'none' }}>
                   <div style={{ minWidth: 28, height: 28, borderRadius: '50%', background: routeGenerated ? '#2563eb' : '#94a3b8', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>{i + 1}</div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700 }}>{a.customerName}{a.farmName ? <span style={{ fontWeight: 400, color: '#666' }}> — {a.farmName}</span> : ''}</div>
-                    <div style={{ fontSize: '0.87rem', color: '#555', marginTop: 2 }}>
+                    <div style={{ fontWeight: 700 }}>{a.customerName}{a.farmName ? <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> — {a.farmName}</span> : ''}</div>
+                    <div style={{ fontSize: '0.87rem', color: 'var(--text)', marginTop: 2 }}>
                       <span style={{ marginRight: '0.75rem' }}>⏰ {fmtTime(a.requestedTime)}</span>
                       {a.phone && <span style={{ marginRight: '0.75rem' }}>📞 {fmtPhone(a.phone)}</span>}
                     </div>
@@ -4383,13 +4440,13 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.6rem' }}>
                 <input type="checkbox" checked={sendSms} onChange={e => setSendSms(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
                 <span>📱 Send via SMS to my phone</span>
-                {userProfile?.phone && <span style={{ color: '#888', fontSize: '0.85em' }}>({userProfile.phone})</span>}
+                {userProfile?.phone && <span style={{ color: 'var(--text-muted)', fontSize: '0.85em' }}>({userProfile.phone})</span>}
               </label>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: '0.6rem' }}>
                 <input type="checkbox" checked={sendEmail} onChange={e => setSendEmail(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
                 <span>✉️ Send via Email to myself</span>
-                {userProfile?.email && <span style={{ color: '#888', fontSize: '0.85em' }}>({userProfile.email})</span>}
+                {userProfile?.email && <span style={{ color: 'var(--text-muted)', fontSize: '0.85em' }}>({userProfile.email})</span>}
               </label>
 
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
@@ -6442,7 +6499,7 @@ function ServicesView({ userId }) {
                       <label>Available Time Slots *</label>
                       {formData.date ? (
                         loadingSlots ? (
-                          <p style={{color: '#999', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
+                          <p style={{color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
                             ⏳ Checking availability...
                           </p>
                         ) : availableSlots.length > 0 ? (
@@ -6465,12 +6522,12 @@ function ServicesView({ userId }) {
                             })}
                           </div>
                         ) : (
-                          <p style={{color: '#999', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
+                          <p style={{color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
                             ⚠️ Farrier is not available on this day. Please select a different date.
                           </p>
                         )
                       ) : (
-                        <p style={{color: '#999', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
+                        <p style={{color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem', background: '#f5f5f5', borderRadius: '4px'}}>
                           📅 Please select a date first to see available time slots.
                         </p>
                       )}
@@ -6485,7 +6542,7 @@ function ServicesView({ userId }) {
                       Request Appointment
                     </button>
 
-                    <p style={{textAlign: 'center', fontSize: '0.78rem', color: '#888', marginTop: '1rem', lineHeight: '1.5'}}>
+                    <p style={{textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '1rem', lineHeight: '1.5'}}>
                       By submitting this form you agree to our{' '}
                       <a href="https://www.farritech.com/terms" target="_blank" rel="noopener noreferrer" style={{color: '#4f6ef7', textDecoration: 'underline'}}>Terms of Service</a>
                       {' '}and{' '}
@@ -7719,7 +7776,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               {/* Customer banner */}
               <div style={{ padding: '0.9rem 1.1rem', background: '#f0f9ff', borderRadius: 10, border: '1.5px solid #bae6fd' }}>
                 <div style={{ fontWeight: 700, color: '#0369a1' }}>👤 {customer.name}{customer.farmName ? ` — ${customer.farmName}` : ''}</div>
-                <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text)', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                   {customer.phone && <span>📞 {customer.phone}</span>}
                   {customer.email && <span>✉️ {customer.email}</span>}
                 </div>
@@ -7807,7 +7864,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                         style={{ marginTop: 2, width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
                       <div>
                         <div style={{ fontWeight: 600, color: '#16a34a', fontSize: '0.95rem' }}>📱 Send confirmation SMS</div>
-                        <div style={{ fontSize: '0.82rem', color: '#555', marginTop: '0.2rem' }}>Text {customer.phone} with the appointment details.</div>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text)', marginTop: '0.2rem' }}>Text {customer.phone} with the appointment details.</div>
                       </div>
                     </label>
                   ) : (
@@ -8224,7 +8281,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                         <div style={{fontWeight: 600, color: '#16a34a', fontSize: '0.95rem'}}>
                           📱 Notify customer via SMS
                         </div>
-                        <div style={{fontSize: '0.82rem', color: '#555', marginTop: '0.2rem'}}>
+                        <div style={{fontSize: '0.82rem', color: 'var(--text)', marginTop: '0.2rem'}}>
                           Sends a text to {appointment.phone} with the updated date &amp; time.
                         </div>
                       </div>
@@ -8257,7 +8314,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       <div style={{fontWeight: 600, color: '#1d4ed8', fontSize: '0.95rem'}}>
                         📧 Send update email to customer
                       </div>
-                      <div style={{fontSize: '0.82rem', color: '#555', marginTop: '0.2rem'}}>
+                      <div style={{fontSize: '0.82rem', color: 'var(--text)', marginTop: '0.2rem'}}>
                         Sends a confirmation update to {appointment.email} with the new details.
                       </div>
                     </div>
@@ -9110,7 +9167,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                   </button>
                 </div>
 
-                <div style={{marginTop: '1.5rem', padding: '0.75rem 1rem', background: '#f0f9ff', borderRadius: '8px', fontSize: '0.8rem', color: '#555'}}>
+                <div style={{marginTop: '1.5rem', padding: '0.75rem 1rem', background: '#f0f9ff', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text)'}}>
                   🔒 <strong>Secured by Stripe</strong> — card details never touch our servers
                 </div>
               </>
@@ -10312,7 +10369,7 @@ useEffect(() => {
                   )}
 
                   {!availability[day].enabled && (
-                    <div style={{gridColumn: '2 / 5', color: '#999', fontStyle: 'italic'}}>
+                    <div style={{gridColumn: '2 / 5', color: 'var(--text-muted)', fontStyle: 'italic'}}>
                       Not available
                     </div>
                   )}
