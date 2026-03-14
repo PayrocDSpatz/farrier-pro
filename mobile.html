@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2683FB">
+<title>FarriTech Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #2683FB;
+    --blue-dark: #1a6fd4;
+    --cyan: #46C5FF;
+    --bg: #F2F4F8;
+    --surface: #FFFFFF;
+    --text: #0D1320;
+    --text-muted: #5A6A7E;
+    --border: #DDE3EC;
+    --success: #16a34a;
+    --success-bg: #dcfce7;
+    --warning: #d97706;
+    --warning-bg: #fef3c7;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+  
+  /* ── SCREENS ── */
+  .screen { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--bg); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.3s; }
+  .screen.hidden { transform: translateX(100%); opacity: 0; pointer-events: none; }
+  .screen.slide-left { transform: translateX(-30%); opacity: 0; pointer-events: none; }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--blue);
+    color: white;
+    padding: 12px 16px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    flex-shrink: 0;
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+  .header-logo { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.5px; }
+  .header-logo span { color: var(--cyan); }
+  .header-title { font-size: 1rem; font-weight: 600; flex: 1; }
+  .back-btn { background: rgba(255,255,255,0.2); border: none; color: white; width: 36px; height: 36px; border-radius: 10px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .back-btn:active { background: rgba(255,255,255,0.35); }
+
+  /* ── SCROLL BODY ── */
+  .scroll-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+
+  /* ── CARDS ── */
+  .card { background: var(--surface); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 12px; }
+  .card-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 10px; }
+
+  /* ── BIG BUTTONS (dashboard) ── */
+  .big-btn { display: flex; align-items: center; gap: 14px; background: var(--surface); border: none; border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); cursor: pointer; width: 100%; margin-bottom: 12px; transition: transform 0.1s, box-shadow 0.1s; text-align: left; }
+  .big-btn:active { transform: scale(0.98); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .big-btn-icon { width: 48px; height: 48px; border-radius: 14px; background: var(--blue); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+  .big-btn-icon.green { background: #16a34a; }
+  .big-btn-icon.cyan { background: #0891b2; }
+  .big-btn-label { font-size: 1rem; font-weight: 700; color: var(--text); }
+  .big-btn-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+  .big-btn-arrow { margin-left: auto; color: var(--text-muted); font-size: 1.1rem; }
+
+  /* ── PRIMARY BUTTON ── */
+  .btn-primary { background: var(--blue); color: white; border: none; border-radius: var(--radius-sm); padding: 15px 20px; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; width: 100%; transition: background 0.15s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .btn-primary:active { background: var(--blue-dark); transform: scale(0.99); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: var(--bg); color: var(--text); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 13px 20px; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; transition: background 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .btn-secondary:active { background: var(--border); }
+  .btn-danger { background: var(--danger-bg); color: var(--danger); border: 2px solid #fca5a5; border-radius: var(--radius-sm); padding: 13px 20px; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; }
+  .btn-sm { padding: 8px 14px; font-size: 0.85rem; border-radius: 8px; border: none; cursor: pointer; font-family: 'Outfit', sans-serif; font-weight: 600; }
+  .btn-outline { background: transparent; border: 2px solid var(--blue); color: var(--blue); border-radius: var(--radius-sm); padding: 13px 20px; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+  /* ── SEARCH ── */
+  .search-wrap { position: relative; margin-bottom: 16px; }
+  .search-input { width: 100%; padding: 14px 16px 14px 44px; border: 2px solid var(--border); border-radius: var(--radius-sm); font-family: 'Outfit', sans-serif; font-size: 1rem; background: var(--surface); color: var(--text); outline: none; transition: border-color 0.2s; }
+  .search-input:focus { border-color: var(--blue); }
+  .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; }
+
+  /* ── CUSTOMER ROW ── */
+  .customer-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; box-shadow: var(--shadow); transition: transform 0.1s; border: 2px solid transparent; }
+  .customer-row:active { transform: scale(0.99); border-color: var(--blue); }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; flex-shrink: 0; }
+  .customer-row-name { font-weight: 700; font-size: 0.95rem; }
+  .customer-row-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+  .customer-row-arrow { margin-left: auto; color: var(--text-muted); }
+
+  /* ── FORM FIELDS ── */
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .field input, .field textarea, .field select { width: 100%; padding: 13px 14px; border: 2px solid var(--border); border-radius: var(--radius-sm); font-family: 'Outfit', sans-serif; font-size: 1rem; color: var(--text); background: var(--surface); outline: none; transition: border-color 0.2s; }
+  .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); }
+  .field textarea { resize: none; min-height: 80px; }
+
+  /* ── SERVICE PICKER ── */
+  .service-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .service-chip { padding: 14px 12px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); background: var(--surface); transition: all 0.15s; user-select: none; }
+  .service-chip:active { transform: scale(0.97); }
+  .service-chip.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
+  .service-chip-price { font-size: 0.78rem; font-weight: 500; margin-top: 3px; color: inherit; opacity: 0.8; }
+
+  /* ── TOTAL BAR ── */
+  .total-bar { background: var(--blue); color: white; border-radius: var(--radius-sm); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .total-bar-label { font-size: 0.9rem; font-weight: 600; opacity: 0.85; }
+  .total-bar-amount { font-size: 1.6rem; font-weight: 800; }
+
+  /* ── PAYMENT METHOD ── */
+  .pay-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .pay-chip { padding: 16px 12px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); background: var(--surface); transition: all 0.15s; }
+  .pay-chip:active { transform: scale(0.97); }
+  .pay-chip.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
+  .pay-chip-icon { font-size: 1.5rem; display: block; margin-bottom: 6px; }
+
+  /* ── INVOICE ROW ── */
+  .invoice-row { padding: 14px 16px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; box-shadow: var(--shadow); cursor: pointer; border-left: 4px solid var(--border); }
+  .invoice-row.outstanding { border-left-color: var(--warning); }
+  .invoice-row.paid { border-left-color: var(--success); }
+  .invoice-row-top { display: flex; justify-content: space-between; align-items: center; }
+  .invoice-row-num { font-weight: 700; font-size: 0.95rem; }
+  .invoice-row-amount { font-weight: 800; font-size: 1rem; color: var(--blue); }
+  .invoice-row-bottom { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+
+  /* ── BADGES ── */
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge-success { background: var(--success-bg); color: var(--success); }
+  .badge-warning { background: var(--warning-bg); color: var(--warning); }
+  .badge-danger { background: var(--danger-bg); color: var(--danger); }
+  .badge-blue { background: #EBF4FF; color: var(--blue); }
+
+  /* ── STAT ROW ── */
+  .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .stat-box { background: var(--surface); border-radius: var(--radius-sm); padding: 14px; box-shadow: var(--shadow); text-align: center; }
+  .stat-box-val { font-size: 1.5rem; font-weight: 800; color: var(--blue); }
+  .stat-box-label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+
+  /* ── MISC ── */
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+  .empty-state-icon { font-size: 3rem; margin-bottom: 12px; }
+  .empty-state-text { font-size: 1rem; font-weight: 600; }
+  .empty-state-sub { font-size: 0.85rem; margin-top: 6px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 48px auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-wrap { display: flex; justify-content: center; padding: 48px; }
+  .toast { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 16px; right: 16px; background: #1a2332; color: white; padding: 14px 18px; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; z-index: 9999; text-align: center; box-shadow: var(--shadow-lg); transform: translateY(100px); opacity: 0; transition: all 0.3s; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { background: #15803d; }
+  .toast.error { background: #dc2626; }
+  .section-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 10px; margin-top: 20px; }
+  .section-label:first-child { margin-top: 0; }
+  .row-btns { display: flex; gap: 8px; }
+  .row-btns .btn-primary, .row-btns .btn-secondary, .row-btns .btn-outline { flex: 1; }
+  .appt-row { padding: 12px 14px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; box-shadow: var(--shadow); border-left: 4px solid var(--blue); }
+  .appt-row-top { font-weight: 700; font-size: 0.9rem; }
+  .appt-row-bottom { font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; }
+  .info-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .info-row:last-child { border-bottom: none; }
+  .info-row-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 600; }
+  .info-row-value { font-size: 0.9rem; font-weight: 700; }
+  .customer-hero { background: linear-gradient(135deg, var(--blue), #1a6fd4); border-radius: var(--radius); padding: 20px; color: white; margin-bottom: 12px; }
+  .customer-hero-name { font-size: 1.3rem; font-weight: 800; }
+  .customer-hero-farm { font-size: 0.9rem; opacity: 0.85; margin-top: 3px; }
+  .customer-hero-contact { font-size: 0.85rem; opacity: 0.8; margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+  .repeat-btn { background: linear-gradient(135deg, #16a34a, #15803d); color: white; border: none; border-radius: var(--radius-sm); padding: 16px 20px; font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: 100%; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .repeat-btn:active { opacity: 0.9; }
+  
+  /* Login screen */
+  .login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; background: #0D1320; }
+  .login-logo { font-size: 2.5rem; font-weight: 800; color: white; margin-bottom: 8px; }
+  .login-logo span { color: var(--cyan); }
+  .login-sub { color: rgba(255,255,255,0.6); font-size: 0.9rem; margin-bottom: 40px; }
+  .login-card { background: white; border-radius: var(--radius); padding: 24px; width: 100%; max-width: 380px; box-shadow: var(--shadow-lg); }
+  .login-card h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 20px; color: var(--text); }
+
+  /* Today's schedule pill */
+  .today-pill { background: var(--blue); color: white; border-radius: 20px; padding: 6px 14px; font-size: 0.8rem; font-weight: 700; display: inline-block; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 0: LOGIN                           -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen" id="screen-login" style="background:#0D1320; overflow-y:auto;">
+  <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100%; padding:32px 24px;">
+    <div style="font-size:2.2rem; font-weight:800; color:white; margin-bottom:6px;">Farri<span style="color:#46C5FF;">Tech</span></div>
+    <div style="color:rgba(255,255,255,0.55); font-size:0.875rem; margin-bottom:36px;">Field Mode — Quick Access</div>
+    <div style="background:white; border-radius:20px; padding:28px 24px; width:100%; max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+      <div style="font-size:1.1rem; font-weight:700; margin-bottom:20px; color:#0D1320;">Sign In</div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div id="login-error" style="color:#dc2626; font-size:0.85rem; margin-bottom:12px; display:none;"></div>
+      <button class="btn-primary" id="login-btn" onclick="doLogin()">Sign In</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 1: DASHBOARD                       -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-dashboard">
+  <div class="header">
+    <div class="header-logo">Farri<span>Tech</span></div>
+    <div style="flex:1;"></div>
+    <div style="font-size:0.78rem; opacity:0.85; text-align:right;" id="dash-user-name"></div>
+    <button onclick="doLogout()" style="background:rgba(255,255,255,0.18);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;margin-left:8px;">Out</button>
+  </div>
+  <div class="scroll-body">
+    <div class="stat-row" id="dash-stats" style="display:none;">
+      <div class="stat-box">
+        <div class="stat-box-val" id="stat-today">—</div>
+        <div class="stat-box-label">Today's Appts</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-box-val" id="stat-collected">—</div>
+        <div class="stat-box-label">This Month</div>
+      </div>
+    </div>
+
+    <!-- Today's schedule -->
+    <div id="today-appts-section" style="display:none;">
+      <div class="section-label">📅 Today's Schedule</div>
+      <div id="today-appts-list"></div>
+      <div style="margin-bottom:8px;"></div>
+    </div>
+
+    <div class="section-label">Actions</div>
+    <button class="big-btn" onclick="goTo('screen-search')">
+      <div class="big-btn-icon">🔍</div>
+      <div>
+        <div class="big-btn-label">Find Customer</div>
+        <div class="big-btn-sub">Search, then create invoice or appt</div>
+      </div>
+      <div class="big-btn-arrow">›</div>
+    </button>
+    <button class="big-btn" onclick="startNewCustomer()">
+      <div class="big-btn-icon green">➕</div>
+      <div>
+        <div class="big-btn-label">New Customer</div>
+        <div class="big-btn-sub">Quick add a new client</div>
+      </div>
+      <div class="big-btn-arrow">›</div>
+    </button>
+    <button class="big-btn" onclick="goTo('screen-search'); setTimeout(()=>loadOpenInvoices(),300)">
+      <div class="big-btn-icon cyan">💰</div>
+      <div>
+        <div class="big-btn-label">Open Invoices</div>
+        <div class="big-btn-sub">View & collect outstanding payments</div>
+      </div>
+      <div class="big-btn-arrow">›</div>
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 2: CUSTOMER SEARCH                 -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-search">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Find Customer</div>
+    <button onclick="startNewCustomer()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">+ New</button>
+  </div>
+  <div style="padding:12px 16px 0; flex-shrink:0; background:var(--bg);">
+    <div class="search-wrap" style="margin-bottom:8px;">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" id="search-input" type="search" placeholder="Name, farm, or phone…" oninput="filterCustomers(this.value)" autocomplete="off">
+    </div>
+  </div>
+  <div class="scroll-body" style="padding-top:8px;">
+    <div id="search-loading" class="loading-wrap"><div class="spinner"></div></div>
+    <div id="search-results"></div>
+    <div id="open-invoices-section" style="display:none;">
+      <div class="section-label" style="margin-top:8px;">💰 Outstanding Invoices</div>
+      <div id="open-invoices-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 3: CUSTOMER PROFILE                -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-customer">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title" id="customer-header-name">Customer</div>
+  </div>
+  <div class="scroll-body">
+    <!-- Hero -->
+    <div class="customer-hero" id="customer-hero"></div>
+
+    <!-- Repeat last -->
+    <div id="repeat-section" style="display:none;">
+      <button class="repeat-btn" id="repeat-btn" onclick="repeatLastService()">
+        <span style="font-size:1.3rem;">🔁</span>
+        <div style="text-align:left;">
+          <div>Repeat Last Service</div>
+          <div id="repeat-sub" style="font-size:0.8rem; opacity:0.85; font-weight:500;"></div>
+        </div>
+      </button>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="section-label">Create</div>
+    <div class="row-btns" style="margin-bottom:8px;">
+      <button class="btn-primary" onclick="startNewInvoice()">📄 New Invoice</button>
+      <button class="btn-secondary" onclick="startNewAppointment()">📅 New Appt</button>
+    </div>
+
+    <!-- Open invoices -->
+    <div id="cust-open-inv-section" style="display:none;">
+      <div class="section-label">💰 Outstanding Invoices</div>
+      <div id="cust-open-inv-list"></div>
+    </div>
+
+    <!-- Recent appointments -->
+    <div id="cust-appts-section" style="display:none;">
+      <div class="section-label">📋 Recent Appointments</div>
+      <div id="cust-appts-list"></div>
+    </div>
+
+    <!-- All invoices -->
+    <div id="cust-inv-section" style="display:none;">
+      <div class="section-label">📑 Invoice History</div>
+      <div id="cust-inv-list"></div>
+    </div>
+
+    <div id="cust-loading" class="loading-wrap"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 4: SERVICE SELECTION               -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-services">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Select Services</div>
+  </div>
+  <div class="scroll-body">
+    <div class="card" style="margin-bottom:12px;">
+      <div style="font-weight:700; color:var(--blue);" id="svc-customer-name"></div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-top:3px;" id="svc-customer-farm"></div>
+    </div>
+
+    <div class="section-label">Tap to select services</div>
+    <div class="service-grid" id="service-grid"></div>
+
+    <div class="field" style="margin-top:12px;">
+      <label>Custom Item (optional)</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="custom-item-name" placeholder="Description" style="flex:2;">
+        <input type="number" id="custom-item-price" placeholder="$" style="flex:1; min-width:0;" min="0" step="0.01">
+        <button onclick="addCustomItem()" style="background:var(--blue);color:white;border:none;border-radius:var(--radius-sm);padding:0 14px;font-size:1.2rem;cursor:pointer;">+</button>
+      </div>
+    </div>
+
+    <div id="custom-items-list"></div>
+    <div style="margin-top:16px;"></div>
+    <div class="total-bar">
+      <div class="total-bar-label">Total</div>
+      <div class="total-bar-amount" id="svc-total">$0.00</div>
+    </div>
+
+    <div class="field">
+      <label>Notes (optional)</label>
+      <textarea id="svc-notes" placeholder="Any notes for this service…" rows="2"></textarea>
+    </div>
+
+    <button class="btn-primary" id="svc-continue-btn" onclick="continueToInvoiceReview()" disabled>Continue →</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 5: INVOICE REVIEW                  -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-invoice-review">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Invoice Review</div>
+  </div>
+  <div class="scroll-body">
+    <div class="card">
+      <div class="card-title">Customer</div>
+      <div style="font-weight:700; font-size:1rem;" id="review-customer-name"></div>
+      <div style="font-size:0.85rem; color:var(--text-muted);" id="review-customer-farm"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Services</div>
+      <div id="review-services-list"></div>
+    </div>
+
+    <div class="total-bar">
+      <div class="total-bar-label">Total</div>
+      <div class="total-bar-amount" id="review-total">$0.00</div>
+    </div>
+
+    <div class="field">
+      <label>Invoice Date</label>
+      <input type="date" id="review-date">
+    </div>
+
+    <div id="review-saving" style="display:none; text-align:center; padding:12px; color:var(--text-muted);">Creating invoice…</div>
+
+    <div class="row-btns">
+      <button class="btn-outline" id="save-inv-btn" onclick="saveInvoiceOnly()">💾 Save</button>
+      <button class="btn-primary" id="pay-inv-btn" onclick="saveAndPay()">💳 Take Payment</button>
+    </div>
+    <div style="margin-top:8px;"></div>
+    <button class="btn-secondary" onclick="saveAndSendLink()">📲 Save & Send Payment Link</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 6: PAYMENT                         -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-payment">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Take Payment</div>
+  </div>
+  <div class="scroll-body">
+    <div class="card" style="text-align:center; padding:28px 20px;">
+      <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600; margin-bottom:6px;" id="pay-invoice-num"></div>
+      <div style="font-size:0.85rem; color:var(--text-muted);" id="pay-customer-name"></div>
+      <div style="font-size:2.8rem; font-weight:800; color:var(--blue); margin:12px 0;" id="pay-amount"></div>
+    </div>
+
+    <div class="section-label">Payment Method</div>
+    <div class="pay-grid" id="pay-method-grid">
+      <div class="pay-chip" onclick="selectPayMethod('cash', this)"><span class="pay-chip-icon">💵</span>Cash</div>
+      <div class="pay-chip" onclick="selectPayMethod('check', this)"><span class="pay-chip-icon">🧾</span>Check</div>
+      <div class="pay-chip" onclick="selectPayMethod('card', this)"><span class="pay-chip-icon">💳</span>Card</div>
+      <div class="pay-chip" onclick="selectPayMethod('link', this)"><span class="pay-chip-icon">📲</span>Pay Link</div>
+    </div>
+
+    <!-- Card number for manual entry -->
+    <div id="card-fields" style="display:none;">
+      <div class="field"><label>Card Last 4</label><input type="number" id="card-last4" placeholder="1234" maxlength="4" style="letter-spacing:4px;"></div>
+      <div class="field"><label>Card Type</label>
+        <select id="card-type">
+          <option>Visa</option><option>Mastercard</option><option>Amex</option><option>Discover</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Send link options -->
+    <div id="link-fields" style="display:none;">
+      <div class="card" style="background:#EBF4FF; border:2px solid #bfdbfe;">
+        <div style="font-weight:700; color:var(--blue); margin-bottom:8px;">📲 Send Payment Link</div>
+        <div style="font-size:0.85rem; color:var(--text-muted);">Customer will receive a link to pay online.</div>
+        <div style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+          <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; font-weight:600; cursor:pointer;">
+            <input type="checkbox" id="send-sms-link" style="width:18px;height:18px;"> Send via SMS
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; font-weight:600; cursor:pointer;">
+            <input type="checkbox" id="send-email-link" style="width:18px;height:18px;"> Send via Email
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div id="pay-saving" style="display:none; text-align:center; padding:12px; color:var(--text-muted);">Processing…</div>
+
+    <button class="btn-primary" id="confirm-pay-btn" onclick="confirmPayment()" disabled>Confirm Payment</button>
+    <div style="margin-top:8px;"></div>
+    <button class="btn-secondary" onclick="goBack()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 7: NEW CUSTOMER                    -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-new-customer">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">New Customer</div>
+  </div>
+  <div class="scroll-body">
+    <div class="field"><label>Owner Name *</label><input type="text" id="nc-name" placeholder="Jane Smith" autocomplete="name"></div>
+    <div class="field"><label>Farm / Business Name</label><input type="text" id="nc-farm" placeholder="Sunny Acres Farm"></div>
+    <div class="field"><label>Phone</label><input type="tel" id="nc-phone" placeholder="(555) 555-5555" autocomplete="tel"></div>
+    <div class="field"><label>Email</label><input type="email" id="nc-email" placeholder="jane@example.com" autocomplete="email"></div>
+    <div class="field"><label>Horse Name(s) / Notes</label><textarea id="nc-notes" placeholder="Horse names, special instructions…"></textarea></div>
+    <button class="btn-primary" id="nc-save-btn" onclick="saveNewCustomer()">Save Customer</button>
+    <div style="margin-top:8px;"></div>
+    <button class="btn-secondary" onclick="goBack()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 8: NEW APPOINTMENT                 -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-new-appt">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">New Appointment</div>
+  </div>
+  <div class="scroll-body">
+    <div class="card" style="margin-bottom:12px;">
+      <div style="font-weight:700; color:var(--blue);" id="appt-customer-name"></div>
+      <div style="font-size:0.85rem; color:var(--text-muted);" id="appt-customer-farm"></div>
+    </div>
+    <div class="field"><label>Date *</label><input type="date" id="appt-date"></div>
+    <div class="field"><label>Time *</label><input type="time" id="appt-time"></div>
+    <div class="field"><label>Number of Horses</label><input type="number" id="appt-horses" value="1" min="1"></div>
+    <div class="section-label" style="margin-top:4px;">Services</div>
+    <div class="service-grid" id="appt-service-grid" style="margin-bottom:16px;"></div>
+    <div class="field"><label>Address</label><input type="text" id="appt-address" placeholder="123 Main St, City, FL"></div>
+    <div class="field"><label>Notes</label><textarea id="appt-notes" placeholder="Gate code, special instructions…" rows="2"></textarea></div>
+    <button class="btn-primary" id="appt-save-btn" onclick="saveNewAppointment()">📅 Save Appointment</button>
+    <div style="margin-top:8px;"></div>
+    <button class="btn-secondary" onclick="goBack()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN 9: SUCCESS                         -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-success">
+  <div class="header" style="background:#15803d;">
+    <div class="header-logo" style="flex:1; text-align:center; font-size:1rem; font-weight:700; color:white;">✓ Done</div>
+  </div>
+  <div class="scroll-body" style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px 24px;">
+    <div style="font-size:4rem; margin-bottom:16px;" id="success-icon">✅</div>
+    <div style="font-size:1.4rem; font-weight:800; color:var(--text); margin-bottom:8px;" id="success-title"></div>
+    <div style="font-size:0.95rem; color:var(--text-muted); margin-bottom:32px;" id="success-sub"></div>
+    <button class="btn-primary" onclick="goToDashboard()" style="max-width:280px; margin-bottom:12px;">🏠 Dashboard</button>
+    <button class="btn-secondary" onclick="goTo('screen-customer'); loadCustomerDetail(state.customer);" style="max-width:280px;" id="success-back-customer-btn">Back to Customer</button>
+  </div>
+</div>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+// ── FIREBASE INIT ──
+const firebaseConfig = {
+  apiKey: "AIzaSyAQ1LaWG9lE9j5h6X0T0YQKa_j04vJZHE4",
+  authDomain: "farrier-pro.firebaseapp.com",
+  projectId: "farrier-pro",
+  storageBucket: "farrier-pro.firebasestorage.app",
+  messagingSenderId: "1010833069179",
+  appId: "1:1010833069179:web:844b6055462b55640b3ede"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+// ── STATE ──
+const state = {
+  user: null,
+  userProfile: null,
+  customers: [],
+  services: [],
+  customer: null,
+  selectedServices: [],
+  customItems: [],
+  currentInvoice: null,
+  selectedPayMethod: null,
+  screenHistory: [],
+  lastService: null,
+};
+
+// ── SCREEN NAVIGATION ──
+function goTo(screenId, pushHistory = true) {
+  const current = document.querySelector('.screen:not(.hidden):not(.slide-left)');
+  if (current && pushHistory) {
+    state.screenHistory.push(current.id);
+    current.classList.add('slide-left');
+    setTimeout(() => current.classList.add('hidden'), 300);
+  } else if (current) {
+    current.classList.add('hidden');
+  }
+  const next = document.getElementById(screenId);
+  next.classList.remove('hidden', 'slide-left');
+}
+
+function goBack() {
+  const prev = state.screenHistory.pop();
+  if (!prev) return;
+  const current = document.querySelector('.screen:not(.hidden)');
+  if (current) {
+    current.classList.add('hidden');
+    current.classList.remove('slide-left');
+  }
+  const prevScreen = document.getElementById(prev);
+  prevScreen.classList.remove('hidden', 'slide-left');
+}
+
+function goToDashboard() {
+  state.screenHistory = [];
+  document.querySelectorAll('.screen').forEach(s => { s.classList.add('hidden'); s.classList.remove('slide-left'); });
+  document.getElementById('screen-dashboard').classList.remove('hidden');
+  loadDashboard();
+}
+
+// ── TOAST ──
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ── AUTH ──
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    state.user = user;
+    await loadUserProfile();
+    await loadServices();
+    await loadCustomers();
+    goTo('screen-dashboard', false);
+    loadDashboard();
+  } else {
+    state.user = null;
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    document.getElementById('screen-login').classList.remove('hidden');
+  }
+});
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  btn.textContent = 'Signing in…';
+  btn.disabled = true;
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+  } catch (e) {
+    err.textContent = e.message.replace('Firebase: ', '');
+    err.style.display = 'block';
+    btn.textContent = 'Sign In';
+    btn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  await auth.signOut();
+}
+
+// ── USER PROFILE ──
+async function loadUserProfile() {
+  if (!state.user) return;
+  try {
+    const snap = await db.collection('farritech_users').doc(state.user.uid).get();
+    if (snap.exists) state.userProfile = snap.data();
+    else {
+      const snap2 = await db.collection('users').doc(state.user.uid).get();
+      if (snap2.exists) state.userProfile = snap2.data();
+    }
+  } catch(e) { console.warn('Profile load:', e); }
+}
+
+// ── LOAD SERVICES ──
+async function loadServices() {
+  if (!state.user) return;
+  try {
+    const snap = await db.collection('services').where('farrierId', '==', state.user.uid).where('active', '==', true).get();
+    state.services = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!state.services.length) {
+      // defaults
+      state.services = [
+        { name: 'Trim All Four', price: 45 },
+        { name: 'Front Shoes', price: 80 },
+        { name: 'Full Set', price: 140 },
+        { name: 'Reset', price: 90 },
+        { name: 'Pads', price: 30 },
+        { name: 'Hot Shoe', price: 75 },
+        { name: 'Dressage Shoes', price: 95 },
+        { name: 'Studs Installation', price: 40 },
+      ];
+    }
+  } catch(e) { console.warn('Services load:', e); }
+}
+
+// ── LOAD CUSTOMERS ──
+async function loadCustomers() {
+  if (!state.user) return;
+  try {
+    const snap = await db.collection('customers').where('farrierId', '==', state.user.uid).orderBy('name').get();
+    state.customers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { console.warn('Customers load:', e); }
+}
+
+// ── DASHBOARD ──
+async function loadDashboard() {
+  const profile = state.userProfile;
+  const bizName = profile?.businessName || profile?.name || state.user?.email?.split('@')[0] || '';
+  document.getElementById('dash-user-name').textContent = bizName;
+
+  // Today's appointments
+  const today = new Date().toISOString().split('T')[0];
+  try {
+    const snap = await db.collection('appointments')
+      .where('farrierId', '==', state.user.uid)
+      .where('requestedDate', '==', today)
+      .get();
+    const appts = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.requestedTime||'').localeCompare(b.requestedTime||''));
+    document.getElementById('stat-today').textContent = appts.length;
+
+    if (appts.length > 0) {
+      document.getElementById('today-appts-section').style.display = 'block';
+      document.getElementById('today-appts-list').innerHTML = appts.map(a => `
+        <div class="appt-row" onclick="selectCustomerById('${a.customerId || ''}', '${a.customerName}')">
+          <div class="appt-row-top">${a.customerName || 'Unknown'}${a.farmName ? ' — ' + a.farmName : ''}</div>
+          <div class="appt-row-bottom">${fmtTime(a.requestedTime)} · ${(a.services||[]).join(', ')||'No services listed'}</div>
+        </div>
+      `).join('');
+    }
+  } catch(e) {}
+
+  // This month revenue
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const snap = await db.collection('invoices')
+      .where('farrierId', '==', state.user.uid)
+      .where('status', '==', 'paid')
+      .get();
+    const monthTotal = snap.docs
+      .map(d => d.data())
+      .filter(d => d.createdAt?.toDate?.() >= new Date(startOfMonth))
+      .reduce((s, d) => s + (d.total || 0), 0);
+    document.getElementById('stat-collected').textContent = '$' + monthTotal.toFixed(0);
+  } catch(e) {}
+
+  document.getElementById('dash-stats').style.display = 'grid';
+}
+
+// ── SEARCH ──
+async function filterCustomers(q) {
+  document.getElementById('open-invoices-section').style.display = 'none';
+  document.getElementById('search-loading').style.display = 'none';
+  const term = q.toLowerCase().trim();
+  const filtered = term
+    ? state.customers.filter(c =>
+        (c.name||'').toLowerCase().includes(term) ||
+        (c.farmName||'').toLowerCase().includes(term) ||
+        (c.phone||'').replace(/\D/g,'').includes(term.replace(/\D/g,'')) ||
+        (c.notes||'').toLowerCase().includes(term)
+      )
+    : state.customers;
+
+  const el = document.getElementById('search-results');
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">No customers found</div><div class="empty-state-sub">Try a different name or add a new customer</div></div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(c => `
+    <div class="customer-row" onclick="selectCustomer(${JSON.stringify(c).replace(/"/g,'&quot;')})">
+      <div class="avatar">${(c.name||'?')[0].toUpperCase()}</div>
+      <div>
+        <div class="customer-row-name">${c.name}</div>
+        <div class="customer-row-sub">${[c.farmName, c.phone].filter(Boolean).join(' · ') || 'No contact info'}</div>
+      </div>
+      <div class="customer-row-arrow">›</div>
+    </div>
+  `).join('');
+}
+
+async function loadOpenInvoices() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').innerHTML = '';
+  const sec = document.getElementById('open-invoices-section');
+  sec.style.display = 'block';
+  const list = document.getElementById('open-invoices-list');
+  list.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const snap = await db.collection('invoices')
+      .where('farrierId', '==', state.user.uid)
+      .where('status', '==', 'outstanding')
+      .orderBy('createdAt', 'desc')
+      .get();
+    const invs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!invs.length) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🎉</div><div class="empty-state-text">No outstanding invoices</div></div>`;
+      return;
+    }
+    list.innerHTML = invs.map(inv => `
+      <div class="invoice-row outstanding" onclick="openInvoicePayment(${JSON.stringify(inv).replace(/"/g,'&quot;')})">
+        <div class="invoice-row-top">
+          <div class="invoice-row-num">#${inv.invoiceNumber} · ${inv.customerName}</div>
+          <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
+        </div>
+        <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to collect payment</div>
+      </div>
+    `).join('');
+  } catch(e) { list.innerHTML = '<div class="empty-state"><div class="empty-state-text">Error loading invoices</div></div>'; }
+}
+
+function selectCustomer(c) {
+  state.customer = c;
+  document.getElementById('customer-header-name').textContent = c.name;
+  goTo('screen-customer');
+  loadCustomerDetail(c);
+}
+
+async function selectCustomerById(id, name) {
+  if (id) {
+    const found = state.customers.find(c => c.id === id);
+    if (found) { selectCustomer(found); return; }
+  }
+  const found = state.customers.find(c => c.name === name);
+  if (found) { selectCustomer(found); return; }
+  showToast('Customer not found', 'error');
+}
+
+// ── CUSTOMER DETAIL ──
+async function loadCustomerDetail(c) {
+  document.getElementById('cust-loading').style.display = 'flex';
+  document.getElementById('cust-open-inv-section').style.display = 'none';
+  document.getElementById('cust-appts-section').style.display = 'none';
+  document.getElementById('cust-inv-section').style.display = 'none';
+  document.getElementById('repeat-section').style.display = 'none';
+
+  // Hero
+  document.getElementById('customer-hero').innerHTML = `
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:12px;">
+      <div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;">${(c.name||'?')[0].toUpperCase()}</div>
+      <div>
+        <div class="customer-hero-name">${c.name}</div>
+        ${c.farmName ? `<div class="customer-hero-farm">${c.farmName}</div>` : ''}
+      </div>
+    </div>
+    <div class="customer-hero-contact">
+      ${c.phone ? `<div>📞 ${c.phone}</div>` : ''}
+      ${c.email ? `<div>✉️ ${c.email}</div>` : ''}
+      ${c.notes ? `<div style="margin-top:4px; font-style:italic; opacity:0.8;">📝 ${c.notes}</div>` : ''}
+    </div>
+  `;
+
+  try {
+    // Appointments
+    const aSnap = await db.collection('appointments')
+      .where('farrierId', '==', state.user.uid)
+      .where('customerName', '==', c.name)
+      .orderBy('requestedDate', 'desc')
+      .limit(5)
+      .get();
+    const appts = aSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (appts.length) {
+      const last = appts[0];
+      state.lastService = last;
+      const lastSvcs = (last.services || []).join(', ');
+      if (lastSvcs) {
+        document.getElementById('repeat-section').style.display = 'block';
+        document.getElementById('repeat-sub').textContent = lastSvcs;
+      }
+
+      document.getElementById('cust-appts-section').style.display = 'block';
+      document.getElementById('cust-appts-list').innerHTML = appts.map(a => `
+        <div class="appt-row">
+          <div class="appt-row-top">${a.requestedDate} ${a.requestedTime ? '@ ' + fmtTime(a.requestedTime) : ''} <span class="badge badge-${a.status === 'confirmed' ? 'success' : 'warning'}">${a.status||'pending'}</span></div>
+          <div class="appt-row-bottom">${(a.services||[]).join(', ')||'—'}</div>
+        </div>
+      `).join('');
+    }
+
+    // Invoices
+    const iSnap = await db.collection('invoices')
+      .where('farrierId', '==', state.user.uid)
+      .where('customerName', '==', c.name)
+      .orderBy('createdAt', 'desc')
+      .limit(10)
+      .get();
+    const invs = iSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const open = invs.filter(i => i.status === 'outstanding');
+    const all = invs;
+
+    if (open.length) {
+      document.getElementById('cust-open-inv-section').style.display = 'block';
+      document.getElementById('cust-open-inv-list').innerHTML = open.map(inv => `
+        <div class="invoice-row outstanding" onclick="openInvoicePayment(${JSON.stringify(inv).replace(/"/g,'&quot;')})">
+          <div class="invoice-row-top">
+            <div class="invoice-row-num">#${inv.invoiceNumber}</div>
+            <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
+          </div>
+          <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to collect</div>
+        </div>
+      `).join('');
+    }
+
+    if (all.length) {
+      document.getElementById('cust-inv-section').style.display = 'block';
+      document.getElementById('cust-inv-list').innerHTML = all.map(inv => `
+        <div class="invoice-row ${inv.status}">
+          <div class="invoice-row-top">
+            <div class="invoice-row-num">#${inv.invoiceNumber}</div>
+            <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
+          </div>
+          <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · <span class="badge badge-${inv.status === 'paid' ? 'success' : 'warning'}">${inv.status}</span></div>
+        </div>
+      `).join('');
+    }
+  } catch(e) { console.error(e); }
+
+  document.getElementById('cust-loading').style.display = 'none';
+}
+
+// ── NEW INVOICE FLOW ──
+function startNewInvoice() {
+  state.selectedServices = [];
+  state.customItems = [];
+  renderServiceGrid('service-grid');
+  document.getElementById('svc-customer-name').textContent = state.customer.name;
+  document.getElementById('svc-customer-farm').textContent = state.customer.farmName || '';
+  document.getElementById('svc-notes').value = '';
+  document.getElementById('custom-item-name').value = '';
+  document.getElementById('custom-item-price').value = '';
+  document.getElementById('custom-items-list').innerHTML = '';
+  updateServiceTotal();
+  goTo('screen-services');
+}
+
+function renderServiceGrid(gridId) {
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = state.services.map((s, i) => `
+    <div class="service-chip" id="${gridId}-chip-${i}" onclick="toggleService(${i}, '${gridId}')">
+      <div>${s.name}</div>
+      <div class="service-chip-price">$${(s.price||0).toFixed(2)}</div>
+    </div>
+  `).join('');
+}
+
+function toggleService(i, gridId = 'service-grid') {
+  const svc = state.services[i];
+  const chip = document.getElementById(`${gridId}-chip-${i}`);
+  if (gridId === 'service-grid') {
+    const idx = state.selectedServices.findIndex(s => s.name === svc.name);
+    if (idx >= 0) { state.selectedServices.splice(idx, 1); chip.classList.remove('selected'); }
+    else { state.selectedServices.push(svc); chip.classList.add('selected'); }
+    updateServiceTotal();
+  } else {
+    // appointment grid — just toggle visual
+    chip.classList.toggle('selected');
+  }
+}
+
+function updateServiceTotal() {
+  const svcTotal = state.selectedServices.reduce((s,sv) => s + (sv.price||0), 0);
+  const customTotal = state.customItems.reduce((s,ci) => s + ci.price, 0);
+  const total = svcTotal + customTotal;
+  document.getElementById('svc-total').textContent = '$' + total.toFixed(2);
+  const btn = document.getElementById('svc-continue-btn');
+  btn.disabled = (state.selectedServices.length + state.customItems.length) === 0;
+}
+
+function addCustomItem() {
+  const name = document.getElementById('custom-item-name').value.trim();
+  const price = parseFloat(document.getElementById('custom-item-price').value) || 0;
+  if (!name) { showToast('Enter a description', 'error'); return; }
+  state.customItems.push({ name, price });
+  document.getElementById('custom-item-name').value = '';
+  document.getElementById('custom-item-price').value = '';
+  renderCustomItems();
+  updateServiceTotal();
+}
+
+function removeCustomItem(i) {
+  state.customItems.splice(i, 1);
+  renderCustomItems();
+  updateServiceTotal();
+}
+
+function renderCustomItems() {
+  document.getElementById('custom-items-list').innerHTML = state.customItems.map((ci, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:var(--surface); border-radius:8px; margin-top:6px; border:2px solid var(--border);">
+      <div style="font-weight:600;">${ci.name}</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-weight:700; color:var(--blue);">$${ci.price.toFixed(2)}</span>
+        <button onclick="removeCustomItem(${i})" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:0.8rem;font-weight:700;">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function continueToInvoiceReview() {
+  const allItems = [
+    ...state.selectedServices.map(s => ({ name: s.name, price: s.price||0 })),
+    ...state.customItems
+  ];
+  const total = allItems.reduce((s,i) => s + i.price, 0);
+
+  document.getElementById('review-customer-name').textContent = state.customer.name;
+  document.getElementById('review-customer-farm').textContent = state.customer.farmName || '';
+  document.getElementById('review-services-list').innerHTML = allItems.map(i => `
+    <div class="info-row">
+      <div class="info-row-label">${i.name}</div>
+      <div class="info-row-value">$${i.price.toFixed(2)}</div>
+    </div>
+  `).join('');
+  document.getElementById('review-total').textContent = '$' + total.toFixed(2);
+  document.getElementById('review-date').value = new Date().toISOString().split('T')[0];
+  goTo('screen-invoice-review');
+}
+
+// ── REPEAT LAST SERVICE ──
+function repeatLastService() {
+  if (!state.lastService) return;
+  const svcs = state.lastService.services || [];
+  state.selectedServices = svcs.map(name => {
+    const found = state.services.find(s => s.name === name);
+    return found || { name, price: 0 };
+  });
+  state.customItems = [];
+  continueToInvoiceReview();
+}
+
+// ── SAVE INVOICE ──
+async function getNextInvoiceNumber() {
+  const snap = await db.collection('invoices').where('farrierId', '==', state.user.uid).get();
+  let highest = 9999;
+  snap.docs.forEach(doc => {
+    const d = doc.data();
+    if (d.invoiceNumber?.startsWith('INV-')) {
+      const n = parseInt(d.invoiceNumber.replace('INV-', ''));
+      if (!isNaN(n) && n >= 10000 && n <= 99999 && n > highest) highest = n;
+    }
+  });
+  return `INV-${highest + 1}`;
+}
+
+async function createInvoice() {
+  const c = state.customer;
+  const allItems = [
+    ...state.selectedServices.map(s => ({ name: s.name, amount: s.price||0 })),
+    ...state.customItems.map(ci => ({ name: ci.name, amount: ci.price }))
+  ];
+  const total = allItems.reduce((s,i) => s + i.amount, 0);
+  const invoiceNumber = await getNextInvoiceNumber();
+
+  const docRef = await db.collection('invoices').add({
+    farrierId: state.user.uid,
+    customerName: c.name,
+    customerFarmName: c.farmName || '',
+    customerEmail: c.email || '',
+    customerPhone: c.phone || '',
+    items: allItems,
+    total,
+    invoiceNumber,
+    status: 'outstanding',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // Try to generate payment link
+  let paymentUrl = '';
+  const stripeKey = state.userProfile?.stripeSecretKey || '';
+  if (stripeKey && total > 0) {
+    try {
+      const plRes = await fetch('/api/stripe-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'payment_link', stripeSecretKey: stripeKey, amount: total, invoiceId: docRef.id, invoiceNumber, customerEmail: c.email||'', customerName: c.name, farrierId: state.user.uid }),
+      });
+      const plData = await plRes.json();
+      if (plData.success && plData.paymentUrl) {
+        paymentUrl = plData.paymentUrl;
+        await db.collection('invoices').doc(docRef.id).update({ paymentUrl, paymentLinkId: plData.paymentLinkId || '' });
+      }
+    } catch(e) { console.warn('Payment link error:', e); }
+  }
+
+  return { id: docRef.id, invoiceNumber, total, paymentUrl, customerName: c.name, customerPhone: c.phone||'', customerEmail: c.email||'' };
+}
+
+async function saveInvoiceOnly() {
+  setBtnsDisabled(true);
+  document.getElementById('review-saving').style.display = 'block';
+  try {
+    const inv = await createInvoice();
+    state.currentInvoice = inv;
+    showSuccess('Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} created`);
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  setBtnsDisabled(false);
+  document.getElementById('review-saving').style.display = 'none';
+}
+
+async function saveAndPay() {
+  setBtnsDisabled(true);
+  document.getElementById('review-saving').style.display = 'block';
+  try {
+    const inv = await createInvoice();
+    state.currentInvoice = inv;
+    openInvoicePayment(inv);
+    document.getElementById('review-saving').style.display = 'none';
+    setBtnsDisabled(false);
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    setBtnsDisabled(false);
+    document.getElementById('review-saving').style.display = 'none';
+  }
+}
+
+async function saveAndSendLink() {
+  setBtnsDisabled(true);
+  document.getElementById('review-saving').style.display = 'block';
+  try {
+    const inv = await createInvoice();
+    state.currentInvoice = inv;
+    if (inv.paymentUrl && inv.customerPhone) {
+      await fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} is ready. Pay here: ${inv.paymentUrl}` })
+      });
+      showSuccess('Invoice Sent!', `Payment link sent to ${inv.customerPhone}`);
+    } else if (inv.paymentUrl) {
+      showSuccess('Invoice Created!', 'Payment link ready — copy from the main app to share');
+    } else {
+      showSuccess('Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} created`);
+    }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  setBtnsDisabled(false);
+  document.getElementById('review-saving').style.display = 'none';
+}
+
+function setBtnsDisabled(v) {
+  ['save-inv-btn','pay-inv-btn'].forEach(id => { const el = document.getElementById(id); if(el) el.disabled = v; });
+}
+
+// ── PAYMENT ──
+function openInvoicePayment(inv) {
+  state.currentInvoice = inv;
+  state.selectedPayMethod = null;
+  document.getElementById('pay-invoice-num').textContent = '#' + (inv.invoiceNumber || '');
+  document.getElementById('pay-customer-name').textContent = inv.customerName || '';
+  document.getElementById('pay-amount').textContent = '$' + (inv.total||0).toFixed(2);
+  document.getElementById('card-fields').style.display = 'none';
+  document.getElementById('link-fields').style.display = 'none';
+  document.getElementById('confirm-pay-btn').disabled = true;
+  document.querySelectorAll('.pay-chip').forEach(c => c.classList.remove('selected'));
+  document.getElementById('confirm-pay-btn').textContent = 'Confirm Payment';
+  goTo('screen-payment');
+}
+
+function selectPayMethod(method, el) {
+  state.selectedPayMethod = method;
+  document.querySelectorAll('.pay-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('card-fields').style.display = method === 'card' ? 'block' : 'none';
+  document.getElementById('link-fields').style.display = method === 'link' ? 'block' : 'none';
+  const btn = document.getElementById('confirm-pay-btn');
+  btn.disabled = false;
+  btn.textContent = method === 'link' ? '📲 Send Payment Link' : '✓ Confirm Payment';
+}
+
+async function confirmPayment() {
+  const method = state.selectedPayMethod;
+  const inv = state.currentInvoice;
+  if (!method || !inv) return;
+
+  document.getElementById('confirm-pay-btn').disabled = true;
+  document.getElementById('pay-saving').style.display = 'block';
+
+  try {
+    if (method === 'link') {
+      // Send payment link via SMS/email
+      const sendSms = document.getElementById('send-sms-link')?.checked;
+      const sendEmail = document.getElementById('send-email-link')?.checked;
+      const payUrl = inv.paymentUrl || '';
+
+      if (sendSms && inv.customerPhone) {
+        await fetch('/api/send-sms', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${(inv.total||0).toFixed(2)} is ready.${payUrl ? ' Pay here: ' + payUrl : ''} Reply STOP to opt out.` })
+        });
+      }
+      if (sendEmail && inv.customerEmail) {
+        await fetch('/api/send-email', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'invoice', customerEmail: inv.customerEmail, customerName: inv.customerName, invoiceNumber: inv.invoiceNumber, total: inv.total, paymentUrl: payUrl })
+        });
+      }
+      showSuccess('Link Sent!', `Payment link sent to ${inv.customerName}`);
+    } else {
+      // Mark as paid
+      const updateData = {
+        status: 'paid',
+        paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+        paymentMethod: method,
+      };
+      if (method === 'card') {
+        updateData.cardLast4 = document.getElementById('card-last4')?.value || '';
+        updateData.cardType = document.getElementById('card-type')?.value || '';
+      }
+      await db.collection('invoices').doc(inv.id).update(updateData);
+      showSuccess('Payment Recorded!', `$${(inv.total||0).toFixed(2)} collected via ${method}`);
+    }
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    document.getElementById('confirm-pay-btn').disabled = false;
+  }
+  document.getElementById('pay-saving').style.display = 'none';
+}
+
+// ── NEW CUSTOMER ──
+function startNewCustomer() {
+  ['nc-name','nc-farm','nc-phone','nc-email','nc-notes'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  goTo('screen-new-customer');
+}
+
+async function saveNewCustomer() {
+  const name = document.getElementById('nc-name').value.trim();
+  if (!name) { showToast('Name is required', 'error'); return; }
+  const btn = document.getElementById('nc-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const docRef = await db.collection('customers').add({
+      farrierId: state.user.uid,
+      name,
+      farmName: document.getElementById('nc-farm').value.trim(),
+      phone: document.getElementById('nc-phone').value.trim(),
+      email: document.getElementById('nc-email').value.trim(),
+      notes: document.getElementById('nc-notes').value.trim(),
+      source: 'mobile_app',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    const newCustomer = { id: docRef.id, name, farmName: document.getElementById('nc-farm').value.trim(), phone: document.getElementById('nc-phone').value.trim(), email: document.getElementById('nc-email').value.trim(), notes: document.getElementById('nc-notes').value.trim() };
+    state.customers.unshift(newCustomer);
+    showToast('Customer added!', 'success');
+    selectCustomer(newCustomer);
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Save Customer';
+}
+
+// ── NEW APPOINTMENT ──
+function startNewAppointment() {
+  document.getElementById('appt-customer-name').textContent = state.customer.name;
+  document.getElementById('appt-customer-farm').textContent = state.customer.farmName || '';
+  document.getElementById('appt-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('appt-time').value = '';
+  document.getElementById('appt-horses').value = '1';
+  document.getElementById('appt-address').value = [state.customer.address, state.customer.city, state.customer.state].filter(Boolean).join(', ');
+  document.getElementById('appt-notes').value = '';
+  renderServiceGrid('appt-service-grid');
+  goTo('screen-new-appt');
+}
+
+async function saveNewAppointment() {
+  const date = document.getElementById('appt-date').value;
+  const time = document.getElementById('appt-time').value;
+  if (!date) { showToast('Date is required', 'error'); return; }
+  const btn = document.getElementById('appt-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const selectedSvcs = state.services
+    .filter((s, i) => document.getElementById(`appt-service-grid-chip-${i}`)?.classList.contains('selected'))
+    .map(s => s.name);
+
+  try {
+    await db.collection('appointments').add({
+      farrierId: state.user.uid,
+      customerName: state.customer.name,
+      customerId: state.customer.id || '',
+      farmName: state.customer.farmName || '',
+      email: state.customer.email || '',
+      phone: state.customer.phone || '',
+      address: document.getElementById('appt-address').value,
+      services: selectedSvcs,
+      numberOfHorses: parseInt(document.getElementById('appt-horses').value) || 1,
+      comments: document.getElementById('appt-notes').value,
+      requestedDate: date,
+      requestedTime: time,
+      status: 'confirmed',
+      source: 'mobile_app',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showSuccess('Appointment Saved!', `${state.customer.name} on ${date}${time ? ' at ' + fmtTime(time) : ''}`);
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = '📅 Save Appointment';
+}
+
+// ── SUCCESS ──
+function showSuccess(title, sub, icon = '✅') {
+  document.getElementById('success-icon').textContent = icon;
+  document.getElementById('success-title').textContent = title;
+  document.getElementById('success-sub').textContent = sub;
+  state.screenHistory = [];
+  goTo('screen-success', false);
+}
+
+// ── SEARCH SCREEN INIT ──
+document.getElementById('screen-search').addEventListener('transitionend', function() {
+  if (!this.classList.contains('hidden') && !this.classList.contains('slide-left')) {
+    document.getElementById('search-loading').style.display = 'none';
+    document.getElementById('open-invoices-section').style.display = 'none';
+    filterCustomers('');
+    setTimeout(() => document.getElementById('search-input').focus(), 100);
+  }
+});
+
+// ── HELPERS ──
+function fmtTime(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':');
+  const hr = parseInt(h);
+  return `${hr > 12 ? hr - 12 : hr || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
+}
+
+function fmtDate(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+</script>
+</body>
+</html>
