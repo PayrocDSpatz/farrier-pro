@@ -491,13 +491,29 @@
       const oobCode = urlParams.get('oobCode');
 
       useEffect(() => {
-        if (auth) {
-          const unsubscribe = auth.onAuthStateChanged((user) => {
-            setUser(user);
-            setLoading(false);
-          });
-          return () => unsubscribe();
+        if (!auth) return;
+
+        // Handle magic link sign-in return
+        if (auth.isSignInWithEmailLink(window.location.href)) {
+          let email = window.localStorage.getItem('emailForSignIn');
+          if (!email) {
+            email = window.prompt('Please confirm your email address to complete sign-in:');
+          }
+          if (email) {
+            auth.signInWithEmailLink(email, window.location.href)
+              .then(() => {
+                window.localStorage.removeItem('emailForSignIn');
+                window.history.replaceState({}, document.title, '/customer-portal.html');
+              })
+              .catch((err) => console.error('Magic link sign-in failed:', err));
+          }
         }
+
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          setUser(user);
+          setLoading(false);
+        });
+        return () => unsubscribe();
       }, []);
 
       // Handle password reset mode before auth check
@@ -629,85 +645,28 @@
 
     // Auth Page Component
     function AuthPage() {
-      const [isLogin, setIsLogin] = useState(true);
       const [email, setEmail] = useState('');
-      const [password, setPassword] = useState('');
-      const [name, setName] = useState('');
-      const [phone, setPhone] = useState('');
       const [loading, setLoading] = useState(false);
+      const [sent, setSent] = useState(false);
       const [error, setError] = useState('');
-      const [successMsg, setSuccessMsg] = useState('');
 
-      const friendlyError = (code) => {
-        switch (code) {
-          case 'auth/wrong-password':
-          case 'auth/invalid-credential':
-            return 'Incorrect password. Please try again or use "Forgot Password" below.';
-          case 'auth/user-not-found':
-            return 'No account found with that email. Please sign up first.';
-          case 'auth/invalid-email':
-            return 'Please enter a valid email address.';
-          case 'auth/too-many-requests':
-            return 'Too many attempts. Please wait a few minutes and try again.';
-          case 'auth/weak-password':
-            return 'Password must be at least 6 characters.';
-          default:
-            return 'Something went wrong. Please try again.';
-        }
-      };
-
-      const handleSubmit = async (e) => {
+      const handleSendLink = async (e) => {
         e.preventDefault();
         setError('');
-        setSuccessMsg('');
-        setLoading(true);
-
-        try {
-          if (isLogin) {
-            await auth.signInWithEmailAndPassword(email, password);
-          } else {
-            const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-            if (db) {
-              await db.collection('customers').doc(userCredential.user.uid).set({
-                name: name,
-                email: email,
-                phone: phone,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-              });
-            }
-          }
-        } catch (err) {
-          if (err.code === 'auth/email-already-in-use') {
-            // Account was pre-created at booking — switch to login and guide them
-            setIsLogin(true);
-            setError('An account with this email already exists. Sign in below using the password from your booking confirmation email, or use "Forgot Password" to set a new one.');
-          } else {
-            setError(friendlyError(err.code));
-          }
-        }
-
-        setLoading(false);
-      };
-
-      const handleForgotPassword = async () => {
-        if (!email) {
-          setError('Please enter your email address above, then click "Forgot Password".');
-          return;
-        }
-        setError('');
-        setSuccessMsg('');
         setLoading(true);
         try {
-          await auth.sendPasswordResetEmail(email, {
+          const actionCodeSettings = {
             url: 'https://app.farritech.com/customer-portal.html',
-            handleCodeInApp: false
-          });
-          setSuccessMsg(`Password reset email sent to ${email}. Check your inbox (and spam folder).`);
+            handleCodeInApp: true,
+          };
+          await auth.sendSignInLinkToEmail(email, actionCodeSettings);
+          window.localStorage.setItem('emailForSignIn', email);
+          setSent(true);
         } catch (err) {
-          if (err.code === 'auth/user-not-found') {
-            setError('No account found with that email address.');
+          if (err.code === 'auth/invalid-email') {
+            setError('Please enter a valid email address.');
           } else {
-            setError(friendlyError(err.code));
+            setError('Something went wrong. Please try again.');
           }
         }
         setLoading(false);
@@ -716,32 +675,14 @@
       const handleGoogleSignIn = async () => {
         setError('');
         setLoading(true);
-
         try {
           const provider = new firebase.auth.GoogleAuthProvider();
-          const result = await auth.signInWithPopup(provider);
-          
-          // Check if customer profile exists, create if not
-          if (db) {
-            const customerDoc = await db.collection('customers').doc(result.user.uid).get();
-            
-            if (!customerDoc.exists) {
-              // Create customer profile from Google data
-              await db.collection('customers').doc(result.user.uid).set({
-                name: result.user.displayName || '',
-                email: result.user.email,
-                phone: result.additionalUserInfo?.profile?.phone || '',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                source: 'google_signin'
-              });
-            }
-          }
+          await auth.signInWithPopup(provider);
         } catch (err) {
           if (err.code !== 'auth/popup-closed-by-user') {
-            setError(err.message);
+            setError('Google sign-in failed. Please try again.');
           }
         }
-
         setLoading(false);
       };
 
@@ -765,164 +706,86 @@
               style={{height: '60px', width: 'auto', objectFit: 'contain'}}
             />
           </header>
+
           <div className="auth-container">
-          <div className="auth-card">
-            <div className="auth-header">
-              <h1>{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
-              <p>{isLogin ? 'Sign in to view your invoices' : 'Sign up to manage your invoices'}</p>
-            </div>
-
-            {error && (
-              <div className="alert alert-error">
-                {error}
+            <div className="auth-card">
+              <div className="auth-header">
+                <h1>Welcome Back</h1>
+                <p>Sign in to view your invoices</p>
               </div>
-            )}
 
-            {successMsg && (
-              <div className="alert" style={{background:'#f0fdf4',border:'1px solid #10b981',color:'#065f46',padding:'0.875rem 1rem',borderRadius:'6px',fontSize:'0.9rem',marginBottom:'1rem'}}>
-                ✅ {successMsg}
-              </div>
-            )}
-
-            <button 
-              onClick={handleGoogleSignIn}
-              className="btn"
-              disabled={loading}
-              style={{
-                width: '100%',
-                marginBottom: '1.5rem',
-                background: 'white',
-                color: '#444',
-                border: '2px solid #ddd',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.75rem',
-                padding: '0.875rem',
-                fontSize: '0.95rem'
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18">
-                <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
-                <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
-                <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.17.282-1.709V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.335z"/>
-                <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-              </svg>
-              Continue with Google
-            </button>
-
-            <div style={{
-              position: 'relative',
-              textAlign: 'center',
-              marginBottom: '1.5rem'
-            }}>
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: 0,
-                right: 0,
-                height: '1px',
-                background: 'var(--border)'
-              }}></div>
-              <span style={{
-                position: 'relative',
-                background: 'var(--card)',
-                padding: '0 1rem',
-                color: 'var(--text-muted)',
-                fontSize: '0.85rem'
-              }}>or continue with email</span>
-            </div>
-
-            <form onSubmit={handleSubmit}>
-              {!isLogin && (
-                <>
-                  <div className="form-group">
-                    <label>Full Name</label>
-                    <input 
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="John Smith"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Phone Number</label>
-                    <input 
-                      type="tel"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="(555) 555-5555"
-                    />
-                  </div>
-                </>
+              {error && (
+                <div className="alert alert-error">{error}</div>
               )}
 
-              <div className="form-group">
-                <label>Email</label>
-                <input 
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Password</label>
-                <input 
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  minLength="6"
-                />
-              </div>
-
-              {isLogin && (
-                <div style={{textAlign:'right', marginTop:'-0.5rem', marginBottom:'1rem'}}>
+              {sent ? (
+                <div style={{textAlign: 'center', padding: '1rem 0'}}>
+                  <div style={{fontSize: '3rem', marginBottom: '1rem'}}>&#x2709;&#xfe0f;</div>
+                  <h2 style={{color: 'var(--primary)', marginBottom: '0.5rem', fontSize: '1.2rem'}}>Check your email</h2>
+                  <p style={{color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem'}}>
+                    We sent a sign-in link to <strong>{email}</strong>.<br/>
+                    Click the link in the email to access your invoices.<br/>
+                    <span style={{fontSize: '0.8rem'}}>Check your spam folder if you don&apos;t see it.</span>
+                  </p>
                   <button
-                    type="button"
-                    onClick={handleForgotPassword}
-                    disabled={loading}
-                    style={{background:'none',border:'none',color:'var(--primary)',cursor:'pointer',fontSize:'0.85rem',textDecoration:'underline',padding:0}}
+                    className="btn btn-outline"
+                    style={{width: '100%'}}
+                    onClick={() => { setSent(false); setEmail(''); }}
                   >
-                    Forgot Password?
+                    Use a different email
                   </button>
                 </div>
+              ) : (
+                <>
+                  <form onSubmit={handleSendLink}>
+                    <div className="form-group">
+                      <label>Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        autoFocus
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={loading}
+                      style={{width: '100%', marginTop: '0.5rem'}}
+                    >
+                      {loading ? <span className="spinner"></span> : 'Send Sign-In Link'}
+                    </button>
+                  </form>
+
+                  <div style={{position: 'relative', textAlign: 'center', margin: '1.5rem 0'}}>
+                    <div style={{position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'var(--border)'}}></div>
+                    <span style={{position: 'relative', background: 'var(--card)', padding: '0 1rem', color: 'var(--text-muted)', fontSize: '0.85rem'}}>or</span>
+                  </div>
+
+                  <button
+                    onClick={handleGoogleSignIn}
+                    className="btn"
+                    disabled={loading}
+                    style={{width: '100%', background: 'white', color: '#444', border: '2px solid #ddd', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', padding: '0.875rem', fontSize: '0.95rem'}}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+                      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                      <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.17.282-1.709V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.335z"/>
+                      <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                    </svg>
+                    Continue with Google
+                  </button>
+                </>
               )}
-
-              <button 
-                type="submit" 
-                className="btn btn-primary"
-                disabled={loading}
-              >
-                {loading ? <span className="spinner"></span> : (isLogin ? 'Sign In' : 'Create Account')}
-              </button>
-            </form>
-
-            <div style={{textAlign: 'center', marginTop: '1.5rem'}}>
-              <button 
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setError('');
-                }}
-                style={{background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.9rem', textDecoration: 'underline'}}
-              >
-                {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-              </button>
             </div>
           </div>
         </div>
-        </div>
       );
     }
-    const formatDate_ = (tsOrDate) => {
+        const formatDate_ = (tsOrDate) => {
       try {
         const d = tsOrDate?.toDate ? tsOrDate.toDate() : (tsOrDate instanceof Date ? tsOrDate : new Date(tsOrDate));
         return isNaN(d.getTime()) ? "" : d.toLocaleDateString();
