@@ -151,7 +151,7 @@ export default async function handler(req, res) {
         },
       });
 
-      // Create a Payment Link
+      // Create a Payment Link — limited to 1 submission so it deactivates after payment
       const paymentLink = await stripe.paymentLinks.create({
         line_items: [{ price: price.id, quantity: 1 }],
         after_completion: {
@@ -159,10 +159,19 @@ export default async function handler(req, res) {
           redirect: { url: `https://app.farritech.com/customer-portal.html` },
         },
         metadata: { farrierId: farrierId || '', invoiceId, invoiceNumber: invoiceNumber || '' },
+        invoice_creation: { enabled: false },
+        restrictions: { completed_sessions: { limit: 1 } },
         ...(customerEmail ? { customer_creation: 'always' } : {}),
       });
 
       return res.status(200).json({ success: true, paymentUrl: paymentLink.url, paymentLinkId: paymentLink.id });
+    }
+
+    if (action === 'deactivate_link') {
+      const { paymentLinkId } = body;
+      if (!paymentLinkId) return res.status(400).json({ success: false, error: 'Missing paymentLinkId.' });
+      await stripe.paymentLinks.update(paymentLinkId, { active: false });
+      return res.status(200).json({ success: true });
     }
 
     if (action === 'validate') {
