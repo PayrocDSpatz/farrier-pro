@@ -908,8 +908,8 @@
       const items = Array.isArray(invoice.items) && invoice.items.length > 0 ? invoice.items : [{ description: safeText_(invoice.services || invoice.service || "Service"), quantity: 1, unitPrice: Number(invoice.total || invoice.amount || 0) }];
       items.forEach(item => {
         const desc = safeText_(item.description || item.name || "");
-        const qty = Number(item.quantity || 1);
-        const rawPrice = item.unitPrice || item.price || 0;
+        const qty = Number(item.qty || item.quantity || 1);
+        const rawPrice = item.unitPrice || item.unitPriceSnapshot || item.price || item.amount || 0;
         const price = Number(String(rawPrice).replace(/[^0-9.]/g, '')) || 0;
         const lineTotal = qty * price;
         y = pdfWrapText_(doc, desc, 48, y, 260, 14);
