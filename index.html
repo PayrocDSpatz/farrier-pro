@@ -37,14 +37,14 @@
   --primary-light: #46C5FF;
   --secondary: #8F9DAF;
   --accent: #46C5FF;
-  --bg: #EBF0F7;
-  --surface: #F5F8FD;
-  --text: #0D1320;
-  --text-muted: #4A6080;
+  --bg: #D8E4F0;
+--surface: #EDF3FB;
+--text: #0D1320;
+--text-muted: #3D5878;
   --success: #2683FB;
   --warning: #f59e0b;
   --error: #ef4444;
-  --border: #C8D6EA;
+  --border: #A8BDD8;
 }
 
     html, body {
@@ -258,25 +258,30 @@
       justify-content: center;
     }
 
-    .btn-primary {
-      background: var(--primary);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: var(--primary-light);
-      transform: translateY(-2px);
-    }
+   .btn-primary {
+  background: var(--primary);
+  color: white;
+  border: 2px solid #46C5FF;
+  box-shadow: 0 0 0 1px rgba(70,197,255,0.3);
+}
+  .btn-primary:hover {
+  background: var(--primary-light);
+  transform: translateY(-2px);
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(70,197,255,0.5);
+}
 
     .btn-secondary {
       background: var(--secondary);
       color: var(--text);
     }
 
-    .btn-success {
-      background: var(--success);
-      color: white;
-    }
+  .btn-success {
+  background: var(--success);
+  color: white;
+  border: 2px solid #46C5FF;
+  box-shadow: 0 0 0 1px rgba(70,197,255,0.3);
+}
 
     .btn-warning {
       background: var(--warning);
