@@ -367,10 +367,11 @@
 
     .stat-label {
       font-size: 0.875rem;
-      color: var(--text-muted);
+      color: #8ab4d8;
       margin-bottom: 0.5rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      font-weight: 700;
     }
 
     .stat-value {
@@ -624,9 +625,9 @@
     }
 
     .success-message {
-      background: #E6F4EA;
-      border: 2px solid var(--success);
-      color: var(--success);
+      background: #0d2a15;
+      border: 2px solid #4ade80;
+      color: #4ade80;
       padding: 1rem;
       border-radius: 8px;
       margin-bottom: 1rem;
@@ -3862,7 +3863,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 <div key={s.label} style={{ background: 'var(--surface)', borderRadius: 12, padding: '1rem 1.25rem', boxShadow: '0 2px 12px rgba(0,0,0,0.3)', border: `2px solid ${s.color}22` }}>
                   <div style={{ fontSize: '1.4rem' }}>{s.icon}</div>
                   <div style={{ fontSize: '1.4rem', fontWeight: 700, color: s.color }}>{s.val}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#777' }}>{s.label}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#8ab4d8' }}>{s.label}</div>
                 </div>
               ))}
             </div>
@@ -3881,7 +3882,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                         {apt.requestedDate || apt.date || '—'} {apt.requestedTime ? `at ${apt.requestedTime}` : ''}
                       </span>
                       {apt.services && apt.services.length > 0 && (
-                        <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.2rem' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text)', marginTop: '0.2rem' }}>
                           🔧 {Array.isArray(apt.services) ? apt.services.join(', ') : apt.services}
                         </div>
                       )}
@@ -3922,7 +3923,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                     <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.08)', borderRadius: 8, flexWrap: 'wrap', gap: '0.5rem' }}>
                       <div>
                         <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Invoice #{inv.invoiceNumber || inv.id.slice(-6).toUpperCase()}</span>
-                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{fmtDate(inv.createdAt)}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{fmtDate(inv.createdAt)}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontWeight: 700, fontSize: '1rem' }}>{fmtMoney(inv.total)}</div>
@@ -4277,7 +4278,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             <td style="padding:10px 8px;vertical-align:top">
               <div style="font-weight:700">${a.customerName}${a.farmName ? ` <span style="font-weight:400;color:#666">— ${a.farmName}</span>` : ''}</div>
               ${addr ? `<div style="font-size:0.85em;color:#555;margin-top:2px">📍 ${mapsUrl ? `<a href="${mapsUrl}" style="color:#2563eb">${addr}</a>` : addr}</div>` : ''}
-              ${a.services?.length ? `<div style="font-size:0.85em;color:#555;margin-top:2px">🐴 ${a.services.join(', ')}</div>` : ''}
+              ${a.services?.length ? `<div style="font-size:0.85em;color:#333;margin-top:2px">🐴 ${a.services.join(', ')}</div>` : ''}
               ${a.numberOfHorses ? `<div style="font-size:0.82em;color:#888">Horses: ${a.numberOfHorses}</div>` : ''}
               ${a.comments ? `<div style="font-size:0.82em;color:#888;font-style:italic">Notes: ${a.comments}</div>` : ''}
             </td>
@@ -4423,7 +4424,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       {a.phone && <span style={{ marginRight: '0.75rem' }}>📞 {fmtPhone(a.phone)}</span>}
                     </div>
                     {addr && (
-                      <div style={{ fontSize: '0.85rem', color: '#46C5FF', marginTop: 2 }}>
+                      <div style={{ fontSize: '0.85rem', color: '#ffffff', marginTop: 2, fontWeight: 600 }}>
                         {mapsUrl ? <a href={mapsUrl} target="_blank" rel="noopener noreferrer">📍 {addr}</a> : `📍 ${addr}`}
                       </div>
                     )}
@@ -10591,7 +10592,7 @@ useEffect(() => {
             </p>
             <div style={{marginBottom: '1rem'}}>
               <strong>Booking URL:</strong><br/>
-              <code style={{background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.5rem', wordBreak: 'break-all'}}>
+              <code style={{background: 'rgba(13,19,32,0.9)', color: '#46C5FF', padding: '0.5rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.5rem', wordBreak: 'break-all', border: '1.5px solid rgba(38,131,251,0.45)'}}>
                 {`${window.location.origin}?farrier=${safeFarrierId}`}
               </code>
               <div style={{marginTop: '0.5rem'}}>
