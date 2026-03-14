@@ -3249,9 +3249,12 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                     const activeItem = group.items.find(i => i.id === tab);
 
                     return (
-                      <div key={group.label} style={{position: 'relative'}}>
+                      <div key={group.label} style={{position: 'relative'}}
+                        onMouseEnter={() => setOpenNavGroup(group.label)}
+                        onMouseLeave={() => setOpenNavGroup(null)}
+                      >
                         <button
-                          onClick={() => setOpenNavGroup(isOpen ? null : group.label)}
+                          onClick={() => { if (group.items.length === 1) { setTab(group.items[0].id); setOpenNavGroup(null); } }}
                           style={{
                             background: 'none',
                             border: 'none',
@@ -3285,12 +3288,13 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                         {isOpen && (
                           <div style={{
                             position: 'absolute',
-                            top: '100%',
+                            top: 'calc(100% - 2px)',
                             left: 0,
                             backgroundColor: '#0D1320',
-                            border: '1px solid rgba(255,255,255,0.12)',
+                            border: '1.5px solid rgba(70,197,255,0.35)',
+                            borderTop: '2px solid #46C5FF',
                             borderRadius: '0 0 10px 10px',
-                            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
                             minWidth: '180px',
                             zIndex: 200,
                             overflow: 'hidden'
