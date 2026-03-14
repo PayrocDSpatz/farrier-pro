@@ -1636,7 +1636,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
       }
 
       async function emailInvoiceLink(invoice, profileOverride) {
-        const _userProfile = profileOverride || (typeof userProfile !== 'undefined' ? userProfile : null);
+        const _userProfile = profileOverride || {};
         const customerEmail = safeText_(invoice.customerEmail || "");
         if (!customerEmail) {
           alert("No customer email on this invoice.");
@@ -1738,9 +1738,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
           }
         } catch (err) {
           console.error("emailInvoiceLink error:", err);
-          // Fallback to mailto if API fails
-          const body = encodeURIComponent(`Hi ${firstName},\n\nHere is your invoice #${invoiceNum} for $${total}.\n\nPay online: ${payUrl}\n\nThank you!`);
-          window.location.href = `mailto:${encodeURIComponent(customerEmail)}?subject=${encodeURIComponent(`Invoice #${invoiceNum}`)}&body=${body}`;
+          alert('Failed to send email: ' + err.message);
         }
       }
 
