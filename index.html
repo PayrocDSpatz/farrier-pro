@@ -4473,7 +4473,15 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           <div style={cardStyle}>
             <div className="form-group" style={{ margin: 0 }}>
               <label style={{ fontWeight: 700 }}>📅 Select Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, maxWidth: 220 }} />
+              <div style={{position:'relative', display:'inline-flex', alignItems:'center', maxWidth:220}}>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                  style={{ ...inputStyle, maxWidth: 220, paddingRight:'2.5rem' }}
+                />
+                <span
+                  onClick={(e) => e.currentTarget.previousSibling.showPicker()}
+                  style={{position:'absolute', right:'0.6rem', fontSize:'1.1rem', cursor:'pointer', userSelect:'none', lineHeight:1}}
+                >📅</span>
+              </div>
             </div>
           </div>
 
