@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">address
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>FarriTech - Advanced Farrier Solutions</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="shortcut icon" href="/favicon.svg" />
@@ -72,32 +72,86 @@
       min-height: 100vh;
     }
 
-    /* Booking page — lighter background for customers */
+    /* Booking page — light mode for customers */
     .booking-page {
-      background: #1a2540;
+      background: #f1f5f9;
       min-height: 100vh;
+      color: #0D1320;
     }
     .booking-page .main-content {
-      background: #1a2540;
+      background: #f1f5f9;
     }
     .booking-page .hero {
       background: transparent;
+      color: #0D1320;
+    }
+    .booking-page .hero h1,
+    .booking-page .hero p {
+      color: #0D1320;
     }
     .booking-page .card {
-      background: #212d47;
-      border-color: rgba(38,131,251,0.2);
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      color: #0D1320;
+    }
+    .booking-page .card h2 {
+      color: #0D1320;
+    }
+    .booking-page label {
+      color: #1e293b;
+    }
+    .booking-page .form-group label {
+      color: #1e293b;
+      font-weight: 600;
     }
     .booking-page .form-group input,
     .booking-page .form-group textarea,
     .booking-page .form-group select {
-      background: rgba(255,255,255,0.07);
-      border-color: rgba(38,131,251,0.35);
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      color: #0D1320;
+    }
+    .booking-page .form-group input::placeholder,
+    .booking-page .form-group textarea::placeholder {
+      color: #94a3b8;
+    }
+    .booking-page input[type="date"] {
+      color-scheme: light;
+      background: #ffffff;
+      color: #0D1320;
+    }
+    .booking-page input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: none;
+      opacity: 0.6;
     }
     .booking-page .time-slot {
-      background: rgba(255,255,255,0.07);
+      background: #f8fafc;
+      border: 1.5px solid #cbd5e1;
+      color: #0D1320;
+    }
+    .booking-page .time-slot:hover {
+      background: #eff6ff;
+      border-color: #2683FB;
     }
     .booking-page .time-slot.selected {
-      background: rgba(38,131,251,0.35);
+      background: #eff6ff;
+      border-color: #2683FB;
+      color: #2683FB;
+      font-weight: 600;
+    }
+    .booking-page .time-slot.booked {
+      background: #f1f5f9;
+      color: #94a3b8;
+    }
+    .booking-page .success-message {
+      background: #f0fdf4;
+      border-color: #4ade80;
+      color: #166534;
+    }
+    .booking-page p,
+    .booking-page div {
+      color: inherit;
     }
 
     /* Header */
@@ -6289,7 +6343,7 @@ function ServicesView({ userId }) {
             </div>
           </header>
 
-          <main className="main-content" style={isMobile ? {padding: '0', paddingBottom: '80px'} : {}}>
+          <main className="main-content" style={isMobile ? {padding: '0', paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))'} : {}}>
             {step === 'success' ? (
               <div style={{textAlign: 'center', padding: isMobile ? '1rem' : '2rem'}}>
                 <div className="success-message">
@@ -6402,7 +6456,7 @@ function ServicesView({ userId }) {
                           onChange={(e) => setFormData({...formData, smsConsent: e.target.checked})}
                           style={{marginTop: '2px', flexShrink: 0, width: isMobile ? '20px' : '16px', height: isMobile ? '20px' : '16px', cursor: 'pointer'}}
                         />
-                        <span style={{fontSize: isMobile ? '0.85rem' : '0.82rem', color: '#cbd5e1', lineHeight: '1.5'}}>
+                        <span style={{fontSize: isMobile ? '0.85rem' : '0.82rem', color: '#475569', lineHeight: '1.5'}}>
                           I agree to receive SMS appointment reminders and service notifications from FarriTech.
                           Message and data rates may apply. Up to 3 messages per appointment.
                           Reply <strong>STOP</strong> to opt out or <strong>HELP</strong> for help.
@@ -6588,10 +6642,11 @@ function ServicesView({ userId }) {
                       <div style={{
                         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
                         padding: '0.75rem 1rem',
-                        background: 'rgba(13,19,32,0.97)',
+                        paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+                        background: 'rgba(255,255,255,0.97)',
                         backdropFilter: 'blur(8px)',
-                        borderTop: '1px solid rgba(38,131,251,0.3)',
-                        boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
+                        borderTop: '1px solid #e2e8f0',
+                        boxShadow: '0 -4px 20px rgba(0,0,0,0.1)'
                       }}>
                         <button type="submit" className="btn btn-success"
                           style={{width:'100%', minHeight:'52px', fontSize:'1rem', fontWeight:'700'}}
