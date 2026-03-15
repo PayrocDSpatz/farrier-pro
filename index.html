@@ -3155,6 +3155,13 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         { id: 'about', label: 'About', icon: 'ℹ️' }
       ];
 
+      // ── mobile/desktop layout vars ──────────────────────────────────────────
+      const headerH   = isMobile ? '56px' : '80px';
+      const logoH     = isMobile ? '40px' : '60px';
+      const cardStyle = isMobile
+        ? { padding: '1rem', margin: '0', borderRadius: 0, border: 'none', background: 'var(--surface)' }
+        : { textAlign: 'left', maxWidth: '600px', margin: '0 auto' };
+
       return (
         <div className="app-container">
           <header style={{
@@ -3163,222 +3170,424 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             top: 0,
             zIndex: 100,
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            height: '80px',
+            height: headerH,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0 1.5rem'
+            padding: isMobile ? '0 0.75rem' : '0 1.5rem'
           }}>
-            <div style={{minWidth: '200px'}}></div>
+            <div style={{minWidth: isMobile ? '60px' : '120px'}}></div>
             <div style={{flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
               <img
                 src="/public/farritech_logo_letters_white.png"
                 alt="FarriTech"
-                style={{height: '60px', width: 'auto', objectFit: 'contain'}}
+                style={{height: logoH, width: 'auto', objectFit: 'contain'}}
               />
             </div>
-            <div style={{minWidth: '200px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '1rem'}}>
-              <div style={{textAlign: 'right', lineHeight: '1.3', color: 'white'}}>
-                <div style={{fontWeight: '600', fontSize: '0.95rem'}}>{userProfile?.businessName || user.email}</div>
-                <div style={{fontSize: '0.72rem', opacity: '0.8', fontWeight: '400'}}>
-                  Logged in as {user.email}
-                </div>
-              </div>
-              <button
-                onClick={handleLogout}
+            <div style={{minWidth: isMobile ? '60px' : '120px', display: 'flex', justifyContent: 'flex-end'}}>
+              <a
+                href={window.location.origin + '/customer-portal.html'}
                 style={{
-                  padding: '0.5rem 1rem',
+                  padding: isMobile ? '0.35rem 0.6rem' : '0.5rem 1rem',
                   background: 'rgba(255,255,255,0.18)',
                   backdropFilter: 'blur(4px)',
                   border: '1px solid rgba(255,255,255,0.4)',
                   color: 'white',
                   borderRadius: '8px',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
+                  textDecoration: 'none',
+                  fontSize: isMobile ? '0.75rem' : '0.9rem',
+                  fontWeight: '500',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.4rem'
+                  gap: '0.3rem',
+                  transition: 'all 0.2s'
                 }}
-                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
-                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
               >
-                🚪 Logout
-              </button>
+                💳 {isMobile ? 'Pay' : 'Pay Invoices'}
+              </a>
             </div>
           </header>
 
-          <nav style={{
-            backgroundColor: '#0D1320',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
-            position: 'sticky',
-            top: '80px',
-            zIndex: 99,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.3)'
-          }}>
-            {(() => {
-              const navGroups = [
-                { label: '📊 Overview', items: [
-                  { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-                  { id: 'qrcode', label: 'My QR Code', icon: '📱' },
-                  { id: 'about', label: 'About', icon: 'ℹ️' },
-                ]},
-                { label: '📅 Schedule', items: [
-                  { id: 'calendar', label: 'Calendar', icon: '📅' },
-                  { id: 'appointments', label: 'Appointments', icon: '📋' },
-                  { id: 'route', label: 'Route Sheet', icon: '🗺️' },
-                ]},
-                { label: '💰 Finance', items: [
-                  { id: 'invoices', label: 'Invoices', icon: '💰' },
-                  { id: 'reports', label: 'Reports', icon: '📈' },
-                ]},
-                { label: '👥 Clients', items: [
-                  { id: 'customers', label: 'Customers', icon: '👥' },
-                ]},
-                { label: '⚙️ Manage', items: [
-                  { id: 'services', label: 'Services', icon: '🧾' },
-                  { id: 'settings', label: 'Settings', icon: '⚙️' },
-                ]},
-              ];
-
-              const activeGroup = navGroups.find(g => g.items.some(i => i.id === tab));
-
-              return (
-                <div style={{
-                  maxWidth: '1200px',
-                  margin: '0 auto',
-                  display: 'flex',
-                  alignItems: 'stretch',
-                  padding: '0 1.5rem',
-                  gap: '0'
-                }}>
-                  {navGroups.map(group => {
-                    const isGroupActive = group.items.some(i => i.id === tab);
-                    const isOpen = openNavGroup === group.label;
-                    const activeItem = group.items.find(i => i.id === tab);
-
-                    return (
-                      <div key={group.label} style={{position: 'relative'}}
-                        onMouseEnter={() => setOpenNavGroup(group.label)}
-                        onMouseLeave={() => setOpenNavGroup(null)}
-                      >
-                        <button
-                          onClick={() => { if (group.items.length === 1) { setTab(group.items[0].id); setOpenNavGroup(null); } }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            padding: '0 1.25rem',
-                            height: '48px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            fontSize: '0.88rem',
-                            fontWeight: isGroupActive ? '700' : '500',
-                            color: isGroupActive ? '#46C5FF' : 'rgba(255,255,255,0.75)',
-                            borderBottom: isGroupActive ? '2px solid #46C5FF' : '2px solid transparent',
-                            transition: 'all 0.15s',
-                            whiteSpace: 'nowrap',
-                          }}
-                          onMouseOver={(e) => { if (!isGroupActive) e.currentTarget.style.color = 'white'; }}
-                          onMouseOut={(e) => { if (!isGroupActive) e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
-                        >
-                          {isGroupActive ? `${activeItem.icon} ${activeItem.label}` : group.label}
-                          <span style={{
-                            fontSize: '0.6rem',
-                            opacity: 0.7,
-                            marginLeft: '2px',
-                            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                            display: 'inline-block',
-                            transition: 'transform 0.2s'
-                          }}>▼</span>
-                        </button>
-
-                        {isOpen && (
-                          <div style={{
-                            position: 'absolute',
-                            top: 'calc(100% - 2px)',
-                            left: 0,
-                            backgroundColor: '#0D1320',
-                            border: '1.5px solid rgba(70,197,255,0.35)',
-                            borderTop: '2px solid #46C5FF',
-                            borderRadius: '0 0 10px 10px',
-                            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                            minWidth: '180px',
-                            zIndex: 200,
-                            overflow: 'hidden'
-                          }}>
-                            {group.items.map(item => (
-                              <button
-                                key={item.id}
-                                onClick={() => { setTab(item.id); setOpenNavGroup(null); }}
-                                style={{
-                                  display: 'block',
-                                  width: '100%',
-                                  textAlign: 'left',
-                                  padding: '0.75rem 1.25rem',
-                                  background: tab === item.id ? 'rgba(70,197,255,0.12)' : 'none',
-                                  border: 'none',
-                                  borderLeft: tab === item.id ? '3px solid #46C5FF' : '3px solid transparent',
-                                  color: tab === item.id ? '#46C5FF' : 'rgba(255,255,255,0.8)',
-                                  fontSize: '0.88rem',
-                                  fontWeight: tab === item.id ? '600' : '400',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s',
-                                  gap: '0.5rem',
-                                }}
-                                onMouseOver={(e) => { if (tab !== item.id) { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = 'white'; }}}
-                                onMouseOut={(e) => { if (tab !== item.id) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}}
-                              >
-                                {item.icon} {item.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+          <main className="main-content" style={isMobile ? {padding: '0', paddingBottom: '80px'} : {}}>
+            {step === 'success' ? (
+              <div style={{textAlign: 'center', padding: isMobile ? '1rem' : '2rem'}}>
+                <div className="success-message">
+                  ✓ Appointment Request Sent Successfully!
                 </div>
-              );
-            })()}
-          </nav>
+                <div className="card">
+                  <h2>What's Next?</h2>
+                  <p style={{marginBottom: '1rem'}}>
+                    Your appointment request has been sent. You'll receive an SMS confirmation once it's approved.
+                  </p>
+                  <div style={{marginBottom: '1rem', color: 'var(--text-muted)', textAlign: 'left'}}>
+                    <div><strong>Name:</strong> {formData.name}</div>
+                    {formData.farmName && <div><strong>Farm:</strong> {formData.farmName}</div>}
+                    <div><strong>Phone:</strong> {formData.phone}</div>
+                    {formData.email && <div><strong>Email:</strong> {formData.email}</div>}
+                    <div><strong>Services:</strong> {formData.services.join(', ') || 'Not specified'}</div>
+                    <div><strong>Date:</strong> {formData.date} at {formData.time}</div>
+                    {formData.address && <div><strong>Address:</strong> {formData.address}, {formData.city}, {formData.state} {formData.zip}</div>}
+                  </div>
+                  <div style={{
+                    background: 'rgba(38,131,251,0.1)',
+                    border: '1px solid rgba(38,131,251,0.3)',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    marginBottom: '1rem'
+                  }}>
+                    <div style={{fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--primary)'}}>
+                      📱 SMS Confirmation
+                    </div>
+                    <p style={{fontSize: '0.9rem', marginBottom: '0.75rem', color: 'var(--text)'}}>
+                      {formData.smsConsent
+                        ? "You'll receive SMS updates about your appointment."
+                        : 'You opted out of SMS. Check your email for updates.'}
+                    </p>
+                    <button
+                      style={{width: '100%', marginTop: '0.5rem'}}
+                      className="btn btn-primary"
+                      onClick={() => { setStep('landing'); setFormData({ name:'', farmName:'', phone:'', email:'', services:[], numberOfHorses:'', address:'', city:'', state:'', zip:'', comments:'', date:'', time:'', smsConsent:false }); }}
+                    >
+                      Book Another Appointment
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={isMobile ? {} : {textAlign: 'center'}}>
+                {!isMobile && (
+                  <div className="hero">
+                    <h1>🐴 {farrierInfo.businessName}</h1>
+                    <p>Professional hoof care for your horses. Book your appointment below.</p>
+                  </div>
+                )}
+                {isMobile && (
+                  <div style={{
+                    background: 'linear-gradient(135deg, #2683FB 0%, #0D1320 100%)',
+                    padding: '1.25rem 1rem 1rem',
+                    textAlign: 'center',
+                    marginBottom: '0'
+                  }}>
+                    <div style={{fontSize: '1.5rem', marginBottom: '0.25rem'}}>🐴</div>
+                    <h1 style={{fontSize: '1.2rem', color: 'white', margin: '0 0 0.2rem', fontWeight: '700'}}>{farrierInfo.businessName}</h1>
+                    <p style={{fontSize: '0.8rem', color: 'rgba(255,255,255,0.8)', margin: 0}}>Professional hoof care — tap below to book</p>
+                  </div>
+                )}
 
-          <main className="main-content">
+                <div className="card" style={cardStyle}>
+                  {!isMobile && <h2>Book Your Appointment</h2>}
+                  {isMobile && (
+                    <h2 style={{fontSize: '1.1rem', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid rgba(38,131,251,0.2)'}}>
+                      📋 Book Your Appointment
+                    </h2>
+                  )}
+                  <form onSubmit={handleSubmit}>
 
-            {tab === 'qrcode' && (
-              <QRCodeView 
-                user={user} 
-                userProfile={userProfile}
-                connectGoogleCalendar={connectGoogleCalendar}
-                disconnectGoogleCalendar={disconnectGoogleCalendar}
-              />
+                    {/* Name */}
+                    <div className="form-group">
+                      <label>Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.name}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        placeholder="Your name"
+                        style={isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {}}
+                      />
+                    </div>
+
+                    {/* Farm */}
+                    <div className="form-group">
+                      <label>Farm / Business Name</label>
+                      <input
+                        type="text"
+                        value={formData.farmName}
+                        onChange={(e) => setFormData({...formData, farmName: e.target.value})}
+                        placeholder="Sunny Acres Farm (optional)"
+                        style={isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {}}
+                      />
+                    </div>
+
+                    {/* Phone */}
+                    <div className="form-group">
+                      <label>Phone Number *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={formData.phone}
+                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                        placeholder="(555) 555-5555"
+                        style={isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {}}
+                      />
+                    </div>
+
+                    {/* SMS Consent */}
+                    <div style={{
+                      background: 'var(--surface)',
+                      border: '1px solid #dbeafe',
+                      borderRadius: '8px',
+                      padding: isMobile ? '14px' : '12px 14px',
+                      marginBottom: '0.75rem'
+                    }}>
+                      <label style={{display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', margin: 0}}>
+                        <input
+                          type="checkbox"
+                          checked={formData.smsConsent}
+                          onChange={(e) => setFormData({...formData, smsConsent: e.target.checked})}
+                          style={{marginTop: '2px', flexShrink: 0, width: isMobile ? '20px' : '16px', height: isMobile ? '20px' : '16px', cursor: 'pointer'}}
+                        />
+                        <span style={{fontSize: isMobile ? '0.85rem' : '0.82rem', color: '#cbd5e1', lineHeight: '1.5'}}>
+                          I agree to receive SMS appointment reminders and service notifications from FarriTech.
+                          Message and data rates may apply. Up to 3 messages per appointment.
+                          Reply <strong>STOP</strong> to opt out or <strong>HELP</strong> for help.
+                          Consent is not required as a condition of booking.
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Email */}
+                    <div className="form-group">
+                      <label>Email</label>
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        placeholder="your@email.com"
+                        style={isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {}}
+                      />
+                    </div>
+
+                    {/* Services */}
+                    <div className="form-group">
+                      <label>Services Needed</label>
+                      {isMobile ? (
+                        <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem'}}>
+                          {services.map(service => (
+                            <label key={service} style={{
+                              display: 'flex', alignItems: 'center', gap: '0.5rem',
+                              cursor: 'pointer', padding: '0.6rem 0.75rem',
+                              background: formData.services.includes(service) ? 'rgba(38,131,251,0.2)' : 'rgba(255,255,255,0.05)',
+                              border: formData.services.includes(service) ? '1.5px solid #2683FB' : '1.5px solid rgba(255,255,255,0.1)',
+                              borderRadius: '8px', minHeight: '44px', transition: 'all 0.15s'
+                            }}>
+                              <input
+                                type="checkbox"
+                                checked={formData.services.includes(service)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData({...formData, services: [...formData.services, service]});
+                                  } else {
+                                    setFormData({...formData, services: formData.services.filter(s => s !== service)});
+                                  }
+                                }}
+                                style={{width:'18px', height:'18px', margin:0, flexShrink:0}}
+                              />
+                              <span style={{fontSize:'0.82rem', fontWeight:'500'}}>{service}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                          {services.map(service => (
+                            <label key={service} style={{display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer'}}>
+                              <input
+                                type="checkbox"
+                                checked={formData.services.includes(service)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData({...formData, services: [...formData.services, service]});
+                                  } else {
+                                    setFormData({...formData, services: formData.services.filter(s => s !== service)});
+                                  }
+                                }}
+                                style={{width: 'auto', margin: 0}}
+                              />
+                              <span style={{fontWeight: 'normal'}}>{service}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Number of Horses */}
+                    <div className="form-group">
+                      <label>Number of Horses</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={formData.numberOfHorses}
+                        onChange={(e) => setFormData({...formData, numberOfHorses: e.target.value})}
+                        placeholder="e.g. 2"
+                        style={isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {}}
+                      />
+                    </div>
+
+                    {/* Address */}
+                    <div className="form-group">
+                      <label>Service Address</label>
+                      <div ref={addressInputRef} style={{width:'100%'}}></div>
+                      <div style={{fontSize: '0.85rem', color: '#64748b', marginTop: '0.35rem'}}>
+                        Where should the farrier come? Leave blank if same as usual.
+                      </div>
+                    </div>
+
+                    <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0.75rem'}}>
+                      <div className="form-group">
+                        <label>City</label>
+                        <input
+                          type="text"
+                          value={formData.city}
+                          onChange={(e) => setFormData({...formData, city: e.target.value})}
+                          placeholder="City"
+                          style={isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {}}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>State</label>
+                        <input
+                          type="text"
+                          value={formData.state}
+                          onChange={(e) => setFormData({...formData, state: e.target.value.toUpperCase()})}
+                          placeholder="FL"
+                          maxLength="2"
+                          style={{textTransform: 'uppercase', ...(isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {})}}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>ZIP</label>
+                        <input
+                          type="text"
+                          value={formData.zip}
+                          onChange={(e) => setFormData({...formData, zip: e.target.value})}
+                          placeholder="32801"
+                          maxLength="10"
+                          style={isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {}}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Comments */}
+                    <div className="form-group">
+                      <label>Additional Notes</label>
+                      <textarea
+                        value={formData.comments}
+                        onChange={(e) => setFormData({...formData, comments: e.target.value})}
+                        placeholder="Horse names, special instructions, preferences…"
+                        rows={isMobile ? 3 : 4}
+                        style={isMobile ? {fontSize:'1rem', padding:'0.75rem'} : {}}
+                      />
+                    </div>
+
+                    {/* Date */}
+                    <div className="form-group">
+                      <label>Preferred Date *</label>
+                      <div style={{position:'relative', display:'flex', alignItems:'center'}}>
+                        <input
+                          type="date"
+                          required
+                          value={formData.date}
+                          onChange={(e) => {
+                            const newDate = e.target.value;
+                            setFormData({...formData, date: newDate, time: ''});
+                            setBookedSlots([]);
+                            loadBookedSlots(newDate);
+                          }}
+                          min={new Date().toISOString().split('T')[0]}
+                          style={{paddingRight:'2.5rem', width:'100%', colorScheme:'dark', ...(isMobile ? {fontSize:'1rem', padding:'0.75rem', paddingRight:'2.5rem', minHeight:'48px'} : {})}}
+                        />
+                        <span
+                          onClick={(e) => e.currentTarget.previousSibling.showPicker()}
+                          style={{
+                            position:'absolute', right:'0.75rem', fontSize:'1.1rem',
+                            cursor:'pointer', userSelect:'none', pointerEvents:'all', lineHeight:1
+                          }}
+                          title="Open calendar"
+                        >📅</span>
+                      </div>
+                    </div>
+
+                    {/* Time Slots */}
+                    <div className="form-group">
+                      <label>Available Time Slots *</label>
+                      {formData.date ? (
+                        loadingSlots ? (
+                          <p style={{color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem', background: 'rgba(38,131,251,0.08)', borderRadius: '4px'}}>
+                            ⏳ Checking availability...
+                          </p>
+                        ) : availableSlots.length > 0 ? (
+                          <div className="time-slots" style={isMobile ? {display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.5rem'} : {}}>
+                            {availableSlots.map(slot => {
+                              const isBooked = bookedSlots.includes(slot);
+                              const isSelected = formData.time === slot;
+                              return (
+                                <div
+                                  key={slot}
+                                  className={`time-slot ${isSelected ? 'selected' : ''} ${isBooked ? 'booked' : ''}`}
+                                  onClick={() => !isBooked && setFormData({...formData, time: slot})}
+                                  style={{
+                                    ...(isBooked ? {cursor: 'not-allowed', opacity: 0.45, textDecoration: 'line-through'} : {}),
+                                    ...(isMobile ? {minHeight:'48px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.9rem'} : {})
+                                  }}
+                                  title={isBooked ? 'This time slot is already booked' : ''}
+                                >
+                                  {formatTime(slot)}
+                                  {isBooked && <span style={{display:'block', fontSize:'0.65rem', color:'#999'}}>Unavailable</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p style={{color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem', background: 'rgba(38,131,251,0.08)', borderRadius: '4px'}}>
+                            ⚠️ Farrier is not available on this day. Please select a different date.
+                          </p>
+                        )
+                      ) : (
+                        <p style={{color: 'var(--text-muted)', fontStyle: 'italic', padding: '1rem', background: 'rgba(38,131,251,0.08)', borderRadius: '4px'}}>
+                          📅 Please select a date first to see available time slots.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Submit */}
+                    {isMobile ? (
+                      <div style={{
+                        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+                        padding: '0.75rem 1rem',
+                        background: 'rgba(13,19,32,0.97)',
+                        backdropFilter: 'blur(8px)',
+                        borderTop: '1px solid rgba(38,131,251,0.3)',
+                        boxShadow: '0 -4px 20px rgba(0,0,0,0.4)'
+                      }}>
+                        <button
+                          type="submit"
+                          className="btn btn-success"
+                          style={{width: '100%', minHeight: '52px', fontSize: '1rem', fontWeight: '700'}}
+                          disabled={!formData.time}
+                        >
+                          {formData.time ? `📅 Request Appointment — ${formatTime(formData.time)}` : '📅 Select a Time Slot to Continue'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="submit"
+                        className="btn btn-success"
+                        style={{width: '100%', marginTop: '1rem'}}
+                        disabled={!formData.time}
+                      >
+                        Request Appointment
+                      </button>
+                    )}
+
+                    <p style={{textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '1rem', lineHeight: '1.5'}}>
+                      By submitting this form you agree to our{' '}
+                      <a href="https://www.farritech.com/terms" target="_blank" rel="noopener noreferrer" style={{color: '#4f6ef7', textDecoration: 'underline'}}>Terms of Service</a>
+                      {' '}and{' '}
+                      <a href="https://www.farritech.com/privacy" target="_blank" rel="noopener noreferrer" style={{color: '#4f6ef7', textDecoration: 'underline'}}>Privacy Policy</a>.
+                    </p>
+                  </form>
+                </div>
+              </div>
             )}
-            {tab === 'dashboard' && <DashboardView userId={farrierId} />}
-            {tab === 'calendar' && <CalendarView userId={farrierId} />}
-            {tab === 'appointments' && <AppointmentsView userId={farrierId} userProfile={userProfile} />}
-            {tab === 'invoices' && <InvoicesView userId={farrierId} userProfile={userProfile} />}
-            {tab === 'customers' && <CustomersView userId={farrierId} userProfile={userProfile} />}
-            {tab === 'services' && <ServicesView userId={farrierId} />}
-            {tab === 'reports' && <ReportsView userId={farrierId} />}
-            {tab === 'route' && <RouteSheetView userId={farrierId} userProfile={userProfile} />}
-            {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
-            {tab === 'about' && <AboutView />}
-            <footer style={{
-              textAlign: 'center',
-              padding: '16px',
-              marginTop: '24px',
-              borderTop: '1px solid #e5e7eb',
-              fontSize: '0.78rem',
-              color: '#9ca3af',
-            }}>
-              <span>© {new Date().getFullYear()} FarriTech &nbsp;·&nbsp; </span>
-              <a href="https://farritech.com/privacy" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Privacy Policy</a>
-              <span> &nbsp;·&nbsp; </span>
-              <a href="https://farritech.com/terms" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Terms of Service</a>
-              <span> &nbsp;·&nbsp; </span>
-              <a href="https://farritech.com/refund-policy" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Refund Policy</a>
-            </footer>
           </main>
         </div>
       );
@@ -5758,6 +5967,7 @@ function ServicesView({ userId }) {
       const [step, setStep] = useState('landing');
       const [farrierInfo, setFarrierInfo] = useState(null);
       const [loading, setLoading] = useState(true);
+      const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
       const [bookedSlots, setBookedSlots] = useState([]);
       const [loadingSlots, setLoadingSlots] = useState(false);
       const [formData, setFormData] = useState({
@@ -5893,6 +6103,13 @@ function ServicesView({ userId }) {
         }, 250);
 
         return () => clearInterval(timer);
+      }, []);
+
+      // Mobile detection
+      useEffect(() => {
+        const onResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
       }, []);
 
 
