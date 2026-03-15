@@ -10271,6 +10271,11 @@ useEffect(() => {
       const [successMessage, setSuccessMessage] = useState('');
       const [error, setError] = useState('');
 
+      // SMS number provisioning
+      const [settingsAreaCode, setSettingsAreaCode] = useState('');
+      const [settingsSmsLoading, setSettingsSmsLoading] = useState(false);
+      const [settingsSmsError, setSettingsSmsError] = useState('');
+
       // Stripe settings
       const [stripePublishableKey, setStripePublishableKey] = useState(userProfile?.stripePublishableKey || '');
       const [stripeSecretKey, setStripeSecretKey] = useState(userProfile?.stripeSecretKey || '');
@@ -10674,15 +10679,12 @@ useEffect(() => {
               };
               const farrierState = (userProfile?.state || '').toUpperCase();
               const acOptions = AC[farrierState] || [{c:'561',l:'Default'}];
-              const [settingsAreaCode, setSettingsAreaCode] = React.useState(acOptions[0].c);
-              const [settingsSmsLoading, setSettingsSmsLoading] = React.useState(false);
-              const [settingsSmsError, setSettingsSmsError] = React.useState('');
+              const currentSettingsCode = settingsAreaCode || acOptions[0].c;
 
               return (
                 <div style={{background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:'8px', padding:'1rem', marginBottom:'1rem'}}>
                   <div style={{fontWeight:'600', marginBottom:'0.5rem', color:'#166534'}}>✅ SMS Active</div>
                   {userProfile?.twilioPhoneNumber ? (
-                    // ── ALREADY PROVISIONED — locked display ──
                     <div>
                       <div style={{fontSize:'0.9rem', color:'#166534', marginBottom:'0.35rem'}}>
                         Your dedicated SMS number:
@@ -10698,7 +10700,6 @@ useEffect(() => {
                       </div>
                     </div>
                   ) : (
-                    // ── NOT YET PROVISIONED — dropdown + button ──
                     <div>
                       <div style={{fontSize:'0.9rem', color:'#166534', marginBottom:'0.75rem'}}>
                         No SMS number assigned yet. Choose your area code and get your dedicated number.
@@ -10713,7 +10714,7 @@ useEffect(() => {
                         Choose your area code{farrierState ? ` (${farrierState})` : ''}:
                       </label>
                       <select
-                        value={settingsAreaCode}
+                        value={currentSettingsCode}
                         onChange={(e) => setSettingsAreaCode(e.target.value)}
                         disabled={settingsSmsLoading}
                         style={{width:'100%', padding:'0.5rem 0.65rem', borderRadius:'6px', border:'1.5px solid #d1d5db', fontSize:'0.9rem', background:'white', marginBottom:'0.65rem', cursor:'pointer'}}
@@ -10733,7 +10734,7 @@ useEffect(() => {
                             const res = await fetch('/api/provision-twilio-number', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ farrierId: safeFarrierId, areaCode: settingsAreaCode, state: farrierState }),
+                              body: JSON.stringify({ farrierId: safeFarrierId, areaCode: currentSettingsCode, state: farrierState }),
                             });
                             const data = await res.json();
                             if (data.success) {
@@ -10749,7 +10750,7 @@ useEffect(() => {
                           }
                         }}
                       >
-                        {settingsSmsLoading ? '⏳ Getting your number…' : `📞 Get My (${settingsAreaCode}) Number`}
+                        {settingsSmsLoading ? '⏳ Getting your number…' : `📞 Get My (${currentSettingsCode}) Number`}
                       </button>
                       {settingsSmsError && (
                         <div style={{marginTop:'0.5rem', fontSize:'0.82rem', color:'#b91c1c', background:'#fef2f2', border:'1px solid #fecaca', borderRadius:'6px', padding:'0.5rem 0.65rem'}}>
