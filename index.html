@@ -4226,6 +4226,8 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const [sendResult, setSendResult] = React.useState('');
       const [totalDistance, setTotalDistance] = React.useState(null);
       const [routeLegs, setRouteLegs] = React.useState([]); // per-leg distances after smart route
+      const [nearbyClients, setNearbyClients] = React.useState([]); // clients near last stop
+      const [loadingNearby, setLoadingNearby] = React.useState(false);
       const [totalDuration, setTotalDuration] = React.useState(null);
       const startAddressRef = React.useRef(null);
       const startAddressPacRef = React.useRef(null);
@@ -4284,6 +4286,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         setRouteGenerated(false);
         setRouteOrder([]);
         setRouteLegs([]);
+        setNearbyClients([]);
         setSendResult('');
         try {
           const snap = await db.collection('appointments')
@@ -4318,6 +4321,82 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const fullAddr = (a) => [a.address, a.city, a.state, a.zip].filter(Boolean).join(', ');
 
       // Smart Route — Google Directions API waypoint optimisation
+      // Haversine distance in miles between two lat/lng points
+      const haversineMi = (lat1, lng1, lat2, lng2) => {
+        const R = 3958.8; // Earth radius miles
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      };
+
+      const loadNearbyClients = async (lastStopAppt, radiusMi = 15) => {
+        if (!db || !lastStopAppt) return;
+        const geo = lastStopAppt.geo || null;
+        // Fall back to geocoding the address if no stored coords
+        let baseLat = geo?.lat, baseLng = geo?.lng;
+        if (!baseLat && lastStopAppt.address && window.google?.maps?.Geocoder) {
+          try {
+            const geocoder = new window.google.maps.Geocoder();
+            const addr = [lastStopAppt.address, lastStopAppt.city, lastStopAppt.state, lastStopAppt.zip].filter(Boolean).join(', ');
+            await new Promise(resolve => {
+              geocoder.geocode({ address: addr }, (results, status) => {
+                if (status === 'OK' && results[0]) {
+                  baseLat = results[0].geometry.location.lat();
+                  baseLng = results[0].geometry.location.lng();
+                }
+                resolve();
+              });
+            });
+          } catch(e) {}
+        }
+        if (!baseLat) return;
+
+        setLoadingNearby(true);
+        try {
+          // Load all customers with geo coords
+          const custSnap = await db.collection('customers').where('farrierId', '==', userId).get();
+          const customers = custSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.geo?.lat);
+
+          // Load upcoming appointments (next 60 days)
+          const today = new Date().toISOString().split('T')[0];
+          const future = new Date(); future.setDate(future.getDate() + 60);
+          const futureStr = future.toISOString().split('T')[0];
+          const apptSnap = await db.collection('appointments')
+            .where('farrierId', '==', userId)
+            .where('requestedDate', '>=', today)
+            .where('requestedDate', '<=', futureStr)
+            .get();
+          const futureAppts = apptSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+          // Map customerId/email → next appointment
+          const nextApptMap = {};
+          futureAppts.forEach(a => {
+            const key = a.customerId || a.customerEmail || '';
+            if (!key) return;
+            if (!nextApptMap[key] || a.requestedDate < nextApptMap[key].requestedDate) {
+              nextApptMap[key] = a;
+            }
+          });
+
+          // Calculate distance and filter
+          const results = customers
+            .map(c => {
+              const distMi = haversineMi(baseLat, baseLng, c.geo.lat, c.geo.lng);
+              const nextAppt = nextApptMap[c.id] || nextApptMap[c.email] || null;
+              return { ...c, distMi, nextAppt };
+            })
+            .filter(c => c.distMi <= radiusMi)
+            .sort((a, b) => a.distMi - b.distMi)
+            .slice(0, 8); // max 8 suggestions
+
+          setNearbyClients(results);
+        } catch(e) {
+          console.warn('loadNearbyClients error:', e);
+        }
+        setLoadingNearby(false);
+      };
+
       const runSmartRoute = async () => {
         const withAddr = appointments.filter(a => fullAddr(a));
         if (withAddr.length < 2) {
@@ -4350,6 +4429,9 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           setTotalDistance(data.distanceMiles);
           setTotalDuration(data.durationMinutes);
           setRouteGenerated(true);
+          // Load nearby clients based on last stop
+          const lastStop = ordered[ordered.length - 1];
+          if (lastStop) loadNearbyClients(lastStop);
 
           // Save leg distance to each appointment doc
           if (db && legs.length > 0) {
@@ -4579,6 +4661,45 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               );
             })}
           </div>
+
+          {/* Nearby clients section */}
+          {routeGenerated && (nearbyClients.length > 0 || loadingNearby) && (
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                <span style={{ fontWeight: 700, fontSize: '1rem' }}>📍 Nearby Clients — You Have Time?</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400 }}>within 15 mi of last stop</span>
+              </div>
+              {loadingNearby && <p style={{ color: 'var(--text-muted)', margin: 0 }}>⏳ Finding nearby clients…</p>}
+              {!loadingNearby && nearbyClients.map((c, i) => (
+                <div key={c.id} style={{ display: 'flex', gap: '0.75rem', padding: '0.75rem 0', borderBottom: i < nearbyClients.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <div style={{ minWidth: 36, height: 36, borderRadius: '50%', background: 'rgba(38,131,251,0.15)', border: '1.5px solid rgba(38,131,251,0.4)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}>
+                    {c.distMi.toFixed(1)}mi
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700 }}>
+                      {c.name}{c.farmName ? <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> — {c.farmName}</span> : ''}
+                    </div>
+                    <div style={{ fontSize: '0.83rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                      {c.phone && <span style={{ marginRight: '0.75rem' }}>📞 {c.phone}</span>}
+                      {c.address && <span>📍 {[c.address, c.city, c.state].filter(Boolean).join(', ')}</span>}
+                    </div>
+                    {c.services?.length > 0 && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 2 }}>🐴 {c.services.join(', ')}</div>
+                    )}
+                    {c.nextAppt ? (
+                      <div style={{ fontSize: '0.8rem', marginTop: 3, color: '#f59e0b', fontWeight: 600 }}>
+                        📅 Next appt: {c.nextAppt.requestedDate} {c.nextAppt.requestedTime ? `at ${c.nextAppt.requestedTime}` : ''}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.8rem', marginTop: 3, color: '#4ade80', fontWeight: 600 }}>
+                        ✅ No upcoming appointment scheduled
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Send / PDF options */}
           {appointments.length > 0 && (
