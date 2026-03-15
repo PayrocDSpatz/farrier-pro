@@ -623,6 +623,11 @@
       color: var(--text);
       border-color: rgba(38,131,251,0.45);
     }
+    input[type="date"] { color-scheme: dark; }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1) opacity(0.6);
+      cursor: pointer;
+    }
 
     .success-message {
       background: #0d2a15;
@@ -6491,7 +6496,7 @@ function ServicesView({ userId }) {
                           onChange={(e) => setFormData({...formData, smsConsent: e.target.checked})}
                           style={{marginTop: '3px', flexShrink: 0, width: '16px', height: '16px', cursor: 'pointer'}}
                         />
-                        <span style={{fontSize: '0.82rem', color: '#444', lineHeight: '1.5'}}>
+                        <span style={{fontSize: '0.82rem', color: '#cbd5e1', lineHeight: '1.5'}}>
                           I agree to receive SMS appointment reminders and service notifications from FarriTech. 
                           Message and data rates may apply. Up to 3 messages per appointment. 
                           Reply <strong>STOP</strong> to opt out or <strong>HELP</strong> for help. 
@@ -6608,18 +6613,30 @@ function ServicesView({ userId }) {
                     
                     <div className="form-group">
                       <label>Preferred Date *</label>
-                      <input 
-                        type="date" 
-                        required 
-                        value={formData.date}
-                        onChange={(e) => {
-                          const newDate = e.target.value;
-                          setFormData({...formData, date: newDate, time: ''});
-                          setBookedSlots([]);
-                          loadBookedSlots(newDate);
-                        }}
-                        min={new Date().toISOString().split('T')[0]}
-                      />
+                      <div style={{position:'relative', display:'flex', alignItems:'center'}}>
+                        <input 
+                          type="date" 
+                          required 
+                          value={formData.date}
+                          onChange={(e) => {
+                            const newDate = e.target.value;
+                            setFormData({...formData, date: newDate, time: ''});
+                            setBookedSlots([]);
+                            loadBookedSlots(newDate);
+                          }}
+                          min={new Date().toISOString().split('T')[0]}
+                          style={{paddingRight:'2.5rem', width:'100%', colorScheme:'dark'}}
+                        />
+                        <span
+                          onClick={(e) => e.currentTarget.previousSibling.showPicker()}
+                          style={{
+                            position:'absolute', right:'0.75rem', fontSize:'1.1rem',
+                            cursor:'pointer', userSelect:'none', pointerEvents:'all',
+                            lineHeight:1
+                          }}
+                          title="Open calendar"
+                        >📅</span>
+                      </div>
                     </div>
                     
                     <div className="form-group">
