@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     let event;
     try {
       if (webhookSecret && sig) {
-        const stripe = new Stripe(process.env.STRIPE_WEBHOOK_VERIFY_KEY || 'sk_test_x');
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_WEBHOOK_VERIFY_KEY || 'sk_test_x');
         event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
       } else {
         event = JSON.parse(rawBody.toString());
@@ -76,23 +76,61 @@ export default async function handler(req, res) {
         const invoiceNumber = metadata.invoiceNumber || '';
         console.log('💳 Checkout completed — invoiceId:', invoiceId, 'status:', session.payment_status);
 
-        if (invoiceId && session.payment_status === 'paid') {
+        // Payment links store metadata on the link object, not in session.metadata
+        // Fall back to fetching the payment link to get invoiceId
+        let resolvedInvoiceId = invoiceId;
+        if (!resolvedInvoiceId && session.payment_link) {
+          try {
+            const farrierId = metadata.farrierId || '';
+            // Try to find invoice by payment link ID in Firestore
+            const invSearchRes = await fetch(
+              `${BASE_URL}/invoices?key=${FIREBASE_API_KEY}&pageSize=200`,
+            );
+            // We can't easily query by payment link without the farrier's key
+            // Instead, retrieve the payment link metadata from Stripe
+            // We need a Stripe key — try the farrier's key first, fall back to platform key
+            const platformKey = process.env.STRIPE_SECRET_KEY;
+            if (platformKey) {
+              const stripeP = new Stripe(platformKey);
+              try {
+                const pl = await stripeP.paymentLinks.retrieve(session.payment_link);
+                resolvedInvoiceId = pl.metadata?.invoiceId || '';
+                console.log('📎 Got invoiceId from payment link metadata:', resolvedInvoiceId);
+              } catch(e) { console.warn('Could not fetch payment link:', e.message); }
+            }
+          } catch(e) { console.warn('Payment link metadata lookup failed:', e.message); }
+        }
+
+        if (resolvedInvoiceId && session.payment_status === 'paid') {
+          const invoiceId = resolvedInvoiceId;
           let last4 = '', brand = '', paymentIntentId = session.payment_intent || '';
-          if (paymentIntentId && metadata.farrierId) {
-            try {
-              const profileRes = await fetch(`${BASE_URL}/farriers/${metadata.farrierId}?key=${FIREBASE_API_KEY}`);
-              if (profileRes.ok) {
-                const profile = await profileRes.json();
-                const stripeKey = profile.fields?.stripeSecretKey?.stringValue || '';
-                if (stripeKey && stripeKey.startsWith('sk_')) {
-                  const stripe = new Stripe(stripeKey);
-                  const charges = await stripe.charges.list({ payment_intent: paymentIntentId, limit: 1 });
-                  last4 = charges.data[0]?.payment_method_details?.card?.last4 || '';
-                  brand = charges.data[0]?.payment_method_details?.card?.brand || '';
-                  if (brand) brand = brand.charAt(0).toUpperCase() + brand.slice(1);
+          if (paymentIntentId) {
+            // Try farrier's key first, then platform key
+            const keysToTry = [];
+            if (metadata.farrierId) {
+              try {
+                const profileRes = await fetch(`${BASE_URL}/farriers/${metadata.farrierId}?key=${FIREBASE_API_KEY}`);
+                if (profileRes.ok) {
+                  const profile = await profileRes.json();
+                  const farrierKey = profile.fields?.stripeSecretKey?.stringValue || '';
+                  if (farrierKey && farrierKey.startsWith('sk_')) keysToTry.push(farrierKey);
                 }
-              }
-            } catch(e) { console.warn('Card details error:', e.message); }
+              } catch(e) { console.warn('Could not fetch farrier profile:', e.message); }
+            }
+            const platformKey = process.env.STRIPE_SECRET_KEY;
+            if (platformKey && !keysToTry.includes(platformKey)) keysToTry.push(platformKey);
+
+            for (const key of keysToTry) {
+              try {
+                const stripe = new Stripe(key);
+                const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['charges'] });
+                const charge = pi.charges?.data?.[0];
+                last4 = charge?.payment_method_details?.card?.last4 || '';
+                brand = charge?.payment_method_details?.card?.brand || '';
+                if (brand) brand = brand.charAt(0).toUpperCase() + brand.slice(1);
+                if (last4) break; // got it, stop trying
+              } catch(e) { console.warn('Card detail lookup failed with key:', e.message); }
+            }
           }
 
           await markInvoicePaid(invoiceId, { paymentMethod: 'card', paymentIntentId, last4, brand });
@@ -118,11 +156,26 @@ export default async function handler(req, res) {
         const pi = event.data.object;
         const invoiceId = pi.metadata?.invoiceId || '';
         if (invoiceId) {
+          // Expand charges if not already expanded
+          let last4 = pi.charges?.data?.[0]?.payment_method_details?.card?.last4 || '';
+          let brand = pi.charges?.data?.[0]?.payment_method_details?.card?.brand || '';
+          if (!last4) {
+            try {
+              const platformKey = process.env.STRIPE_SECRET_KEY;
+              if (platformKey) {
+                const stripe = new Stripe(platformKey);
+                const fullPi = await stripe.paymentIntents.retrieve(pi.id, { expand: ['charges'] });
+                last4 = fullPi.charges?.data?.[0]?.payment_method_details?.card?.last4 || '';
+                brand = fullPi.charges?.data?.[0]?.payment_method_details?.card?.brand || '';
+              }
+            } catch(e) { console.warn('PI card detail lookup failed:', e.message); }
+          }
+          if (brand) brand = brand.charAt(0).toUpperCase() + brand.slice(1);
           await markInvoicePaid(invoiceId, {
             paymentMethod: 'card',
             paymentIntentId: pi.id,
-            last4: pi.charges?.data?.[0]?.payment_method_details?.card?.last4 || '',
-            brand: pi.charges?.data?.[0]?.payment_method_details?.card?.brand || '',
+            last4,
+            brand,
           });
           console.log('✅ Invoice', invoiceId, 'marked paid via payment_intent');
         }
@@ -193,7 +246,7 @@ export default async function handler(req, res) {
       });
       const paymentLink = await stripe.paymentLinks.create({
         line_items: [{ price: price.id, quantity: 1 }],
-        after_completion: { type: 'redirect', redirect: { url: 'https://app.farritech.com/customer-portal.html' } },
+        after_completion: { type: 'redirect', redirect: { url: `https://app.farritech.com/customer-portal.html?invoice_id=${invoiceId}&session_id={CHECKOUT_SESSION_ID}` } },
         metadata: { farrierId: farrierId || '', invoiceId, invoiceNumber: invoiceNumber || '' },
         invoice_creation: { enabled: false },
         restrictions: { completed_sessions: { limit: 1 } },
