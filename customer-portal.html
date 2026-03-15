@@ -885,6 +885,11 @@
         }
         doc.text(cardLine, pageW - 150, 212, { align: "center" });
         if (paidDateLine) doc.text(paidDateLine, pageW - 150, 228, { align: "center" });
+        if (invoice.stripePaymentIntentId) {
+          doc.setFontSize(7); doc.setTextColor(140);
+          doc.text('Txn: ' + safeText_(invoice.stripePaymentIntentId), pageW - 150, 242, { align: "center" });
+          doc.setFontSize(9); doc.setTextColor(0);
+        }
       } else if (payUrl) {
         try {
           const qr = await qrToDataUrl_(payUrl);
@@ -990,6 +995,27 @@
 
       useEffect(() => {
         loadData();
+      }, []);
+
+      // Detect return from Stripe payment link and mark invoice paid
+      useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('session_id');
+        const invoiceId = params.get('invoice_id');
+        if (sessionId && invoiceId && db) {
+          console.log('💳 Returned from Stripe payment — marking invoice paid:', invoiceId);
+          db.collection('invoices').doc(invoiceId).update({
+            status: 'paid',
+            paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+            paymentMethod: 'card',
+            stripeSessionId: sessionId,
+          }).then(() => {
+            console.log('✅ Invoice marked paid from portal redirect');
+            loadData();
+            // Clean up URL
+            window.history.replaceState({}, document.title, '/customer-portal.html');
+          }).catch(e => console.error('Failed to mark invoice paid:', e));
+        }
       }, []);
 
       const loadData = async () => {

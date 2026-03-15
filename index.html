@@ -1631,7 +1631,23 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         const paidAmount = invoice.paidAmount || payments.reduce((s,p) => s + (p.amount||0), 0);
         const balanceDue = Math.max(0, (invoice.total || 0) - paidAmount);
 
-        if (payments.length > 0) {
+        // Build effective payments list — prefer payments[] array,
+        // but fall back to top-level paidAt/cardLast4 for Stripe online payments
+        let effectivePayments = payments;
+        if (payments.length === 0 && invoice.paidAt && (invStatus === 'paid' || invStatus === 'partial')) {
+          const paidDate = invoice.paidAt?.toDate ? invoice.paidAt.toDate() : new Date(invoice.paidAt);
+          const cardDetail = invoice.cardLast4
+            ? `${invoice.cardType || 'Card'} ending ${invoice.cardLast4}`
+            : (invoice.paymentMethod === 'cash' ? 'Cash' : invoice.paymentMethod === 'check' ? 'Check' : 'Online Payment');
+          effectivePayments = [{
+            date: paidDate.toISOString(),
+            amount: paidAmount || invoice.total || 0,
+            memo: cardDetail,
+            stripePaymentIntentId: invoice.stripePaymentIntentId || '',
+          }];
+        }
+
+        if (effectivePayments.length > 0) {
           y += 16;
           if (y > pageH - 160) { doc.addPage(); y = 72; }
           doc.setFont("helvetica", "bold");
@@ -1645,14 +1661,21 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
           doc.setFont("helvetica", "normal");
           doc.setFontSize(9);
           const methodLabels = { cash: 'Cash', check: 'Check', credit_card: 'Credit Card', other: 'Other' };
-          for (const p of payments) {
+          for (const p of effectivePayments) {
             if (y > pageH - 100) { doc.addPage(); y = 72; }
             const dateStr = p.date ? new Date(p.date).toLocaleDateString() : '';
             const methodStr = methodLabels[p.method] || p.method || '';
-            // Use memo if it has card details (e.g. "Visa ending 4242"), otherwise fall back to method label
             const detailStr = p.memo && p.memo !== 'Credit card' && p.memo !== 'Credit Card' ? p.memo : methodStr;
             doc.setTextColor(60);
             doc.text(`${dateStr}  ${detailStr}`, 48, y);
+            // Show transaction ID in small text if available
+            if (p.stripePaymentIntentId) {
+              doc.setFontSize(7);
+              doc.setTextColor(140);
+              doc.text(`Txn: ${p.stripePaymentIntentId}`, 48, y + 8);
+              doc.setFontSize(9);
+              y += 8;
+            }
             doc.setTextColor(0);
             doc.text(money_(p.amount || 0), pageW - 48, y, { align: 'right' });
             y += 16;
