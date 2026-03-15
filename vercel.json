@@ -15,6 +15,14 @@
       "destination": "/mobile.html"
     },
     {
+      "source": "/mobile-manifest.json",
+      "destination": "/mobile-manifest.json"
+    },
+    {
+      "source": "/mobile-sw.js",
+      "destination": "/mobile-sw.js"
+    },
+    {
       "source": "/((?!.*\\.).*)",
       "destination": "/"
     }

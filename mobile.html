@@ -6,6 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#2683FB">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FarriTech">
+<link rel="apple-touch-icon" href="/public/farritech_logo_square.png">
+<link rel="manifest" href="/mobile-manifest.json">
 <title>FarriTech Mobile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1260,6 +1265,15 @@ function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
   <div style="background:#f9fafb;padding:16px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;text-align:center;">
     <p style="color:#9ca3af;font-size:12px;margin:0;">Powered by <a href="https://www.farritech.com" style="color:#6b7280;">FarriTech</a></p>
   </div>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/mobile-sw.js')
+      .then(reg => console.log('✅ SW registered'))
+      .catch(err => console.log('SW error:', err));
+  });
+}
+</script>
 </body></html>`;
 }
 
