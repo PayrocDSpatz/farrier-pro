@@ -4225,6 +4225,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const [sending, setSending] = React.useState(false);
       const [sendResult, setSendResult] = React.useState('');
       const [totalDistance, setTotalDistance] = React.useState(null);
+      const [routeLegs, setRouteLegs] = React.useState([]); // per-leg distances after smart route
       const [totalDuration, setTotalDuration] = React.useState(null);
       const startAddressRef = React.useRef(null);
       const startAddressPacRef = React.useRef(null);
@@ -4282,6 +4283,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         setLoading(true);
         setRouteGenerated(false);
         setRouteOrder([]);
+        setRouteLegs([]);
         setSendResult('');
         try {
           const snap = await db.collection('appointments')
@@ -4342,10 +4344,26 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
           const ordered = data.order.map(i => withAddr[i]);
           const unrouted = appointments.filter(a => !fullAddr(a));
+          const legs = data.legs || [];
+          setRouteLegs(legs);
           setRouteOrder([...ordered, ...unrouted]);
           setTotalDistance(data.distanceMiles);
           setTotalDuration(data.durationMinutes);
           setRouteGenerated(true);
+
+          // Save leg distance to each appointment doc
+          if (db && legs.length > 0) {
+            ordered.forEach((appt, idx) => {
+              const leg = legs[idx];
+              if (leg && appt.id) {
+                db.collection('appointments').doc(appt.id).update({
+                  routeLegDistanceMi: parseFloat(leg.distanceMi),
+                  routeLegDurationMin: leg.durationMin,
+                  routeDate: date,
+                }).catch(e => console.warn('Could not save leg distance:', e));
+              }
+            });
+          }
         } catch(e) {
           alert('Route error: ' + e.message);
         }
@@ -4543,6 +4561,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                     {addr && (
                       <div style={{ fontSize: '0.85rem', color: 'var(--primary-light)', marginTop: 2, fontWeight: 600 }}>
                         {mapsUrl ? <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{color:'var(--primary-light)', textDecoration:'underline'}}>📍 {addr}</a> : `📍 ${addr}`}
+                      </div>
+                    )}
+                    {routeGenerated && routeLegs[i] && (
+                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 2 }}>
+                        ↳ {routeLegs[i].distanceMi} mi · ~{routeLegs[i].durationMin} min {i === 0 ? 'from start' : 'from prev stop'}
                       </div>
                     )}
                     {a.services?.length > 0 && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2 }}>🐴 {a.services.join(', ')}</div>}
