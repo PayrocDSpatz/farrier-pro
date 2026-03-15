@@ -969,6 +969,13 @@
       const [customStart, setCustomStart] = useState('');
       const [customEnd, setCustomEnd] = useState('');
       const [showCustomPicker, setShowCustomPicker] = useState(false);
+      const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
+      useEffect(() => {
+        const onResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+      }, []);
 
       useEffect(() => {
         loadData();
@@ -1202,31 +1209,69 @@
             </div>
           </header>
 
-          <main className="main-content">
-            <div style={{marginBottom: '2rem'}}>
-              <h1 style={{fontFamily: "'DM Serif Display', serif", fontSize: '2.5rem', color: 'var(--primary)', marginBottom: '0.5rem'}}>
+          <main className="main-content" style={isMobile ? {padding: '1rem'} : {}}>
+            <div style={{marginBottom: '1.5rem'}}>
+              <h1 style={{fontFamily: "'DM Serif Display', serif", fontSize: isMobile ? '1.75rem' : '2.5rem', color: 'var(--primary)', marginBottom: '0.5rem'}}>
                 Your Invoices
               </h1>
-              <p style={{color: 'var(--text-muted)', fontSize: '1.1rem'}}>
+              <p style={{color: 'var(--text-muted)', fontSize: '1.1rem', marginBottom: '1.25rem'}}>
                 View and pay your farrier service invoices
               </p>
+
+              {/* Customer info strip */}
+              {(invoices.length > 0 || user) && (() => {
+                const custName = invoices[0]?.customerName || customerProfile?.name || '';
+                const custEmail = invoices[0]?.customerEmail || user?.email || '';
+                const custPhone = invoices[0]?.customerPhone || customerProfile?.phone || '';
+                return (
+                  <div style={{
+                    display: 'flex', flexWrap: 'wrap', gap: '1.5rem',
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    borderRadius: '10px', padding: '0.9rem 1.25rem',
+                    alignItems: 'center'
+                  }}>
+                    <div style={{display:'flex', alignItems:'center', gap:'0.5rem'}}>
+                      <span style={{fontSize:'1.2rem'}}>👤</span>
+                      <div>
+                        <div style={{fontSize:'0.75rem', color:'var(--text-muted)', fontWeight:'500', textTransform:'uppercase', letterSpacing:'0.05em'}}>Name</div>
+                        <div style={{fontWeight:'600', color:'var(--text)'}}>{custName || '—'}</div>
+                      </div>
+                    </div>
+                    <div style={{display:'flex', alignItems:'center', gap:'0.5rem'}}>
+                      <span style={{fontSize:'1.2rem'}}>✉️</span>
+                      <div>
+                        <div style={{fontSize:'0.75rem', color:'var(--text-muted)', fontWeight:'500', textTransform:'uppercase', letterSpacing:'0.05em'}}>Email</div>
+                        <div style={{fontWeight:'600', color:'var(--text)'}}>{custEmail || '—'}</div>
+                      </div>
+                    </div>
+                    {custPhone && (
+                      <div style={{display:'flex', alignItems:'center', gap:'0.5rem'}}>
+                        <span style={{fontSize:'1.2rem'}}>📞</span>
+                        <div>
+                          <div style={{fontSize:'0.75rem', color:'var(--text-muted)', fontWeight:'500', textTransform:'uppercase', letterSpacing:'0.05em'}}>Phone</div>
+                          <div style={{fontWeight:'600', color:'var(--text)'}}>{custPhone}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Date Filter Buttons */}
             <div style={{
               display: 'flex',
+              flexDirection: 'column',
               gap: '0.75rem',
-              marginBottom: '2rem',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-              alignItems: 'center'
+              marginBottom: '1.5rem',
             }}>
-              <div style={{display: 'flex', gap: '0.75rem', flexWrap: 'wrap'}}>
+              <div style={{display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(110px, auto))', gap: isMobile ? '0.5rem' : '0.75rem'}}>
                 <button
                   onClick={() => setDateFilter('all')}
                   style={{
-                    padding: '0.625rem 1.25rem',
+                    padding: isMobile ? '0.5rem 0.4rem' : '0.625rem 1.25rem',
                     borderRadius: '8px',
+                    fontSize: isMobile ? '0.78rem' : '0.9rem',
                     border: dateFilter === 'all' ? '2px solid var(--primary)' : '2px solid var(--border)',
                     background: dateFilter === 'all' ? 'var(--primary)' : 'white',
                     color: dateFilter === 'all' ? 'white' : 'var(--text)',
@@ -1242,8 +1287,9 @@
                 <button
                   onClick={() => setDateFilter('unpaid')}
                   style={{
-                    padding: '0.625rem 1.25rem',
+                    padding: isMobile ? '0.5rem 0.4rem' : '0.625rem 1.25rem',
                     borderRadius: '8px',
+                    fontSize: isMobile ? '0.78rem' : '0.9rem',
                     border: dateFilter === 'unpaid' ? '2px solid #ef4444' : '2px solid var(--border)',
                     background: dateFilter === 'unpaid' ? '#ef4444' : 'white',
                     color: dateFilter === 'unpaid' ? 'white' : 'var(--text)',
@@ -1259,8 +1305,9 @@
                 <button
                   onClick={() => setDateFilter('thisMonth')}
                   style={{
-                    padding: '0.625rem 1.25rem',
+                    padding: isMobile ? '0.5rem 0.4rem' : '0.625rem 1.25rem',
                     borderRadius: '8px',
+                    fontSize: isMobile ? '0.78rem' : '0.9rem',
                     border: dateFilter === 'thisMonth' ? '2px solid var(--primary)' : '2px solid var(--border)',
                     background: dateFilter === 'thisMonth' ? 'var(--primary)' : 'white',
                     color: dateFilter === 'thisMonth' ? 'white' : 'var(--text)',
@@ -1271,13 +1318,14 @@
                     fontFamily: 'inherit'
                   }}
                 >
-                  This Month
+                  {isMobile ? 'This Mo.' : 'This Month'}
                 </button>
                 <button
                   onClick={() => setDateFilter('lastMonth')}
                   style={{
-                    padding: '0.625rem 1.25rem',
+                    padding: isMobile ? '0.5rem 0.4rem' : '0.625rem 1.25rem',
                     borderRadius: '8px',
+                    fontSize: isMobile ? '0.78rem' : '0.9rem',
                     border: dateFilter === 'lastMonth' ? '2px solid var(--primary)' : '2px solid var(--border)',
                     background: dateFilter === 'lastMonth' ? 'var(--primary)' : 'white',
                     color: dateFilter === 'lastMonth' ? 'white' : 'var(--text)',
@@ -1288,13 +1336,14 @@
                     fontFamily: 'inherit'
                   }}
                 >
-                  Last Month
+                  {isMobile ? 'Last Mo.' : 'Last Month'}
                 </button>
                 <button
                   onClick={() => setDateFilter('ytd')}
                   style={{
-                    padding: '0.625rem 1.25rem',
+                    padding: isMobile ? '0.5rem 0.4rem' : '0.625rem 1.25rem',
                     borderRadius: '8px',
+                    fontSize: isMobile ? '0.78rem' : '0.9rem',
                     border: dateFilter === 'ytd' ? '2px solid var(--primary)' : '2px solid var(--border)',
                     background: dateFilter === 'ytd' ? 'var(--primary)' : 'white',
                     color: dateFilter === 'ytd' ? 'white' : 'var(--text)',
@@ -1305,13 +1354,14 @@
                     fontFamily: 'inherit'
                   }}
                 >
-                  Year to Date
+                  {isMobile ? 'YTD' : 'Year to Date'}
                 </button>
                 <button
                   onClick={() => { setDateFilter('custom'); setShowCustomPicker(true); }}
                   style={{
-                    padding: '0.625rem 1.25rem',
+                    padding: isMobile ? '0.5rem 0.4rem' : '0.625rem 1.25rem',
                     borderRadius: '8px',
+                    fontSize: isMobile ? '0.78rem' : '0.9rem',
                     border: dateFilter === 'custom' ? '2px solid var(--primary)' : '2px solid var(--border)',
                     background: dateFilter === 'custom' ? 'var(--primary)' : 'white',
                     color: dateFilter === 'custom' ? 'white' : 'var(--text)',
@@ -1322,7 +1372,7 @@
                     fontFamily: 'inherit'
                   }}
                 >
-                  📅 Custom Range
+                  {isMobile ? '📅 Custom' : '📅 Custom Range'}
                 </button>
               </div>
 
@@ -1374,7 +1424,7 @@
               )}
 
               {/* Export Button */}
-              {filteredInvoices.length > 0 && (
+              {filteredInvoices.length > 0 && !isMobile && (
                 <button
                   onClick={exportToExcel}
                   style={{
@@ -1398,9 +1448,19 @@
                   📊 Export to Excel
                 </button>
               )}
+              {filteredInvoices.length > 0 && isMobile && (
+                <button onClick={exportToExcel} style={{
+                  background: 'none', border: 'none', color: '#16a34a',
+                  fontSize: '0.82rem', fontWeight: '600', cursor: 'pointer',
+                  padding: '0.25rem 0', textAlign: 'left', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: '0.35rem'
+                }}>
+                  📊 Export to Excel
+                </button>
+              )}
             </div>
 
-            <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '2rem'}}>
+            <div style={{display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(250px, 1fr))', gap: isMobile ? '0.75rem' : '1.5rem', marginBottom: isMobile ? '1.25rem' : '2rem'}}>
               <div className="card" style={{textAlign: 'center'}}>
                 <div style={{fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: '500'}}>
                   Total Paid
