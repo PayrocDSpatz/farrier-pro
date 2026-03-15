@@ -2849,6 +2849,11 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
     }
   };
 
+  // Area code options for SMS provisioning step
+  const SMS_AC = {AL:[{c:'205',l:'Birmingham'},{c:'251',l:'Mobile'},{c:'256',l:'Huntsville'}],AK:[{c:'907',l:'Statewide'}],AZ:[{c:'602',l:'Phoenix'},{c:'480',l:'Scottsdale/Mesa'},{c:'520',l:'Tucson'},{c:'623',l:'West Phoenix'}],AR:[{c:'501',l:'Little Rock'},{c:'479',l:'Fort Smith/Fayetteville'},{c:'870',l:'Northeast AR'}],CA:[{c:'213',l:'Los Angeles'},{c:'310',l:'West LA/Beverly Hills'},{c:'415',l:'San Francisco'},{c:'510',l:'Oakland/East Bay'},{c:'619',l:'San Diego'},{c:'714',l:'Orange County'},{c:'818',l:'San Fernando Valley'},{c:'909',l:'Inland Empire'},{c:'925',l:'East Bay/Contra Costa'}],CO:[{c:'303',l:'Denver'},{c:'720',l:'Denver Metro'},{c:'719',l:'Colorado Springs'},{c:'970',l:'Northern/Western CO'}],CT:[{c:'203',l:'Bridgeport/New Haven'},{c:'860',l:'Hartford'}],DE:[{c:'302',l:'Statewide'}],FL:[{c:'407',l:'Orlando'},{c:'561',l:'Palm Beach'},{c:'813',l:'Tampa'},{c:'954',l:'Fort Lauderdale'},{c:'305',l:'Miami'},{c:'786',l:'Miami-Dade'},{c:'754',l:'Broward County'},{c:'727',l:'St. Petersburg'},{c:'941',l:'Sarasota'},{c:'904',l:'Jacksonville'},{c:'850',l:'Tallahassee/Panhandle'},{c:'863',l:'Lakeland'}],GA:[{c:'404',l:'Atlanta'},{c:'678',l:'Atlanta Metro'},{c:'470',l:'Atlanta Metro'},{c:'770',l:'Atlanta Suburbs'},{c:'706',l:'Northeast GA'},{c:'912',l:'Savannah'}],HI:[{c:'808',l:'Statewide'}],ID:[{c:'208',l:'Statewide'}],IL:[{c:'312',l:'Chicago'},{c:'773',l:'Chicago'},{c:'847',l:'North Suburbs'},{c:'630',l:'West Suburbs'},{c:'708',l:'South Suburbs'},{c:'815',l:'Rockford/North IL'},{c:'217',l:'Springfield'},{c:'618',l:'Southern IL'}],IN:[{c:'317',l:'Indianapolis'},{c:'219',l:'Northwest IN'},{c:'260',l:'Fort Wayne'},{c:'574',l:'South Bend'},{c:'765',l:'Central IN'},{c:'812',l:'Southern IN'}],IA:[{c:'515',l:'Des Moines'},{c:'319',l:'Cedar Rapids'},{c:'563',l:'Davenport'},{c:'712',l:'Western IA'}],KS:[{c:'913',l:'Kansas City Area'},{c:'316',l:'Wichita'},{c:'785',l:'Topeka'},{c:'620',l:'Southern KS'}],KY:[{c:'502',l:'Louisville'},{c:'859',l:'Lexington'},{c:'270',l:'Western KY'},{c:'606',l:'Eastern KY'}],LA:[{c:'504',l:'New Orleans'},{c:'225',l:'Baton Rouge'},{c:'337',l:'Lafayette'},{c:'318',l:'Shreveport'},{c:'985',l:'Northshore/Houma'}],ME:[{c:'207',l:'Statewide'}],MD:[{c:'410',l:'Baltimore'},{c:'443',l:'Baltimore Metro'},{c:'301',l:'Western MD/Suburbs'},{c:'240',l:'Suburbs'}],MA:[{c:'617',l:'Boston'},{c:'857',l:'Boston'},{c:'781',l:'Boston Suburbs'},{c:'508',l:'Worcester/Cape Cod'},{c:'978',l:'North Shore'},{c:'413',l:'Springfield'}],MI:[{c:'313',l:'Detroit'},{c:'248',l:'Oakland County'},{c:'586',l:'Macomb County'},{c:'734',l:'Ann Arbor/Wayne'},{c:'616',l:'Grand Rapids'},{c:'517',l:'Lansing'},{c:'269',l:'Southwest MI'},{c:'989',l:'Central MI'}],MN:[{c:'612',l:'Minneapolis'},{c:'651',l:'St. Paul'},{c:'763',l:'Northwest Metro'},{c:'952',l:'Southwest Metro'},{c:'507',l:'Southern MN'},{c:'218',l:'Northern MN'}],MS:[{c:'601',l:'Jackson'},{c:'228',l:'Gulf Coast'},{c:'662',l:'Northern MS'}],MO:[{c:'314',l:'St. Louis'},{c:'816',l:'Kansas City'},{c:'636',l:'St. Louis Suburbs'},{c:'417',l:'Springfield'},{c:'573',l:'Columbia'}],MT:[{c:'406',l:'Statewide'}],NE:[{c:'402',l:'Omaha/Lincoln'},{c:'531',l:'Omaha'},{c:'308',l:'Western NE'}],NV:[{c:'702',l:'Las Vegas'},{c:'725',l:'Las Vegas Metro'},{c:'775',l:'Reno/Northern NV'}],NH:[{c:'603',l:'Statewide'}],NJ:[{c:'201',l:'Northeast NJ'},{c:'973',l:'Newark/North NJ'},{c:'732',l:'Central NJ'},{c:'609',l:'South NJ/Trenton'},{c:'856',l:'South Jersey'},{c:'908',l:'Central NJ'}],NM:[{c:'505',l:'Albuquerque/Santa Fe'},{c:'575',l:'Southern NM'}],NY:[{c:'212',l:'Manhattan'},{c:'718',l:'Brooklyn/Queens/Bronx'},{c:'914',l:'Westchester'},{c:'516',l:'Long Island'},{c:'631',l:'Long Island'},{c:'716',l:'Buffalo'},{c:'585',l:'Rochester'},{c:'518',l:'Albany'},{c:'315',l:'Syracuse'}],NC:[{c:'704',l:'Charlotte'},{c:'980',l:'Charlotte'},{c:'919',l:'Raleigh'},{c:'984',l:'Raleigh/Durham'},{c:'336',l:'Greensboro'},{c:'910',l:'Wilmington/Fayetteville'},{c:'828',l:'Asheville'}],ND:[{c:'701',l:'Statewide'}],OH:[{c:'614',l:'Columbus'},{c:'216',l:'Cleveland'},{c:'440',l:'Cleveland Suburbs'},{c:'513',l:'Cincinnati'},{c:'937',l:'Dayton'},{c:'419',l:'Toledo'},{c:'330',l:'Akron/Canton'}],OK:[{c:'405',l:'Oklahoma City'},{c:'918',l:'Tulsa'},{c:'580',l:'Southern OK'}],OR:[{c:'503',l:'Portland'},{c:'971',l:'Portland Metro'},{c:'541',l:'Eugene/Southern OR'}],PA:[{c:'215',l:'Philadelphia'},{c:'267',l:'Philadelphia'},{c:'412',l:'Pittsburgh'},{c:'717',l:'Harrisburg/Lancaster'},{c:'610',l:'Suburban Philadelphia'},{c:'570',l:'Northeast PA'},{c:'814',l:'Erie/Central PA'}],RI:[{c:'401',l:'Statewide'}],SC:[{c:'803',l:'Columbia'},{c:'864',l:'Greenville/Upstate'},{c:'843',l:'Charleston/Myrtle Beach'}],SD:[{c:'605',l:'Statewide'}],TN:[{c:'615',l:'Nashville'},{c:'901',l:'Memphis'},{c:'865',l:'Knoxville'},{c:'423',l:'Chattanooga'},{c:'731',l:'Western TN'}],TX:[{c:'214',l:'Dallas'},{c:'469',l:'Dallas Metro'},{c:'817',l:'Fort Worth'},{c:'713',l:'Houston'},{c:'281',l:'Houston Suburbs'},{c:'832',l:'Houston Metro'},{c:'512',l:'Austin'},{c:'737',l:'Austin Metro'},{c:'210',l:'San Antonio'},{c:'915',l:'El Paso'},{c:'806',l:'Lubbock/Amarillo'},{c:'903',l:'Northeast TX'},{c:'936',l:'East TX'},{c:'409',l:'Beaumont/SE TX'},{c:'361',l:'Corpus Christi'},{c:'956',l:'Laredo/McAllen'}],UT:[{c:'801',l:'Salt Lake City'},{c:'385',l:'Salt Lake Metro'},{c:'435',l:'Southern/Rural UT'}],VT:[{c:'802',l:'Statewide'}],VA:[{c:'703',l:'Northern VA/DC Suburbs'},{c:'571',l:'Northern VA'},{c:'804',l:'Richmond'},{c:'757',l:'Hampton Roads/Virginia Beach'},{c:'540',l:'Shenandoah Valley'},{c:'434',l:'Charlottesville'}],WA:[{c:'206',l:'Seattle'},{c:'425',l:'Bellevue/Eastside'},{c:'253',l:'Tacoma'},{c:'360',l:'Western WA'},{c:'509',l:'Eastern WA/Spokane'}],WV:[{c:'304',l:'Statewide'},{c:'681',l:'Statewide'}],WI:[{c:'414',l:'Milwaukee'},{c:'262',l:'Southeast WI'},{c:'608',l:'Madison'},{c:'920',l:'Green Bay'},{c:'715',l:'Northern WI'}],WY:[{c:'307',l:'Statewide'}]};
+  const smsAcOptions = SMS_AC[smsProvisionedState] || [{c:'561',l:'Default'}];
+  const smsCurrentCode = selectedAreaCode || smsAcOptions[0].c;
+
   return (
     <div className="app-container">
       <header style={{
@@ -2918,123 +2923,57 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
                     <div style={{fontSize:'1.5rem', fontWeight:'700', color:'#166534', letterSpacing:'0.05em'}}>{twilioNumber}</div>
                     <div style={{fontSize:'0.8rem', color:'#6b7280', marginTop:'0.35rem'}}>Clients will see this number when they receive texts from you.</div>
                   </div>
-                ) : (() => {
-                  // Area code options keyed by state — mirrors server-side map
-                  const AC = {
-                    AL:[{c:'205',l:'Birmingham'},{c:'251',l:'Mobile'},{c:'256',l:'Huntsville'}],
-                    AK:[{c:'907',l:'Statewide'}],
-                    AZ:[{c:'602',l:'Phoenix'},{c:'480',l:'Scottsdale/Mesa'},{c:'520',l:'Tucson'},{c:'623',l:'West Phoenix'}],
-                    AR:[{c:'501',l:'Little Rock'},{c:'479',l:'Fort Smith/Fayetteville'},{c:'870',l:'Northeast AR'}],
-                    CA:[{c:'213',l:'Los Angeles'},{c:'310',l:'West LA/Beverly Hills'},{c:'415',l:'San Francisco'},{c:'510',l:'Oakland/East Bay'},{c:'619',l:'San Diego'},{c:'714',l:'Orange County'},{c:'818',l:'San Fernando Valley'},{c:'909',l:'Inland Empire'},{c:'925',l:'East Bay/Contra Costa'}],
-                    CO:[{c:'303',l:'Denver'},{c:'720',l:'Denver Metro'},{c:'719',l:'Colorado Springs'},{c:'970',l:'Northern/Western CO'}],
-                    CT:[{c:'203',l:'Bridgeport/New Haven'},{c:'860',l:'Hartford'}],
-                    DE:[{c:'302',l:'Statewide'}],
-                    FL:[{c:'407',l:'Orlando'},{c:'561',l:'Palm Beach'},{c:'813',l:'Tampa'},{c:'954',l:'Fort Lauderdale'},{c:'305',l:'Miami'},{c:'786',l:'Miami-Dade'},{c:'754',l:'Broward County'},{c:'727',l:'St. Petersburg'},{c:'941',l:'Sarasota'},{c:'904',l:'Jacksonville'},{c:'850',l:'Tallahassee/Panhandle'},{c:'863',l:'Lakeland'}],
-                    GA:[{c:'404',l:'Atlanta'},{c:'678',l:'Atlanta Metro'},{c:'470',l:'Atlanta Metro'},{c:'770',l:'Atlanta Suburbs'},{c:'706',l:'Northeast GA'},{c:'912',l:'Savannah'}],
-                    HI:[{c:'808',l:'Statewide'}],
-                    ID:[{c:'208',l:'Statewide'}],
-                    IL:[{c:'312',l:'Chicago'},{c:'773',l:'Chicago'},{c:'847',l:'North Suburbs'},{c:'630',l:'West Suburbs'},{c:'708',l:'South Suburbs'},{c:'815',l:'Rockford/North IL'},{c:'217',l:'Springfield'},{c:'618',l:'Southern IL'}],
-                    IN:[{c:'317',l:'Indianapolis'},{c:'219',l:'Northwest IN'},{c:'260',l:'Fort Wayne'},{c:'574',l:'South Bend'},{c:'765',l:'Central IN'},{c:'812',l:'Southern IN'}],
-                    IA:[{c:'515',l:'Des Moines'},{c:'319',l:'Cedar Rapids'},{c:'563',l:'Davenport'},{c:'712',l:'Western IA'}],
-                    KS:[{c:'913',l:'Kansas City Area'},{c:'316',l:'Wichita'},{c:'785',l:'Topeka'},{c:'620',l:'Southern KS'}],
-                    KY:[{c:'502',l:'Louisville'},{c:'859',l:'Lexington'},{c:'270',l:'Western KY'},{c:'606',l:'Eastern KY'}],
-                    LA:[{c:'504',l:'New Orleans'},{c:'225',l:'Baton Rouge'},{c:'337',l:'Lafayette'},{c:'318',l:'Shreveport'},{c:'985',l:'Northshore/Houma'}],
-                    ME:[{c:'207',l:'Statewide'}],
-                    MD:[{c:'410',l:'Baltimore'},{c:'443',l:'Baltimore Metro'},{c:'301',l:'Western MD/Suburbs'},{c:'240',l:'Suburbs'}],
-                    MA:[{c:'617',l:'Boston'},{c:'857',l:'Boston'},{c:'781',l:'Boston Suburbs'},{c:'508',l:'Worcester/Cape Cod'},{c:'978',l:'North Shore'},{c:'413',l:'Springfield'}],
-                    MI:[{c:'313',l:'Detroit'},{c:'248',l:'Oakland County'},{c:'586',l:'Macomb County'},{c:'734',l:'Ann Arbor/Wayne'},{c:'616',l:'Grand Rapids'},{c:'517',l:'Lansing'},{c:'269',l:'Southwest MI'},{c:'989',l:'Central MI'}],
-                    MN:[{c:'612',l:'Minneapolis'},{c:'651',l:'St. Paul'},{c:'763',l:'Northwest Metro'},{c:'952',l:'Southwest Metro'},{c:'507',l:'Southern MN'},{c:'218',l:'Northern MN'}],
-                    MS:[{c:'601',l:'Jackson'},{c:'228',l:'Gulf Coast'},{c:'662',l:'Northern MS'}],
-                    MO:[{c:'314',l:'St. Louis'},{c:'816',l:'Kansas City'},{c:'636',l:'St. Louis Suburbs'},{c:'417',l:'Springfield'},{c:'573',l:'Columbia'}],
-                    MT:[{c:'406',l:'Statewide'}],
-                    NE:[{c:'402',l:'Omaha/Lincoln'},{c:'531',l:'Omaha'},{c:'308',l:'Western NE'}],
-                    NV:[{c:'702',l:'Las Vegas'},{c:'725',l:'Las Vegas Metro'},{c:'775',l:'Reno/Northern NV'}],
-                    NH:[{c:'603',l:'Statewide'}],
-                    NJ:[{c:'201',l:'Northeast NJ'},{c:'973',l:'Newark/North NJ'},{c:'732',l:'Central NJ'},{c:'609',l:'South NJ/Trenton'},{c:'856',l:'South Jersey'},{c:'908',l:'Central NJ'}],
-                    NM:[{c:'505',l:'Albuquerque/Santa Fe'},{c:'575',l:'Southern NM'}],
-                    NY:[{c:'212',l:'Manhattan'},{c:'718',l:'Brooklyn/Queens/Bronx'},{c:'914',l:'Westchester'},{c:'516',l:'Long Island'},{c:'631',l:'Long Island'},{c:'716',l:'Buffalo'},{c:'585',l:'Rochester'},{c:'518',l:'Albany'},{c:'315',l:'Syracuse'}],
-                    NC:[{c:'704',l:'Charlotte'},{c:'980',l:'Charlotte'},{c:'919',l:'Raleigh'},{c:'984',l:'Raleigh/Durham'},{c:'336',l:'Greensboro'},{c:'910',l:'Wilmington/Fayetteville'},{c:'828',l:'Asheville'}],
-                    ND:[{c:'701',l:'Statewide'}],
-                    OH:[{c:'614',l:'Columbus'},{c:'216',l:'Cleveland'},{c:'440',l:'Cleveland Suburbs'},{c:'513',l:'Cincinnati'},{c:'937',l:'Dayton'},{c:'419',l:'Toledo'},{c:'330',l:'Akron/Canton'}],
-                    OK:[{c:'405',l:'Oklahoma City'},{c:'918',l:'Tulsa'},{c:'580',l:'Southern OK'}],
-                    OR:[{c:'503',l:'Portland'},{c:'971',l:'Portland Metro'},{c:'541',l:'Eugene/Southern OR'}],
-                    PA:[{c:'215',l:'Philadelphia'},{c:'267',l:'Philadelphia'},{c:'412',l:'Pittsburgh'},{c:'717',l:'Harrisburg/Lancaster'},{c:'610',l:'Suburban Philadelphia'},{c:'570',l:'Northeast PA'},{c:'814',l:'Erie/Central PA'}],
-                    RI:[{c:'401',l:'Statewide'}],
-                    SC:[{c:'803',l:'Columbia'},{c:'864',l:'Greenville/Upstate'},{c:'843',l:'Charleston/Myrtle Beach'}],
-                    SD:[{c:'605',l:'Statewide'}],
-                    TN:[{c:'615',l:'Nashville'},{c:'901',l:'Memphis'},{c:'865',l:'Knoxville'},{c:'423',l:'Chattanooga'},{c:'731',l:'Western TN'}],
-                    TX:[{c:'214',l:'Dallas'},{c:'469',l:'Dallas Metro'},{c:'817',l:'Fort Worth'},{c:'713',l:'Houston'},{c:'281',l:'Houston Suburbs'},{c:'832',l:'Houston Metro'},{c:'512',l:'Austin'},{c:'737',l:'Austin Metro'},{c:'210',l:'San Antonio'},{c:'915',l:'El Paso'},{c:'806',l:'Lubbock/Amarillo'},{c:'903',l:'Northeast TX'},{c:'936',l:'East TX'},{c:'409',l:'Beaumont/SE TX'},{c:'361',l:'Corpus Christi'},{c:'956',l:'Laredo/McAllen'}],
-                    UT:[{c:'801',l:'Salt Lake City'},{c:'385',l:'Salt Lake Metro'},{c:'435',l:'Southern/Rural UT'}],
-                    VT:[{c:'802',l:'Statewide'}],
-                    VA:[{c:'703',l:'Northern VA/DC Suburbs'},{c:'571',l:'Northern VA'},{c:'804',l:'Richmond'},{c:'757',l:'Hampton Roads/Virginia Beach'},{c:'540',l:'Shenandoah Valley'},{c:'434',l:'Charlottesville'}],
-                    WA:[{c:'206',l:'Seattle'},{c:'425',l:'Bellevue/Eastside'},{c:'253',l:'Tacoma'},{c:'360',l:'Western WA'},{c:'509',l:'Eastern WA/Spokane'}],
-                    WV:[{c:'304',l:'Statewide'},{c:'681',l:'Statewide'}],
-                    WI:[{c:'414',l:'Milwaukee'},{c:'262',l:'Southeast WI'},{c:'608',l:'Madison'},{c:'920',l:'Green Bay'},{c:'715',l:'Northern WI'}],
-                    WY:[{c:'307',l:'Statewide'}],
-                  };
-                  const options = AC[smsProvisionedState] || [{c:'561',l:'Default'}];
-                  const currentCode = selectedAreaCode || options[0].c;
-                  return (
-                    <div>
-                      <label style={{display:'block', fontSize:'0.85rem', fontWeight:'600', color:'#374151', marginBottom:'0.4rem'}}>
-                        Choose your area code{smsProvisionedState ? ` (${smsProvisionedState})` : ''}:
-                      </label>
-                      <select
-                        value={currentCode}
-                        onChange={(e) => setSelectedAreaCode(e.target.value)}
-                        disabled={smsLoading}
-                        style={{
-                          width:'100%', padding:'0.6rem 0.75rem', borderRadius:'8px',
-                          border:'1.5px solid #d1d5db', fontSize:'0.95rem',
-                          background:'white', color:'#0D1320', marginBottom:'0.85rem',
-                          cursor:'pointer', appearance:'auto'
-                        }}
-                      >
-                        {options.map(o => (
-                          <option key={o.c} value={o.c}>{o.c} — {o.l}</option>
-                        ))}
-                      </select>
-                      <button
-                        className="btn btn-primary"
-                        style={{width:'100%', fontSize:'1rem', padding:'0.75rem'}}
-                        disabled={smsLoading}
-                        onClick={async () => {
-                          setSmsLoading(true);
-                          setSmsError("");
-                          try {
-                            const res = await fetch('/api/provision-twilio-number', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                farrierId: smsProvisionedUid,
-                                areaCode: currentCode,
-                                state: smsProvisionedState,
-                              }),
-                            });
-                            const data = await res.json();
-                            if (data.success && data.phoneNumber) {
-                              try {
-                                await db.collection('farriers').doc(smsProvisionedUid).set(
-                                  { twilioPhoneNumber: data.phoneNumber },
-                                  { merge: true }
-                                );
-                              } catch(e) { console.warn('Could not save twilioPhoneNumber to Firestore', e); }
-                              setTwilioNumber(data.phoneNumber);
-                            } else {
-                              setSmsError(data.error || 'Could not provision a number right now. You can get one from Settings after login.');
-                            }
-                          } catch(e) {
-                            setSmsError('Something went wrong. You can set up your SMS number from Settings after logging in.');
-                          } finally {
-                            setSmsLoading(false);
+                ) : (
+                  <div>
+                    <label style={{display:'block', fontSize:'0.85rem', fontWeight:'600', color:'#374151', marginBottom:'0.4rem'}}>
+                      Choose your area code{smsProvisionedState ? ` (${smsProvisionedState})` : ''}:
+                    </label>
+                    <select
+                      value={smsCurrentCode}
+                      onChange={(e) => setSelectedAreaCode(e.target.value)}
+                      disabled={smsLoading}
+                      style={{width:'100%', padding:'0.6rem 0.75rem', borderRadius:'8px', border:'1.5px solid #d1d5db', fontSize:'0.95rem', background:'white', color:'#0D1320', marginBottom:'0.85rem', cursor:'pointer', appearance:'auto'}}
+                    >
+                      {smsAcOptions.map(o => (
+                        <option key={o.c} value={o.c}>{o.c} — {o.l}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="btn btn-primary"
+                      style={{width:'100%', fontSize:'1rem', padding:'0.75rem'}}
+                      disabled={smsLoading}
+                      onClick={async () => {
+                        setSmsLoading(true);
+                        setSmsError("");
+                        try {
+                          const res = await fetch('/api/provision-twilio-number', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ farrierId: smsProvisionedUid, areaCode: smsCurrentCode, state: smsProvisionedState }),
+                          });
+                          const data = await res.json();
+                          if (data.success && data.phoneNumber) {
+                            try {
+                              await db.collection('farriers').doc(smsProvisionedUid).set(
+                                { twilioPhoneNumber: data.phoneNumber },
+                                { merge: true }
+                              );
+                            } catch(e) { console.warn('Could not save twilioPhoneNumber to Firestore', e); }
+                            setTwilioNumber(data.phoneNumber);
+                          } else {
+                            setSmsError(data.error || 'Could not provision a number right now. You can get one from Settings after login.');
                           }
-                        }}
-                      >
-                        {smsLoading ? '⏳ Finding your number…' : `📞 Get My (${currentCode}) Number`}
-                      </button>
-                    </div>
-                  );
-                })()}
+                        } catch(e) {
+                          setSmsError('Something went wrong. You can set up your SMS number from Settings after logging in.');
+                        } finally {
+                          setSmsLoading(false);
+                        }
+                      }}
+                    >
+                      {smsLoading ? '⏳ Finding your number…' : `📞 Get My (${smsCurrentCode}) Number`}
+                    </button>
+                  </div>
+                )}
 
                 {smsError && (
                   <div style={{marginTop:'0.75rem', fontSize:'0.85rem', color:'#b91c1c', background:'#fef2f2', border:'1px solid #fecaca', borderRadius:'6px', padding:'0.6rem 0.75rem'}}>
