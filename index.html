@@ -4542,7 +4542,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                     </div>
                     {addr && (
                       <div style={{ fontSize: '0.85rem', color: 'var(--primary-light)', marginTop: 2, fontWeight: 600 }}>
-                        {mapsUrl ? <a href={mapsUrl} target="_blank" rel="noopener noreferrer">📍 {addr}</a> : `📍 ${addr}`}
+                        {mapsUrl ? <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{color:'var(--primary-light)', textDecoration:'underline'}}>📍 {addr}</a> : `📍 ${addr}`}
                       </div>
                     )}
                     {a.services?.length > 0 && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2 }}>🐴 {a.services.join(', ')}</div>}
