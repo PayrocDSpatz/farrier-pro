@@ -8472,8 +8472,22 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [customEndDate, setCustomEndDate] = useState('');
 
       useEffect(() => {
-        loadInvoices();
-      }, []);
+        if (!db) return;
+        // Realtime listener — updates instantly when customer pays online
+        const unsub = db.collection('invoices')
+          .where('farrierId', '==', userId)
+          .onSnapshot(snapshot => {
+            const invoiceData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            invoiceData.sort((a, b) => {
+              if (!a.createdAt || !b.createdAt) return 0;
+              return b.createdAt.toDate() - a.createdAt.toDate();
+            });
+            setInvoices(invoiceData);
+          }, err => {
+            console.error('Invoice listener error:', err);
+          });
+        return () => unsub();
+      }, [userId]);
 
       const loadInvoices = async () => {
         console.log('🔵 Loading invoices for userId:', userId);
