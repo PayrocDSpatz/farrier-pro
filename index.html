@@ -4356,7 +4356,29 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         try {
           // Load all customers with geo coords
           const custSnap = await db.collection('customers').where('farrierId', '==', userId).get();
-          const customers = custSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.geo?.lat);
+          // Include customers with geo coords; also try to geocode those without
+          const allCustomers = custSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const customers = [];
+          for (const c of allCustomers) {
+            if (c.geo?.lat) {
+              customers.push(c);
+            } else if (c.address && window.google?.maps?.Geocoder) {
+              // Geocode on the fly for customers added without Places API
+              try {
+                const geocoder = new window.google.maps.Geocoder();
+                const addr = [c.address, c.city, c.state, c.zip].filter(Boolean).join(', ');
+                await new Promise(resolve => {
+                  geocoder.geocode({ address: addr }, (results, status) => {
+                    if (status === 'OK' && results[0]) {
+                      c.geo = { lat: results[0].geometry.location.lat(), lng: results[0].geometry.location.lng() };
+                      customers.push(c);
+                    }
+                    resolve();
+                  });
+                });
+              } catch(e) {}
+            }
+          }
 
           // Load upcoming appointments (next 60 days)
           const today = new Date().toISOString().split('T')[0];
@@ -4369,21 +4391,29 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             .get();
           const futureAppts = apptSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-          // Map customerId/email → next appointment
-          const nextApptMap = {};
+          // Map all possible keys → next appointment (appointments use email, customerEmail, or customerName)
+          const nextApptByEmail = {};
+          const nextApptByName = {};
           futureAppts.forEach(a => {
-            const key = a.customerId || a.customerEmail || '';
-            if (!key) return;
-            if (!nextApptMap[key] || a.requestedDate < nextApptMap[key].requestedDate) {
-              nextApptMap[key] = a;
-            }
+            // Only match appointments belonging to this farrier
+            if (a.farrierId !== userId) return;
+            const email = (a.customerEmail || a.email || '').toLowerCase().trim();
+            const name  = (a.customerName || '').toLowerCase().trim();
+            const update = (map, key, appt) => {
+              if (!key) return;
+              if (!map[key] || appt.requestedDate < map[key].requestedDate) map[key] = appt;
+            };
+            update(nextApptByEmail, email, a);
+            update(nextApptByName, name, a);
           });
 
           // Calculate distance and filter
           const results = customers
             .map(c => {
               const distMi = haversineMi(baseLat, baseLng, c.geo.lat, c.geo.lng);
-              const nextAppt = nextApptMap[c.id] || nextApptMap[c.email] || null;
+              const cEmail = (c.email || '').toLowerCase().trim();
+              const cName  = (c.name  || '').toLowerCase().trim();
+              const nextAppt = nextApptByEmail[cEmail] || nextApptByName[cName] || null;
               return { ...c, distMi, nextAppt };
             })
             .filter(c => c.distMi <= radiusMi)
@@ -7517,6 +7547,51 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           if (newStatus === 'confirmed') {
             console.log('🟢 Status is confirmed');
             if (appointment) {
+              // ── Ensure customer record exists ──────────────────────────────
+              if (db && appointment.customerName) {
+                try {
+                  const custEmail = (appointment.email || appointment.customerEmail || '').toLowerCase().trim();
+                  const custName  = (appointment.customerName || '').trim();
+                  // Check by email first, then by name
+                  let custExists = false;
+                  if (custEmail) {
+                    const byEmail = await db.collection('customers')
+                      .where('farrierId', '==', farrierId)
+                      .where('email', '==', custEmail)
+                      .limit(1).get();
+                    custExists = !byEmail.empty;
+                  }
+                  if (!custExists && custName) {
+                    const byName = await db.collection('customers')
+                      .where('farrierId', '==', farrierId)
+                      .where('name', '==', custName)
+                      .limit(1).get();
+                    custExists = !byName.empty;
+                  }
+                  if (!custExists) {
+                    await db.collection('customers').add({
+                      farrierId,
+                      name: custName,
+                      farmName: appointment.farmName || '',
+                      email: custEmail,
+                      phone: appointment.phone || '',
+                      address: appointment.address || '',
+                      city: appointment.city || '',
+                      state: appointment.state || '',
+                      zip: appointment.zip || '',
+                      services: appointment.services || [],
+                      geo: appointment.geo || null,
+                      source: 'auto_from_confirm',
+                      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                    console.log('✅ Customer record created from confirmation:', custName);
+                  }
+                } catch(e) {
+                  console.warn('Could not auto-create customer record:', e);
+                }
+              }
+              // ──────────────────────────────────────────────────────────────
+
               // Calendar sync — silent, non-blocking
               if (userProfile?.googleCalendarConnected) {
                 createCalendarEvent(appointment, userProfile).then(success => {
