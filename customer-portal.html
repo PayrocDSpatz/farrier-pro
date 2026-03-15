@@ -944,9 +944,20 @@
     async function openInvoicePdf(invoice, farrierProfile) {
       try {
         const url = await generateInvoicePdfBlobUrl(invoice, farrierProfile);
-        const w = window.open(url, "_blank", "noopener,noreferrer");
-        if (!w) { alert("Popup blocked. Please allow popups to view/print the invoice PDF."); return; }
-        setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 700);
+        const isMob = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (isMob) {
+          // On mobile: trigger a download instead of window.open+print
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'Invoice-' + (invoice.invoiceNumber || invoice.id) + '.pdf';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else {
+          const w = window.open(url, "_blank", "noopener,noreferrer");
+          if (!w) { alert("Popup blocked. Please allow popups to view/print the invoice PDF."); return; }
+          setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 700);
+        }
       } catch (e) {
         console.error("PDF generation failed:", e);
         alert("Could not generate PDF. Check console for details.");
@@ -1175,28 +1186,30 @@
             justifyContent: 'space-between',
             padding: '0 1.5rem'
           }}>
-            <div style={{minWidth: '160px'}}></div>
+            <div style={{minWidth: isMobile ? '48px' : '160px'}}></div>
             <div style={{flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
               <img
                 src="/public/farritech_logo_letters_white.png"
                 alt="FarriTech"
-                style={{height: '60px', width: 'auto', objectFit: 'contain'}}
+                style={{height: isMobile ? '40px' : '60px', width: 'auto', objectFit: 'contain'}}
               />
             </div>
-            <div style={{minWidth: '160px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem'}}>
-              <span style={{color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem'}}>
-                {farrierBusinessName || customerProfile?.name || user.email}
-              </span>
+            <div style={{minWidth: isMobile ? '48px' : '160px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.5rem'}}>
+              {!isMobile && (
+                <span style={{color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem'}}>
+                  {farrierBusinessName || customerProfile?.name || user.email}
+                </span>
+              )}
               <button
                 onClick={handleLogout}
                 style={{
-                  padding: '0.5rem 1rem',
+                  padding: isMobile ? '0.4rem 0.6rem' : '0.5rem 1rem',
                   background: 'rgba(255,255,255,0.18)',
                   backdropFilter: 'blur(4px)',
                   border: '1px solid rgba(255,255,255,0.4)',
                   color: 'white',
                   borderRadius: '8px',
-                  fontSize: '0.9rem',
+                  fontSize: isMobile ? '0.75rem' : '0.9rem',
                   fontWeight: '500',
                   cursor: 'pointer',
                   transition: 'all 0.2s'
@@ -1204,7 +1217,7 @@
                 onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.28)'}
                 onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
               >
-                Sign Out
+                {isMobile ? '⎋' : 'Sign Out'}
               </button>
             </div>
           </header>
@@ -1615,7 +1628,7 @@
                         openInvoicePdf(invoice, { businessName: farrierBusinessName });
                       }}
                     >
-                      🖨️ Print / Save PDF
+                      {/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? '💾 Save PDF' : '🖨️ Print / Save PDF'}
                     </button>
                   </div>
                 ))}
