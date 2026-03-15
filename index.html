@@ -6342,7 +6342,7 @@ function ServicesView({ userId }) {
                 <div className="card">
                   <h2>What's Next?</h2>
                   <p style={{marginBottom: '1rem'}}>
-                    Your appointment request has been sent. You'll receive an SMS confirmation once it's approved.
+                    Your appointment request has been sent. {formData.smsConsent ? "You'll receive an SMS confirmation once it's approved." : "Your farrier will review your request and reach out to confirm."}
                   </p>
                   <div style={{marginBottom: '1rem', color: '#475569', textAlign: 'left'}}>
                     <div><strong>Name:</strong> {formData.name}</div>
