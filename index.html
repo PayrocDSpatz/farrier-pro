@@ -4385,6 +4385,8 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           txt += '\n';
           const addr = fullAddr(a);
           if (addr) txt += `   📍 ${addr}\n`;
+          const leg = routeLegs[i];
+          if (leg) txt += `   ↳ ${leg.distanceMi} mi · ~${leg.durationMin} min ${i === 0 ? 'from start' : 'from prev stop'}\n`;
           if (a.services?.length) txt += `   🐴 ${a.services.join(', ')}\n`;
           if (a.phone) txt += `   📞 ${fmtPhone(a.phone)}\n`;
           if (a.numberOfHorses) txt += `   Horses: ${a.numberOfHorses}\n`;
@@ -4400,11 +4402,13 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         const rows = displayList.map((a, i) => {
           const addr = fullAddr(a);
           const mapsUrl = addr ? `https://maps.google.com/?q=${encodeURIComponent(addr)}` : null;
+          const leg = routeLegs[i];
+          const legHtml = leg ? `<div style="font-size:0.8em;color:#6b7280;margin-top:2px">↳ ${leg.distanceMi} mi · ~${leg.durationMin} min ${i === 0 ? 'from start' : 'from prev stop'}</div>` : '';
           return `<tr style="border-bottom:1px solid #e5e7eb">
             <td style="padding:10px 8px;font-weight:700;color:#2563eb;vertical-align:top">${i + 1}</td>
             <td style="padding:10px 8px;vertical-align:top">
               <div style="font-weight:700">${a.customerName}${a.farmName ? ` <span style="font-weight:400;color:#666">— ${a.farmName}</span>` : ''}</div>
-              ${addr ? `<div style="font-size:0.85em;color:#555;margin-top:2px">📍 ${mapsUrl ? `<a href="${mapsUrl}" style="color:#2563eb">${addr}</a>` : addr}</div>` : ''}
+              ${addr ? `<div style="font-size:0.85em;color:#555;margin-top:2px">📍 ${mapsUrl ? `<a href="${mapsUrl}" style="color:#2563eb">${addr}</a>` : addr}</div>${legHtml}` : ''}
               ${a.services?.length ? `<div style="font-size:0.85em;color:#333;margin-top:2px">🐴 ${a.services.join(', ')}</div>` : ''}
               ${a.numberOfHorses ? `<div style="font-size:0.82em;color:#888">Horses: ${a.numberOfHorses}</div>` : ''}
               ${a.comments ? `<div style="font-size:0.82em;color:#888;font-style:italic">Notes: ${a.comments}</div>` : ''}
