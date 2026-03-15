@@ -72,6 +72,34 @@
       min-height: 100vh;
     }
 
+    /* Booking page — lighter background for customers */
+    .booking-page {
+      background: #1a2540;
+      min-height: 100vh;
+    }
+    .booking-page .main-content {
+      background: #1a2540;
+    }
+    .booking-page .hero {
+      background: transparent;
+    }
+    .booking-page .card {
+      background: #212d47;
+      border-color: rgba(38,131,251,0.2);
+    }
+    .booking-page .form-group input,
+    .booking-page .form-group textarea,
+    .booking-page .form-group select {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(38,131,251,0.35);
+    }
+    .booking-page .time-slot {
+      background: rgba(255,255,255,0.07);
+    }
+    .booking-page .time-slot.selected {
+      background: rgba(38,131,251,0.35);
+    }
+
     /* Header */
     .app-header {
       background: var(--primary);
@@ -6217,7 +6245,7 @@ function ServicesView({ userId }) {
         : { textAlign: 'left', maxWidth: '600px', margin: '0 auto' };
 
       return (
-        <div className="app-container">
+        <div className="app-container booking-page">
           <header style={{
             backgroundColor: '#2683FB',
             position: 'sticky',
