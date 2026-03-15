@@ -216,6 +216,7 @@
         <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
       </div>
       <div id="login-error" style="color:#dc2626; font-size:0.85rem; margin-bottom:12px; display:none;"></div>
+      <div id="login-debug" style="color:#666; font-size:0.75rem; margin-bottom:8px; word-break:break-all;"></div>
       <button class="btn-primary" id="login-btn" onclick="doLogin()">Sign In</button>
       <div style="display:flex;align-items:center;gap:10px;margin:16px 0;">
         <div style="flex:1;height:1px;background:#DDE3EC;"></div>
@@ -653,6 +654,7 @@ function showToast(msg, type = '') {
 
 // ── AUTH ──
 auth.onAuthStateChanged(async (user) => {
+  dbg('onAuthStateChanged: ' + (user ? user.email : 'null'));
   if (user) {
     state.user = user;
     await loadUserProfile();
@@ -679,6 +681,12 @@ async function doGoogleLogin() {
   }
 }
 
+function dbg(msg) {
+  console.log(msg);
+  const el = document.getElementById('login-debug');
+  if (el) el.textContent = msg;
+}
+
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
@@ -692,12 +700,14 @@ async function doLogin() {
   err.style.display = 'none';
   btn.textContent = 'Signing in…';
   btn.disabled = true;
+  dbg('Calling signInWithEmailAndPassword…');
   try {
-    await auth.signInWithEmailAndPassword(email, password);
-    // onAuthStateChanged will handle the redirect
+    const result = await auth.signInWithEmailAndPassword(email, password);
+    dbg('Sign in success: ' + (result?.user?.email || 'unknown'));
   } catch (e) {
     console.error('Login error:', e);
-    err.textContent = e.message.replace('Firebase: ', '').replace(/\s*\(auth\/.*?\)\.?/, '');
+    dbg('Error: ' + e.code + ' — ' + e.message);
+    err.textContent = e.message.replace('Firebase: ', '');
     err.style.display = 'block';
     btn.textContent = 'Sign In';
     btn.disabled = false;
