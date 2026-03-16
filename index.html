@@ -3856,10 +3856,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               </div>
             ) : (
               <select value={formSource} onChange={e => setFormSource(e.target.value)}
-                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid rgba(38,131,251,0.45)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', background: 'var(--surface)', color: '#1e293b' }}>
-                <option value="referral">🤝 Referral</option>
-                <option value="existing">⭐ Existing</option>
-                <option value="marketing">📣 Marketing</option>
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid rgba(38,131,251,0.45)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', background: 'rgba(22,32,50,0.95)', color: 'var(--text)', colorScheme: 'dark' }}>
+                <option value="referral" style={{background:'#1e2d45', color:'#e8f0fe'}}>🤝 Referral</option>
+                <option value="existing" style={{background:'#1e2d45', color:'#e8f0fe'}}>⭐ Existing</option>
+                <option value="marketing" style={{background:'#1e2d45', color:'#e8f0fe'}}>📣 Marketing</option>
               </select>
             )}
           </div>
@@ -8128,13 +8128,18 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         setSaving(false);
       };
 
+      // Light-mode style helpers for this modal
+      const mBorder = '2px solid #cbd5e1';
+      const mInput  = { width: '100%', padding: '0.75rem', borderRadius: 8, border: mBorder, fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box', background: '#fff', color: '#0f172a' };
+      const mLabel  = { fontWeight: 600, color: '#1e293b', fontSize: '0.9rem', marginBottom: '0.35rem', display: 'block' };
+
       return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 580, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 580, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', color: '#0f172a' }}>
             {/* Header */}
-            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '2px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
-              <h2 style={{ margin: 0, color: 'var(--primary)', fontSize: '1.2rem' }}>📋 New Appointment</h2>
-              <button className="btn btn-sm btn-outline" onClick={onClose} style={{ padding: '0.3rem 0.7rem' }}>✕</button>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+              <h2 style={{ margin: 0, color: '#2683FB', fontSize: '1.2rem' }}>📋 New Appointment</h2>
+              <button onClick={onClose} style={{ background: 'none', border: '1.5px solid #cbd5e1', borderRadius: 8, padding: '0.3rem 0.7rem', cursor: 'pointer', color: '#64748b', fontSize: '1rem' }}>✕</button>
             </div>
 
             <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -8142,47 +8147,46 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               {/* Customer banner */}
               <div style={{ padding: '0.9rem 1.1rem', background: '#f0f9ff', borderRadius: 10, border: '1.5px solid #bae6fd' }}>
                 <div style={{ fontWeight: 700, color: '#0369a1' }}>👤 {customer.name}{customer.farmName ? ` — ${customer.farmName}` : ''}</div>
-                <div style={{ fontSize: '0.85rem', color: '#1e293b', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '0.85rem', color: '#334155', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                   {customer.phone && <span>📞 {customer.phone}</span>}
                   {customer.email && <span>✉️ {customer.email}</span>}
                 </div>
               </div>
 
               {/* Farm/Business override */}
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Farm / Business Name</label>
+              <div style={{ margin: 0 }}>
+                <label style={mLabel}>Farm / Business Name</label>
                 <input type="text" value={farmName} onChange={e => setFarmName(e.target.value)}
-                  placeholder="Sunny Acres Farm (optional)"
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+                  placeholder="Sunny Acres Farm (optional)" style={mInput} />
               </div>
 
               {/* Date & Time */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Date *</label>
+                <div>
+                  <label style={mLabel}>Date *</label>
                   <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                    style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+                    style={{...mInput, colorScheme:'light'}} />
                 </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Time *</label>
+                <div>
+                  <label style={mLabel}>Time *</label>
                   <input type="time" value={time} onChange={e => setTime(e.target.value)}
-                    style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+                    style={{...mInput, colorScheme:'light'}} />
                 </div>
               </div>
 
               {/* Horses */}
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Number of Horses</label>
+              <div>
+                <label style={mLabel}>Number of Horses</label>
                 <input type="number" value={numberOfHorses} min="1" onChange={e => setNumberOfHorses(e.target.value)}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+                  style={mInput} />
               </div>
 
               {/* Services */}
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Services</label>
+              <div>
+                <label style={mLabel}>Services</label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: '0.4rem' }}>
                   {availableServices.map(s => (
-                    <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.7rem', border: '1.5px solid var(--border)', borderRadius: 8, cursor: 'pointer', background: services.includes(s) ? '#dcfce7' : '#fff', fontSize: '0.9rem', fontWeight: services.includes(s) ? 600 : 400 }}>
+                    <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.7rem', border: services.includes(s) ? '1.5px solid #2683FB' : '1.5px solid #cbd5e1', borderRadius: 8, cursor: 'pointer', background: services.includes(s) ? '#eff6ff' : '#f8fafc', fontSize: '0.9rem', fontWeight: services.includes(s) ? 600 : 400, color: '#0f172a' }}>
                       <input type="checkbox" checked={services.includes(s)}
                         onChange={() => setServices(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
                         style={{ cursor: 'pointer' }} />
@@ -8193,32 +8197,31 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               </div>
 
               {/* Address */}
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Address</label>
+              <div>
+                <label style={mLabel}>Address</label>
                 <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Service location"
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+                  style={mInput} />
               </div>
 
               {/* City & State */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: '0.75rem' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>City</label>
-                  <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="City"
-                    style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+                <div>
+                  <label style={mLabel}>City</label>
+                  <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="City" style={mInput} />
                 </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>State</label>
+                <div>
+                  <label style={mLabel}>State</label>
                   <input type="text" value={state} onChange={e => setState(e.target.value.toUpperCase())} placeholder="FL" maxLength={2}
-                    style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box', textTransform: 'uppercase' }} />
+                    style={{...mInput, textTransform:'uppercase'}} />
                 </div>
               </div>
 
               {/* Notes */}
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Notes</label>
+              <div>
+                <label style={mLabel}>Notes</label>
                 <textarea value={comments} onChange={e => setComments(e.target.value)}
                   placeholder="Gate codes, special instructions…" rows={3}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', resize: 'vertical', boxSizing: 'border-box' }} />
+                  style={{...mInput, resize:'vertical'}} />
               </div>
 
               {/* SMS confirmation */}
