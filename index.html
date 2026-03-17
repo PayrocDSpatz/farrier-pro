@@ -2873,7 +2873,11 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
       setSuccessMessage("Account created! Redirecting to your dashboard…");
       cleanupUrl();
       setTimeout(() => {
-        window.location.href = window.location.origin + window.location.pathname;
+        const isMobileDevice = window.innerWidth < 768 ||
+          /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        window.location.href = isMobileDevice
+          ? window.location.origin + "/mobile"
+          : window.location.origin + window.location.pathname;
       }, 800);
 
     } catch (err) {
@@ -2929,7 +2933,13 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
           try { await seedDefaultServicesIfEmpty_(recoveryUid); } catch (e) {}
           setSuccessMessage("Account created! Redirecting to your dashboard…");
           cleanupUrl();
-          setTimeout(() => { window.location.href = window.location.origin + window.location.pathname; }, 800);
+          setTimeout(() => {
+            const isMobileDevice = window.innerWidth < 768 ||
+              /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            window.location.href = isMobileDevice
+              ? window.location.origin + "/mobile"
+              : window.location.origin + window.location.pathname;
+          }, 800);
           return;
         } catch (signInErr) {
           console.error("❌ Recovery sign-in failed:", signInErr?.code, signInErr?.message);
@@ -10588,7 +10598,13 @@ useEffect(() => {
                   type="email"
                   value={userProfile?.email || user.email}
                   disabled
-                  style={{background: '#f5f5f5', cursor: 'not-allowed'}}
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    color: 'var(--text-primary, #e2e8f0)',
+                    cursor: 'not-allowed',
+                    opacity: 0.8,
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}
                 />
               </div>
 
