@@ -4173,7 +4173,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       {(cust.name || '?').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b' }}>{cust.name || 'Unknown'}{cust.farmName ? ` — ${cust.farmName}` : ''}</div>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{cust.name || 'Unknown'}{cust.farmName ? ` — ${cust.farmName}` : ''}</div>
                       <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                         {cust.phone && <span>📞 {cust.phone}</span>}
                         {cust.email && <span>✉️ {cust.email}</span>}
