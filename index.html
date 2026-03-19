@@ -700,6 +700,12 @@
       filter: invert(1) opacity(1) brightness(1.5);
       cursor: pointer;
     }
+    input.light-date-input { color-scheme: light; }
+    input.light-date-input::-webkit-calendar-picker-indicator {
+      filter: none;
+      opacity: 0.6;
+      cursor: pointer;
+    }
 
     .success-message {
       background: #0d2a15;
@@ -8175,6 +8181,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 <div>
                   <label style={mLabel}>Date *</label>
                   <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                    className="light-date-input"
                     style={{...mInput, colorScheme:'light'}} />
                 </div>
                 <div>
@@ -10019,8 +10026,17 @@ useEffect(() => {
             console.log('✅ Invoice created with ID:', docRef.id);
 
             // Generate Stripe Payment Link if farrier has Stripe connected
+            // Fetch fresh profile from Firestore to avoid stale state
             let paymentUrl = '';
-            const stripeKey = userProfile?.stripeSecretKey || '';
+            let stripeKey = userProfile?.stripeSecretKey || '';
+            try {
+              const freshProfile = await db.collection('users').doc(userId).get();
+              if (freshProfile.exists) {
+                stripeKey = freshProfile.data()?.stripeSecretKey || stripeKey;
+              }
+            } catch (profileErr) {
+              console.warn('Could not refresh profile, using cached:', profileErr);
+            }
             console.log('💳 Stripe key present:', !!stripeKey, '| prefix:', stripeKey.substring(0,10));
             if (stripeKey && total > 0) {
               try {
@@ -10431,7 +10447,7 @@ useEffect(() => {
             </button>
 
             <p style={{fontSize: '0.875rem', color: '#666', marginTop: '0.5rem', textAlign: 'center'}}>
-              Customer will use "Pay Now" button to pay with Authorize.Net
+              Customer will use "Pay Now" button to pay with Stripe
             </p>
           </div>
         </div>
