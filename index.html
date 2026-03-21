@@ -9706,6 +9706,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [customerEmail, setCustomerEmail] = useState(prefillData?.customerEmail || '');
       const [customerPhone, setCustomerPhone] = useState(prefillData?.customerPhone || '');
       const [items, setItems] = useState([{ description: '', amount: 0, horseName: '' }]);
+      const [milesDriven, setMilesDriven] = useState(0);
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
       const [customers, setCustomers] = useState([]);
@@ -10020,10 +10021,32 @@ useEffect(() => {
               total: total,
               invoiceNumber: invoiceNumber,
               status: 'outstanding',
+              milesDriven: milesDriven || 0,
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
             console.log('✅ Invoice created with ID:', docRef.id);
+
+            // Write mileage log if miles entered
+            if (milesDriven > 0) {
+              try {
+                await db.collection('mileage_logs').add({
+                  farrierId:    userId,
+                  date:         new Date().toISOString().split('T')[0],
+                  customerName: customerName,
+                  farmName:     customerFarmName || '',
+                  services:     cleanedItems.map(i => i.description || i.name || ''),
+                  invoiceNumber,
+                  invoiceId:    docRef.id,
+                  invoiceTotal: total,
+                  miles:        milesDriven,
+                  createdAt:    firebase.firestore.FieldValue.serverTimestamp(),
+                });
+                console.log('✅ Mileage log saved:', milesDriven, 'miles');
+              } catch(e) {
+                console.warn('⚠️ Mileage log failed (non-fatal):', e.message);
+              }
+            }
 
             // Generate Stripe Payment Link if farrier has Stripe connected
             // Fetch fresh profile from Firestore to avoid stale state
@@ -10428,6 +10451,26 @@ useEffect(() => {
               <button className="btn btn-sm btn-outline" onClick={addItem} type="button">
                 + Add Another Service
               </button>
+            </div>
+
+            <div style={{marginTop: '1rem'}}>
+              <label style={{display:'block', fontWeight:'700', fontSize:'0.9rem', marginBottom:'6px', color:'var(--text)'}}>
+                🚗 Miles Driven (optional)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                placeholder="0"
+                value={milesDriven || ''}
+                onChange={e => setMilesDriven(parseFloat(e.target.value) || 0)}
+                style={{width:'140px', padding:'8px 12px', border:'1.5px solid var(--border)', borderRadius:'8px', fontSize:'1rem', fontWeight:'600'}}
+              />
+              {milesDriven > 0 && (
+                <span style={{marginLeft:'10px', fontSize:'0.85rem', color:'#0F766E', fontWeight:'600'}}>
+                  = ${(milesDriven * 0.725).toFixed(2)} deduction
+                </span>
+              )}
             </div>
 
             <div style={{borderTop: '2px solid var(--border)', paddingTop: '1rem', marginTop: '1rem'}}>
