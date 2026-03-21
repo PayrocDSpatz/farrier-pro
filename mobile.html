@@ -1148,15 +1148,27 @@ async function loadApptSearch() {
   document.getElementById('appt-search-input').value = '';
   setApptFilter('upcoming', false);
 
+  if (!state.user?.uid) {
+    resultsEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Not signed in.</div>';
+    return;
+  }
+
+  console.log('🔍 loadApptSearch: uid =', state.user.uid);
+
   try {
     const snap = await db.collection('appointments')
       .where('farrierId', '==', state.user.uid)
       .get();
+    console.log('📅 appointments fetched:', snap.size);
     allAppts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (allAppts.length === 0) {
+      resultsEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">No appointments found.</div>';
+      return;
+    }
     filterApptResults();
   } catch(e) {
     console.error('loadApptSearch error:', e);
-    resultsEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Could not load appointments.</div>';
+    resultsEl.innerHTML = `<div style="text-align:center;padding:40px 16px;font-size:0.82rem;color:#c62828;">${e.code || e.message || 'Unknown error'}</div>`;
   }
 }
 
