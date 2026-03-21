@@ -220,7 +220,7 @@
         <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
       </div>
       <div id="login-error" style="color:#dc2626; font-size:0.85rem; margin-bottom:12px; display:none;"></div>
-      <div id="login-debug" style="color:#666; font-size:0.75rem; margin-bottom:8px; word-break:break-all;"></div>
+      <div id="login-debug" style="display:none;"></div>
       <button class="btn-primary" id="login-btn" onclick="doLogin()">Sign In</button>
       <div style="display:flex;align-items:center;gap:10px;margin:16px 0;">
         <div style="flex:1;height:1px;background:#DDE3EC;"></div>
@@ -691,9 +691,12 @@ function showToast(msg, type = '') {
 }
 
 // ── AUTH ──
+let loginInProgress = false;
+
 auth.onAuthStateChanged(async (user) => {
   dbg('onAuthStateChanged: ' + (user ? user.email : 'null'));
   if (user) {
+    loginInProgress = false;
     state.user = user;
     await loadUserProfile();
     await loadServices();
@@ -704,6 +707,12 @@ auth.onAuthStateChanged(async (user) => {
     state.user = null;
     document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
     document.getElementById('screen-login').classList.remove('hidden');
+    // Only reset the button if we're NOT mid-login (prevents flickering after signout)
+    if (!loginInProgress) {
+      const btn = document.getElementById('login-btn');
+      if (btn) { btn.textContent = 'Sign In'; btn.disabled = false; }
+    }
+    dbg('');
   }
 });
 
@@ -720,9 +729,8 @@ async function doGoogleLogin() {
 }
 
 function dbg(msg) {
-  console.log(msg);
-  const el = document.getElementById('login-debug');
-  if (el) el.textContent = msg;
+  console.log('[FarriTech]', msg);
+  // debug element intentionally not shown in production
 }
 
 async function doLogin() {
@@ -736,6 +744,7 @@ async function doLogin() {
     return;
   }
   err.style.display = 'none';
+  loginInProgress = true;
   btn.textContent = 'Signing in…';
   btn.disabled = true;
   dbg('Calling signInWithEmailAndPassword…');
@@ -743,6 +752,7 @@ async function doLogin() {
     const result = await auth.signInWithEmailAndPassword(email, password);
     dbg('Sign in success: ' + (result?.user?.email || 'unknown'));
   } catch (e) {
+    loginInProgress = false;
     console.error('Login error:', e);
     dbg('Error: ' + e.code + ' — ' + e.message);
     err.textContent = e.message.replace('Firebase: ', '');
