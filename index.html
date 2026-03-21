@@ -54,6 +54,15 @@
       height: 100%;
       overflow-x: hidden;
     }
+    /* When auth shell is active, lock the whole page */
+    body:has(.ft-auth-shell) {
+      overflow: hidden !important;
+      height: 100vh !important;
+    }
+    body:has(.ft-auth-shell) #root {
+      height: 100vh !important;
+      overflow: hidden !important;
+    }
     #root {
       width: 100%;
       min-height: 100%;
@@ -1199,57 +1208,92 @@
   margin: 0 !important;
 }
 
-/* ── FarriTech Auth Fix: ensure full card visible on screen ── */
+/* ── FarriTech Auth Fix: no scrollbars, everything fits ── */
+
+/* Shell: no overflow at all */
+.ft-auth-shell {
+  overflow: hidden !important;
+}
+
+/* Grid: tight vertical padding, no scroll */
 .ft-auth-grid {
-  padding: clamp(8px, 2vh, 32px) clamp(32px, 7vw, 110px) !important;
+  padding: clamp(6px, 1.5vh, 24px) clamp(32px, 7vw, 110px) !important;
+  overflow: hidden !important;
+  align-items: center !important;
 }
+
+/* Card: no scrollbars, hidden overflow — content must fit */
+.auth-card {
+  overflow: hidden !important;
+  overflow-y: hidden !important;
+  max-height: calc(100vh - 40px) !important;
+  padding: 12px 18px !important;
+}
+
+/* Hide scrollbars everywhere on auth page */
+.ft-auth-shell *::-webkit-scrollbar { display: none !important; }
+.ft-auth-shell * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+
+/* Logo */
 .ft-card-logo {
-  width: 100px !important;
-  margin-bottom: 6px !important;
+  width: 80px !important;
+  margin-bottom: 4px !important;
 }
+
+/* Header */
 .ft-auth-shell .auth-header {
   margin-bottom: 4px !important;
 }
 .ft-auth-shell .auth-header h1 {
-  font-size: 1.15rem !important;
-  margin-bottom: 2px !important;
+  font-size: 1.1rem !important;
+  margin-bottom: 1px !important;
 }
 .ft-auth-shell .auth-header p {
-  font-size: 0.8rem !important;
-  margin: 0 !important;
+  font-size: 0.78rem !important;
+  margin: 0 0 2px !important;
 }
+
+/* Tabs */
 .ft-auth-shell .auth-tabs {
   margin-bottom: 8px !important;
 }
+
+/* Form groups */
 .ft-auth-shell .form-group {
-  margin-bottom: 8px !important;
+  margin-bottom: 7px !important;
 }
 .ft-auth-shell .form-group label {
-  font-size: 0.8rem !important;
-  margin-bottom: 3px !important;
+  font-size: 0.78rem !important;
+  margin-bottom: 2px !important;
   display: block !important;
 }
 .ft-auth-shell .form-group input {
   padding: 7px 10px !important;
-  font-size: 0.875rem !important;
+  font-size: 0.85rem !important;
 }
+
+/* Buttons */
 .ft-auth-shell .btn-primary {
   padding: 9px 12px !important;
-  font-size: 0.9rem !important;
-}
-.ft-auth-shell .btn-google,
-.ft-auth-shell form button[type="button"] {
-  padding: 8px 12px !important;
   font-size: 0.875rem !important;
+  margin-top: 0 !important;
 }
-/* Divider margin */
-.ft-auth-shell form > div[style*="margin: 0.75rem"] {
-  margin: 0.4rem 0 !important;
+.ft-auth-shell form button[type="button"] {
+  padding: 7px 12px !important;
+  font-size: 0.85rem !important;
 }
-/* Customer login section */
-.ft-auth-shell .auth-card > div[style*="marginTop: '0.75rem'"] {
-  margin-top: 0.5rem !important;
-  padding-top: 0.5rem !important;
+
+/* OR divider — tighten margin */
+.ft-auth-shell form .auth-divider,
+.ft-auth-shell form > div {
+  margin-top: 6px !important;
+  margin-bottom: 6px !important;
+}
+
+/* Customer login footer section */
+.ft-auth-shell .auth-card > div:last-child {
+  margin-top: 6px !important;
+  padding-top: 6px !important;
 }
 
 
@@ -2759,13 +2803,13 @@ return (
 
               <div style={{marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.12)', textAlign: 'center'}}>
                 <p style={{color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '0.6rem'}}>
-                  Are you a customer looking to view or pay an invoice?
+                  Are you a client looking to view or pay an invoice?
                 </p>
                 <a
                   href="/customer-portal.html"
                   style={{display: 'inline-block', padding: '0.55rem 1.25rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', fontSize: '0.875rem', fontWeight: 600, textDecoration: 'none', background: 'rgba(255,255,255,0.08)'}}
                 >
-                  👤 Customer Login
+                  👤 Client Login
                 </a>
               </div>
             </div>
