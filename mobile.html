@@ -877,7 +877,7 @@ async function loadDashboard() {
   const profile = state.userProfile;
   const bizName = profile?.businessName || profile?.name || state.user?.displayName || 'Farrier';
   const email = state.user?.email || '';
-  document.getElementById('dash-user-name').innerHTML = `<div style="font-size:0.82rem;font-weight:700;">${bizName}</div><div style="font-size:0.7rem;opacity:0.75;">${email}</div>`;
+  document.getElementById('dash-user-name').innerHTML = `<div style="font-size:0.82rem;font-weight:700;">${bizName}</div><div style="font-size:0.7rem;opacity:1;font-weight:600;color:rgba(255,255,255,0.92);">${email}</div>`;
 
   // Today's appointments
   const today = new Date().toISOString().split('T')[0];

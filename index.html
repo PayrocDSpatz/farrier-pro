@@ -3261,6 +3261,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         { id: 'customers', label: 'Customers', icon: '👥' },
         { id: 'services', label: 'Services', icon: '🧾' },
         { id: 'reports', label: 'Reports', icon: '📈' },
+        { id: 'mileage', label: 'Mileage Log', icon: '🚗' },
         { id: 'route', label: 'Route Sheet', icon: '🗺️' },
         { id: 'settings', label: 'Settings', icon: '⚙️' },
         { id: 'about', label: 'About', icon: 'ℹ️' }
@@ -3472,6 +3473,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'customers' && <CustomersView userId={farrierId} userProfile={userProfile} />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
             {tab === 'reports' && <ReportsView userId={farrierId} />}
+            {tab === 'mileage' && <MileageLogView userId={farrierId} userProfile={userProfile} />}
             {tab === 'route' && <RouteSheetView userId={farrierId} userProfile={userProfile} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
             {tab === 'about' && <AboutView />}
@@ -5827,6 +5829,193 @@ function ServicesView({ userId }) {
     </div>
   );
 }
+
+    function MileageLogView({ userId, userProfile }) {
+      const [logs, setLogs] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [filter, setFilter] = useState('month');
+      const IRS_RATE = 0.725;
+
+      useEffect(() => { loadLogs(); }, []);
+
+      const loadLogs = async () => {
+        setLoading(true);
+        try {
+          const snap = await db.collection('mileage_logs')
+            .where('farrierId', '==', userId)
+            .get();
+          const data = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+          setLogs(data);
+        } catch(e) {
+          console.error('Mileage log error:', e);
+        }
+        setLoading(false);
+      };
+
+      const getRange = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        if (filter === 'week') {
+          const day = now.getDay();
+          const start = new Date(now); start.setDate(now.getDate() - day);
+          return { start: start.toISOString().split('T')[0], end: now.toISOString().split('T')[0] };
+        }
+        if (filter === 'month') return { start: `${y}-${m}-01`, end: now.toISOString().split('T')[0] };
+        if (filter === 'year')  return { start: `${y}-01-01`,   end: now.toISOString().split('T')[0] };
+        return { start: '2000-01-01', end: '2999-12-31' };
+      };
+
+      const { start, end } = getRange();
+      const filtered = logs.filter(l => l.date >= start && l.date <= end);
+      const totalMiles = filtered.reduce((s, l) => s + (l.miles || 0), 0);
+      const deduction = (totalMiles * IRS_RATE).toFixed(2);
+
+      const filterBtn = (id, label) => (
+        <button
+          onClick={() => setFilter(id)}
+          style={{
+            padding: '7px 16px', borderRadius: '8px', border: '1.5px solid',
+            borderColor: filter === id ? '#0F766E' : '#d1d5db',
+            background: filter === id ? '#0F766E' : 'white',
+            color: filter === id ? 'white' : '#374151',
+            fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer'
+          }}
+        >{label}</button>
+      );
+
+      const handlePrint = () => {
+        const bizName = userProfile?.businessName || 'Farrier';
+        const periodLabel = { week: 'This Week', month: 'This Month', year: 'This Year', all: 'All Time' }[filter];
+        const rows = filtered.map(l => `
+          <tr>
+            <td>${l.date}</td>
+            <td>${l.customerName || '—'}${l.farmName ? '<br><small style="color:#6b7280">' + l.farmName + '</small>' : ''}</td>
+            <td>${(l.services||[]).join(', ') || '—'}</td>
+            <td>${l.invoiceNumber || '—'}</td>
+            <td style="text-align:right; font-weight:700;">${l.miles}</td>
+            <td style="text-align:right; color:#0F766E; font-weight:600;">$${(l.miles * IRS_RATE).toFixed(2)}</td>
+          </tr>`).join('');
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+          <title>Mileage Log — ${bizName}</title>
+          <style>
+            body { font-family: Arial, sans-serif; font-size: 13px; color: #111; margin: 32px; }
+            h1 { font-size: 20px; margin-bottom: 4px; }
+            .meta { color: #555; font-size: 12px; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; }
+            th { background: #0F766E; color: white; padding: 8px 10px; text-align: left; font-size: 12px; }
+            td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+            tr:nth-child(even) td { background: #f9fafb; }
+            .summary { margin-top: 20px; padding: 14px 16px; background: #f0fdf4; border: 1px solid #6ee7b7; border-radius: 6px; }
+            @media print { button { display:none; } }
+          </style>
+        </head><body>
+          <h1>🚗 Mileage Log — ${bizName}</h1>
+          <div class="meta">Period: ${periodLabel} (${start} → ${end}) · Generated: ${new Date().toLocaleDateString()}</div>
+          <table>
+            <thead><tr><th>Date</th><th>Client</th><th>Services</th><th>Invoice</th><th style="text-align:right">Miles</th><th style="text-align:right">Deduction</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div class="summary">
+            <strong>Total Miles: ${totalMiles.toLocaleString()}</strong> &nbsp;·&nbsp;
+            IRS Rate: $${IRS_RATE}/mi &nbsp;·&nbsp;
+            Estimated Deduction: <strong>$${parseFloat(deduction).toLocaleString('en-US', {minimumFractionDigits:2})}</strong>
+          </div>
+        </body></html>`;
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.print();
+      };
+
+      return (
+        <div style={{maxWidth: '900px', margin: '0 auto', padding: '2rem 1rem'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'1.5rem', flexWrap:'wrap', gap:'1rem'}}>
+            <div>
+              <h1 style={{fontSize:'1.75rem', fontWeight:'800', color:'#0D1320', margin:0}}>🚗 Mileage Log</h1>
+              <p style={{color:'#6b7280', margin:'4px 0 0', fontSize:'0.9rem'}}>Track miles driven for tax deductions</p>
+            </div>
+            <button onClick={handlePrint} style={{background:'#0F766E', color:'white', border:'none', borderRadius:'10px', padding:'10px 20px', fontWeight:'700', fontSize:'0.9rem', cursor:'pointer'}}>
+              🖨️ Print / Export
+            </button>
+          </div>
+
+          {/* Filter tabs */}
+          <div style={{display:'flex', gap:'8px', marginBottom:'1.25rem', flexWrap:'wrap'}}>
+            {filterBtn('week',  'This Week')}
+            {filterBtn('month', 'This Month')}
+            {filterBtn('year',  'This Year')}
+            {filterBtn('all',   'All Time')}
+          </div>
+
+          {/* Summary cards */}
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:'1rem', marginBottom:'1.5rem'}}>
+            <div style={{background:'white', border:'2px solid #0F766E', borderRadius:'12px', padding:'1rem 1.25rem'}}>
+              <div style={{fontSize:'0.75rem', fontWeight:'700', color:'#6b7280', textTransform:'uppercase', letterSpacing:'0.5px'}}>Total Miles</div>
+              <div style={{fontSize:'2rem', fontWeight:'900', color:'#0F766E', marginTop:'4px'}}>{totalMiles.toLocaleString()}</div>
+            </div>
+            <div style={{background:'white', border:'2px solid #2683FB', borderRadius:'12px', padding:'1rem 1.25rem'}}>
+              <div style={{fontSize:'0.75rem', fontWeight:'700', color:'#6b7280', textTransform:'uppercase', letterSpacing:'0.5px'}}>Est. IRS Deduction</div>
+              <div style={{fontSize:'2rem', fontWeight:'900', color:'#2683FB', marginTop:'4px'}}>${parseFloat(deduction).toLocaleString('en-US', {minimumFractionDigits:2})}</div>
+              <div style={{fontSize:'0.7rem', color:'#9ca3af', marginTop:'2px'}}>@ $0.725/mi (2026 rate)</div>
+            </div>
+            <div style={{background:'white', border:'1.5px solid #e5e7eb', borderRadius:'12px', padding:'1rem 1.25rem'}}>
+              <div style={{fontSize:'0.75rem', fontWeight:'700', color:'#6b7280', textTransform:'uppercase', letterSpacing:'0.5px'}}>Entries</div>
+              <div style={{fontSize:'2rem', fontWeight:'900', color:'#0D1320', marginTop:'4px'}}>{filtered.length}</div>
+            </div>
+          </div>
+
+          {/* Table */}
+          {loading ? (
+            <div style={{textAlign:'center', padding:'3rem', color:'#6b7280'}}>Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div style={{textAlign:'center', padding:'3rem', color:'#6b7280', background:'white', borderRadius:'12px', border:'1.5px solid #e5e7eb'}}>
+              No mileage entries for this period.<br/>
+              <small>Miles are logged automatically when you create an invoice with miles entered.</small>
+            </div>
+          ) : (
+            <div style={{background:'white', borderRadius:'12px', border:'1.5px solid #e5e7eb', overflow:'hidden'}}>
+              <table style={{width:'100%', borderCollapse:'collapse', fontSize:'0.9rem'}}>
+                <thead>
+                  <tr style={{background:'#f9fafb', borderBottom:'2px solid #e5e7eb'}}>
+                    <th style={{padding:'10px 14px', textAlign:'left', fontWeight:'700', color:'#374151'}}>Date</th>
+                    <th style={{padding:'10px 14px', textAlign:'left', fontWeight:'700', color:'#374151'}}>Client</th>
+                    <th style={{padding:'10px 14px', textAlign:'left', fontWeight:'700', color:'#374151'}}>Services</th>
+                    <th style={{padding:'10px 14px', textAlign:'left', fontWeight:'700', color:'#374151'}}>Invoice</th>
+                    <th style={{padding:'10px 14px', textAlign:'right', fontWeight:'700', color:'#374151'}}>Miles</th>
+                    <th style={{padding:'10px 14px', textAlign:'right', fontWeight:'700', color:'#374151'}}>Deduction</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((l, i) => (
+                    <tr key={l.id} style={{borderBottom:'1px solid #f3f4f6', background: i % 2 === 0 ? 'white' : '#fafafa'}}>
+                      <td style={{padding:'10px 14px', color:'#374151', fontWeight:'600'}}>{l.date}</td>
+                      <td style={{padding:'10px 14px'}}>
+                        <div style={{fontWeight:'700', color:'#0D1320'}}>{l.customerName || '—'}</div>
+                        {l.farmName && <div style={{fontSize:'0.78rem', color:'#6b7280'}}>{l.farmName}</div>}
+                      </td>
+                      <td style={{padding:'10px 14px', color:'#374151', fontSize:'0.85rem'}}>{(l.services||[]).join(', ') || '—'}</td>
+                      <td style={{padding:'10px 14px', color:'#6b7280', fontSize:'0.85rem'}}>{l.invoiceNumber || '—'}</td>
+                      <td style={{padding:'10px 14px', textAlign:'right', fontWeight:'800', color:'#0F766E', fontSize:'1rem'}}>{l.miles}</td>
+                      <td style={{padding:'10px 14px', textAlign:'right', fontWeight:'600', color:'#2683FB'}}>${(l.miles * IRS_RATE).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{background:'#f0fdf4', borderTop:'2px solid #0F766E'}}>
+                    <td colSpan="4" style={{padding:'10px 14px', fontWeight:'800', color:'#0F766E'}}>TOTAL</td>
+                    <td style={{padding:'10px 14px', textAlign:'right', fontWeight:'900', color:'#0F766E', fontSize:'1.05rem'}}>{totalMiles.toLocaleString()}</td>
+                    <td style={{padding:'10px 14px', textAlign:'right', fontWeight:'900', color:'#2683FB', fontSize:'1.05rem'}}>${parseFloat(deduction).toLocaleString('en-US', {minimumFractionDigits:2})}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     function AboutView() {
       return (
@@ -10453,24 +10642,26 @@ useEffect(() => {
               </button>
             </div>
 
-            <div style={{marginTop: '1rem'}}>
-              <label style={{display:'block', fontWeight:'700', fontSize:'0.9rem', marginBottom:'6px', color:'var(--text)'}}>
-                🚗 Miles Driven (optional)
+            <div style={{marginTop: '1rem', background:'#f0fdf4', border:'2px solid #0F766E', borderRadius:'10px', padding:'12px 14px'}}>
+              <label style={{display:'block', fontWeight:'800', fontSize:'0.9rem', marginBottom:'8px', color:'#0F766E'}}>
+                🚗 Miles Driven <span style={{fontWeight:'500', color:'#374151'}}>(for mileage log — not shown on invoice)</span>
               </label>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                placeholder="0"
-                value={milesDriven || ''}
-                onChange={e => setMilesDriven(parseFloat(e.target.value) || 0)}
-                style={{width:'140px', padding:'8px 12px', border:'1.5px solid var(--border)', borderRadius:'8px', fontSize:'1rem', fontWeight:'600'}}
-              />
-              {milesDriven > 0 && (
-                <span style={{marginLeft:'10px', fontSize:'0.85rem', color:'#0F766E', fontWeight:'600'}}>
-                  = ${(milesDriven * 0.725).toFixed(2)} deduction
-                </span>
-              )}
+              <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="0"
+                  value={milesDriven || ''}
+                  onChange={e => setMilesDriven(parseFloat(e.target.value) || 0)}
+                  style={{width:'120px', padding:'9px 12px', border:'2px solid #0F766E', borderRadius:'8px', fontSize:'1.05rem', fontWeight:'700', color:'#0D1320', background:'white'}}
+                />
+                {milesDriven > 0 && (
+                  <span style={{fontSize:'0.88rem', color:'#0F766E', fontWeight:'700'}}>
+                    = ${(milesDriven * 0.725).toFixed(2)} deduction
+                  </span>
+                )}
+              </div>
             </div>
 
             <div style={{borderTop: '2px solid var(--border)', paddingTop: '1rem', marginTop: '1rem'}}>
