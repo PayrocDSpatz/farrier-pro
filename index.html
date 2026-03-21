@@ -1082,12 +1082,12 @@
 .ft-auth-shell {
   position: relative !important;
   width: 100% !important;
-  min-height: 100vh !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
   display: flex !important;
   flex-direction: column !important;
   background: url('/auth-bg.svg') center/cover no-repeat fixed !important;
-  overflow-x: hidden !important;
-  overflow-y: visible !important;
+  overflow: hidden !important;
 }
 
 .ft-auth-shell > *{ position: relative; z-index: 1; }
@@ -1097,32 +1097,24 @@
   width: 100% !important;
   max-width: 100% !important;
   margin: 0 !important;
-  padding: clamp(32px, 5vw, 72px) clamp(40px, 8vw, 120px) !important;
+  padding: clamp(16px, 3vw, 56px) clamp(32px, 7vw, 110px) !important;
   box-sizing: border-box !important;
   display: grid !important;
   grid-template-columns: 1.4fr 0.75fr !important;
-  gap: clamp(24px, 4vw, 72px) !important;
+  gap: clamp(20px, 3vw, 60px) !important;
   align-items: center !important;
-  min-height: calc(100vh - 90px) !important;
+  height: 100% !important;
+  min-height: 0 !important;
   flex: 1 !important;
+  overflow-y: auto !important;
 }
 
-/* On short viewports, align top and let page scroll naturally */
-@media (max-height: 820px) {
-  .ft-auth-grid {
-    align-items: flex-start !important;
-    min-height: unset !important;
-    padding-top: clamp(20px, 3vh, 40px) !important;
-    padding-bottom: clamp(20px, 3vh, 40px) !important;
-  }
-}
-
-/* Card: right-aligned glass card */
+/* Card: right-aligned glass card — scrollable so all content is reachable */
 .auth-card{
   width: 100% !important;
   max-width: 460px !important;
   margin: 0 0 0 auto !important;
-  padding: 18px 22px !important;
+  padding: 14px 20px !important;
   border-radius: 22px !important;
   background: rgba(8, 12, 22, 0.72) !important;
   border: 1px solid rgba(120, 180, 255, 0.16) !important;
@@ -1133,26 +1125,56 @@
   backdrop-filter: blur(18px) !important;
   -webkit-backdrop-filter: blur(18px) !important;
   position: relative !important;
-  overflow: hidden !important;
+  overflow: visible !important;
+  max-height: calc(100vh - 60px) !important;
+  overflow-y: auto !important;
 }
 
-/* Reduce card padding on short viewports so all elements (Google sign-in, forgot password) remain visible */
-@media (max-height: 750px) {
+/* Tighten spacing on shorter viewports */
+@media (max-height: 820px) {
   .auth-card {
-    padding: 16px 20px !important;
+    padding: 12px 18px !important;
   }
   .ft-card-logo {
-    width: 70px !important;
-    margin-bottom: 8px !important;
+    width: 72px !important;
+    margin-bottom: 6px !important;
   }
   .ft-auth-shell .auth-header {
-    margin-bottom: 10px !important;
+    margin-bottom: 6px !important;
+  }
+  .ft-auth-shell .auth-header h1 {
+    font-size: 1.1rem !important;
+  }
+  .ft-auth-shell .auth-header p {
+    font-size: 0.78rem !important;
   }
   .ft-auth-shell .auth-tabs {
-    margin-bottom: 10px !important;
+    margin-bottom: 8px !important;
   }
   .ft-auth-shell .form-group {
-    margin-bottom: 10px !important;
+    margin-bottom: 8px !important;
+  }
+  .ft-auth-shell .form-group label {
+    font-size: 0.78rem !important;
+    margin-bottom: 3px !important;
+  }
+  .ft-auth-shell .form-group input {
+    padding: 7px 10px !important;
+    font-size: 0.85rem !important;
+  }
+  .ft-auth-shell .btn-primary {
+    padding: 9px !important;
+    font-size: 0.9rem !important;
+  }
+}
+
+@media (max-height: 700px) {
+  .auth-card {
+    padding: 10px 16px !important;
+  }
+  .ft-card-logo {
+    width: 58px !important;
+    margin-bottom: 4px !important;
   }
 }
 
@@ -1177,6 +1199,60 @@
   margin: 0 !important;
 }
 
+/* ── FarriTech Auth Fix: ensure full card visible on screen ── */
+.ft-auth-grid {
+  padding: clamp(8px, 2vh, 32px) clamp(32px, 7vw, 110px) !important;
+}
+.ft-card-logo {
+  width: 100px !important;
+  margin-bottom: 6px !important;
+}
+.ft-auth-shell .auth-header {
+  margin-bottom: 4px !important;
+}
+.ft-auth-shell .auth-header h1 {
+  font-size: 1.15rem !important;
+  margin-bottom: 2px !important;
+}
+.ft-auth-shell .auth-header p {
+  font-size: 0.8rem !important;
+  margin: 0 !important;
+}
+.ft-auth-shell .auth-tabs {
+  margin-bottom: 8px !important;
+}
+.ft-auth-shell .form-group {
+  margin-bottom: 8px !important;
+}
+.ft-auth-shell .form-group label {
+  font-size: 0.8rem !important;
+  margin-bottom: 3px !important;
+  display: block !important;
+}
+.ft-auth-shell .form-group input {
+  padding: 7px 10px !important;
+  font-size: 0.875rem !important;
+}
+.ft-auth-shell .btn-primary {
+  padding: 9px 12px !important;
+  font-size: 0.9rem !important;
+}
+.ft-auth-shell .btn-google,
+.ft-auth-shell form button[type="button"] {
+  padding: 8px 12px !important;
+  font-size: 0.875rem !important;
+}
+/* Divider margin */
+.ft-auth-shell form > div[style*="margin: 0.75rem"] {
+  margin: 0.4rem 0 !important;
+}
+/* Customer login section */
+.ft-auth-shell .auth-card > div[style*="marginTop: '0.75rem'"] {
+  margin-top: 0.5rem !important;
+  padding-top: 0.5rem !important;
+}
+
+
 /* Hero typography */
 .ft-auth-hero h1{
   font-size: clamp(2.2rem, 4vw, 3.4rem);
@@ -1200,16 +1276,16 @@
 }
 
 .ft-card-logo{
-  width: 240px;
+  width: 200px;
   height: auto;
-  margin: 0 auto 20px;
+  margin: 0 auto 12px;
   display:block;
   image-rendering: -webkit-optimize-contrast;
   transform: translateZ(0);
   filter: drop-shadow(0 10px 22px rgba(0,0,0,0.55)) drop-shadow(0 0 28px rgba(59,130,246,0.35));
 }
-.auth-header h1{ margin: 4px 0 4px; font-size: 24px; letter-spacing: -0.01em; }
-.auth-header p{ margin: 0 0 10px; opacity: 0.78; }
+.auth-header h1{ margin: 2px 0 2px; font-size: 22px; letter-spacing: -0.01em; }
+.auth-header p{ margin: 0 0 8px; opacity: 0.78; }
 
 /* Header: solid dark navy like reference */
 .ft-auth-shell .app-header {
@@ -1220,7 +1296,7 @@
   width: 100% !important;
   box-sizing: border-box !important;
   padding: 0 clamp(20px, 4vw, 48px) !important;
-  height: 90px !important;
+  height: 72px !important;
   display: flex !important;
   align-items: center !important;
 }
@@ -2466,7 +2542,7 @@ const [loading, setLoading] = useState(false);
 
 return (
   <div className="ft-auth-shell">
-          <main className="ft-auth-grid" style={{minHeight:'100vh'}}>
+          <main className="ft-auth-grid" style={{minHeight:'0'}}>
             {/* Hero text — left column */}
             <div>{/* left column spacer — background image has the hero text */}</div>
 
@@ -2628,7 +2704,7 @@ return (
                 </button>
 
                 {/* Divider */}
-                <div style={{display: 'flex', alignItems: 'center', margin: '1.5rem 0', gap: '1rem'}}>
+                <div style={{display: 'flex', alignItems: 'center', margin: '0.75rem 0', gap: '1rem'}}>
                   <div style={{flex: 1, height: '1px', background: '#e0e0e0'}}></div>
                   <span style={{color: '#666', fontSize: '0.875rem'}}>OR</span>
                   <div style={{flex: 1, height: '1px', background: '#e0e0e0'}}></div>
@@ -2662,7 +2738,7 @@ return (
                 </button>
                 
                 {mode === 'login' && (
-                  <div style={{textAlign: 'center', marginTop: '1rem'}}>
+                  <div style={{textAlign: 'center', marginTop: '0.5rem'}}>
                     <button 
                       type="button"
                       onClick={handleForgotPassword}
@@ -2681,7 +2757,7 @@ return (
                 )}
               </form>
 
-              <div style={{marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.12)', textAlign: 'center'}}>
+              <div style={{marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.12)', textAlign: 'center'}}>
                 <p style={{color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginBottom: '0.6rem'}}>
                   Are you a customer looking to view or pay an invoice?
                 </p>
