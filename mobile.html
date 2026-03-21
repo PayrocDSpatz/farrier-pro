@@ -306,6 +306,14 @@
       </div>
       <div class="big-btn-arrow">›</div>
     </button>
+    <button class="big-btn" onclick="goTo('screen-mileage'); loadMileageLog()">
+      <div class="big-btn-icon" style="background:#0F766E;">🚗</div>
+      <div>
+        <div class="big-btn-label">Mileage Log</div>
+        <div class="big-btn-sub">View & export driving records</div>
+      </div>
+      <div class="big-btn-arrow">›</div>
+    </button>
   </div>
 </div>
 
@@ -417,6 +425,11 @@
     <div class="total-bar">
       <div class="total-bar-label">Total</div>
       <div class="total-bar-amount" id="svc-total">$0.00</div>
+    </div>
+
+    <div class="field">
+      <label>Miles Driven (optional)</label>
+      <input type="number" id="svc-miles" placeholder="0" min="0" step="1" style="max-width:140px;">
     </div>
 
     <div class="field">
@@ -595,6 +608,44 @@
   </div>
   <div class="scroll-body" id="appt-search-results" style="padding:0 16px 16px;">
     <div style="text-align:center; color:var(--text-muted); padding:40px 0; font-size:0.9rem;">Loading…</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: MILEAGE LOG                       -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-mileage">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Mileage Log</div>
+  </div>
+  <div style="padding:12px 16px 0; flex-shrink:0; background:var(--bg);">
+    <!-- Period filter -->
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <button class="appt-filter-btn active" id="mil-filter-week"  onclick="setMileageFilter('week')">This Week</button>
+      <button class="appt-filter-btn"        id="mil-filter-month" onclick="setMileageFilter('month')">This Month</button>
+      <button class="appt-filter-btn"        id="mil-filter-year"  onclick="setMileageFilter('year')">This Year</button>
+      <button class="appt-filter-btn"        id="mil-filter-all"   onclick="setMileageFilter('all')">All</button>
+    </div>
+    <!-- Summary bar -->
+    <div id="mileage-summary" style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;box-shadow:var(--shadow);">
+      <div>
+        <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Total Miles</div>
+        <div style="font-size:1.6rem;font-weight:800;color:#0F766E;" id="mileage-total">—</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Est. Deduction</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--blue);" id="mileage-deduction">—</div>
+        <div style="font-size:0.65rem;color:var(--text-muted);">@ IRS rate $0.725/mi</div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-body" id="mileage-list" style="padding:0 16px 80px;">
+    <div style="text-align:center;color:var(--text-muted);padding:40px 0;">Loading…</div>
+  </div>
+  <!-- Print/Export button -->
+  <div style="position:sticky;bottom:0;background:var(--bg);padding:12px 16px;border-top:1px solid var(--border);">
+    <button class="btn-primary" onclick="printMileageLog()" style="background:#0F766E;">🖨️ Print / Export Log</button>
   </div>
 </div>
 
@@ -1049,6 +1100,7 @@ function startNewInvoice() {
   document.getElementById('svc-customer-name').textContent = state.customer.name;
   document.getElementById('svc-customer-farm').textContent = state.customer.farmName || '';
   document.getElementById('svc-notes').value = '';
+  document.getElementById('svc-miles').value = '';
   document.getElementById('custom-item-name').value = '';
   document.getElementById('custom-item-price').value = '';
   document.getElementById('custom-items-list').innerHTML = '';
@@ -1159,17 +1211,11 @@ async function loadApptSearch() {
     const snap = await db.collection('appointments')
       .where('farrierId', '==', state.user.uid)
       .get();
-    console.log('📅 appointments fetched:', snap.size);
     allAppts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (allAppts.length === 0) {
-      resultsEl.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px 16px;font-size:0.85rem;">
-        Firestore returned 0 docs.<br>
-        <small style="font-size:0.72rem;word-break:break-all;opacity:0.7;display:block;margin-top:8px;">UID: ${state.user.uid}</small>
-      </div>`;
+      resultsEl.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:0.9rem;">No appointments found.</div>`;
       return;
     }
-    // Show raw count + today's date for debugging
-    resultsEl.innerHTML = `<div style="font-size:0.75rem;color:var(--text-muted);padding:6px 0 10px;">Found ${allAppts.length} total · device date: ${new Date().toISOString().split('T')[0]}</div>`;
     filterApptResults();
   } catch(e) {
     console.error('loadApptSearch error:', e);
@@ -1236,6 +1282,137 @@ function filterApptResults() {
   }).join('');
 }
 
+// ── MILEAGE LOG ──
+let allMileageLogs = [];
+let mileageFilter = 'month';
+
+async function loadMileageLog() {
+  const listEl = document.getElementById('mileage-list');
+  listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Loading…</div>';
+  setMileageFilter('month', false);
+
+  try {
+    const snap = await db.collection('mileage_logs')
+      .where('farrierId', '==', state.user.uid)
+      .get();
+    allMileageLogs = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    renderMileageLog();
+  } catch(e) {
+    listEl.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Error: ${e.message}</div>`;
+  }
+}
+
+function setMileageFilter(filter, render = true) {
+  mileageFilter = filter;
+  ['week','month','year','all'].forEach(f => {
+    document.getElementById('mil-filter-' + f)?.classList.toggle('active', f === filter);
+  });
+  if (render) renderMileageLog();
+}
+
+function getMileageDateRange() {
+  const now = new Date();
+  if (mileageFilter === 'week') {
+    const day = now.getDay();
+    const start = new Date(now); start.setDate(now.getDate() - day);
+    return { start: start.toISOString().split('T')[0], end: now.toISOString().split('T')[0] };
+  }
+  if (mileageFilter === 'month') {
+    return {
+      start: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,
+      end: now.toISOString().split('T')[0]
+    };
+  }
+  if (mileageFilter === 'year') {
+    return { start: `${now.getFullYear()}-01-01`, end: now.toISOString().split('T')[0] };
+  }
+  return { start: '2000-01-01', end: '2999-12-31' };
+}
+
+function renderMileageLog() {
+  const { start, end } = getMileageDateRange();
+  const filtered = allMileageLogs.filter(l => l.date >= start && l.date <= end);
+  const totalMiles = filtered.reduce((s, l) => s + (l.miles || 0), 0);
+  const IRS_RATE = 0.725;
+  const deduction = (totalMiles * IRS_RATE).toFixed(2);
+
+  document.getElementById('mileage-total').textContent = totalMiles.toLocaleString() + ' mi';
+  document.getElementById('mileage-deduction').textContent = '$' + parseFloat(deduction).toLocaleString('en-US', {minimumFractionDigits:2});
+
+  const listEl = document.getElementById('mileage-list');
+  if (!filtered.length) {
+    listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:0.9rem;">No mileage entries for this period.</div>';
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(l => `
+    <div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow);border-left:4px solid #0F766E;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="font-weight:700;font-size:0.9rem;">${l.customerName || '—'}${l.farmName ? ' — ' + l.farmName : ''}</div>
+        <div style="font-size:1rem;font-weight:800;color:#0F766E;white-space:nowrap;margin-left:8px;">${l.miles} mi</div>
+      </div>
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-top:3px;">
+        📅 ${l.date}${l.services?.length ? ' · ' + l.services.join(', ') : ''}
+      </div>
+      ${l.invoiceNumber ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">Invoice ${l.invoiceNumber} · $${(l.invoiceTotal||0).toFixed(2)}</div>` : ''}
+      ${l.notes ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:3px;font-style:italic;">📝 ${l.notes}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function printMileageLog() {
+  const { start, end } = getMileageDateRange();
+  const filtered = allMileageLogs.filter(l => l.date >= start && l.date <= end);
+  const totalMiles = filtered.reduce((s, l) => s + (l.miles || 0), 0);
+  const deduction = (totalMiles * 0.725).toFixed(2);
+  const bizName = state.userProfile?.businessName || 'Farrier';
+  const periodLabel = { week: 'This Week', month: 'This Month', year: 'This Year', all: 'All Time' }[mileageFilter];
+
+  const rows = filtered.map(l => `
+    <tr>
+      <td>${l.date}</td>
+      <td>${l.customerName || '—'}${l.farmName ? '<br><small>' + l.farmName + '</small>' : ''}</td>
+      <td>${(l.services||[]).join(', ') || '—'}</td>
+      <td>${l.invoiceNumber || '—'}</td>
+      <td style="text-align:right;font-weight:700;">${l.miles}</td>
+    </tr>
+  `).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Mileage Log — ${bizName}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 13px; color: #111; margin: 32px; }
+      h1 { font-size: 20px; margin-bottom: 4px; }
+      .meta { color: #555; font-size: 12px; margin-bottom: 20px; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #0F766E; color: white; padding: 8px 10px; text-align: left; font-size: 12px; }
+      td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+      tr:nth-child(even) td { background: #f9fafb; }
+      .summary { margin-top: 20px; padding: 14px 16px; background: #f0fdf4; border: 1px solid #6ee7b7; border-radius: 6px; }
+      .summary strong { font-size: 15px; }
+      @media print { button { display: none; } }
+    </style>
+  </head><body>
+    <h1>🚗 Mileage Log — ${bizName}</h1>
+    <div class="meta">Period: ${periodLabel} (${start} to ${end}) · Generated: ${new Date().toLocaleDateString()}</div>
+    <table>
+      <thead><tr><th>Date</th><th>Client</th><th>Services</th><th>Invoice</th><th style="text-align:right;">Miles</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="summary">
+      <strong>Total Miles: ${totalMiles.toLocaleString()}</strong> &nbsp;·&nbsp;
+      Est. IRS Deduction (@ $0.725/mi): <strong>$${parseFloat(deduction).toLocaleString('en-US',{minimumFractionDigits:2})}</strong>
+    </div>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.print();
+}
+
 // ── REPEAT LAST SERVICE ──
 function repeatLastService() {
   if (!state.lastService) return;
@@ -1281,8 +1458,35 @@ async function createInvoice() {
     total,
     invoiceNumber,
     status: 'outstanding',
+    milesDriven: parseInt(document.getElementById('svc-miles')?.value) || 0,
+    notes: document.getElementById('svc-notes')?.value.trim() || '',
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   });
+
+  // ── Write mileage log entry if miles were entered ──
+  const miles = parseInt(document.getElementById('svc-miles')?.value) || 0;
+  const serviceDate = document.getElementById('review-date')?.value || new Date().toISOString().split('T')[0];
+  if (miles > 0) {
+    try {
+      await db.collection('mileage_logs').add({
+        farrierId:      state.user.uid,
+        date:           serviceDate,
+        customerName:   c.name,
+        farmName:       c.farmName || '',
+        address:        c.address || '',
+        services:       allItems.map(i => i.name),
+        invoiceNumber,
+        invoiceId:      docRef.id,
+        invoiceTotal:   total,
+        miles,
+        notes:          document.getElementById('svc-notes')?.value.trim() || '',
+        createdAt:      firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log('✅ Mileage log saved:', miles, 'miles');
+    } catch(e) {
+      console.warn('⚠️ Mileage log failed (non-fatal):', e.message);
+    }
+  }
 
   // Try to generate payment link
   let paymentUrl = '';
