@@ -1162,13 +1162,17 @@ async function loadApptSearch() {
     console.log('📅 appointments fetched:', snap.size);
     allAppts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (allAppts.length === 0) {
-      resultsEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">No appointments found.</div>';
+      resultsEl.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px 0;">No appointments found.<br><small style="font-size:0.75rem;opacity:0.6;">uid: ${state.user.uid}</small></div>`;
       return;
     }
     filterApptResults();
   } catch(e) {
     console.error('loadApptSearch error:', e);
-    resultsEl.innerHTML = `<div style="text-align:center;padding:40px 16px;font-size:0.82rem;color:#c62828;">${e.code || e.message || 'Unknown error'}</div>`;
+    resultsEl.innerHTML = `<div style="padding:16px;font-size:0.78rem;color:#c62828;background:#fff8f8;border-radius:8px;border:1px solid #fca5a5;word-break:break-all;">
+      <strong>Error:</strong> ${e.code || 'unknown'}<br>
+      <strong>Message:</strong> ${e.message || '—'}<br>
+      <strong>UID:</strong> ${state.user.uid}
+    </div>`;
   }
 }
 
