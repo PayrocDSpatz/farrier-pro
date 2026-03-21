@@ -170,6 +170,10 @@
   .appt-row { padding: 12px 14px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; box-shadow: var(--shadow); border-left: 4px solid var(--blue); }
   .appt-row-top { font-weight: 700; font-size: 0.9rem; }
   .appt-row-bottom { font-size: 0.8rem; color: var(--text-muted); margin-top: 3px; }
+  .appt-filter-btn { flex:1; padding:8px 0; border:1.5px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-muted); font-size:0.82rem; font-weight:600; cursor:pointer; transition:all 0.15s; }
+  .appt-filter-btn.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .appt-search-row { padding:12px 14px; background:var(--surface); border-radius:var(--radius-sm); margin-bottom:8px; box-shadow:var(--shadow); border-left:4px solid #7C3AED; cursor:pointer; }
+  .appt-search-row:active { opacity:0.75; }
   .info-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .info-row:last-child { border-bottom: none; }
   .info-row-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 600; }
@@ -291,6 +295,14 @@
       <div>
         <div class="big-btn-label">Open Invoices</div>
         <div class="big-btn-sub">View & collect outstanding payments</div>
+      </div>
+      <div class="big-btn-arrow">›</div>
+    </button>
+    <button class="big-btn" onclick="goTo('screen-appt-search'); loadApptSearch()">
+      <div class="big-btn-icon" style="background:#7C3AED;">📅</div>
+      <div>
+        <div class="big-btn-label">Find Appointment</div>
+        <div class="big-btn-sub">Search upcoming & past appointments</div>
       </div>
       <div class="big-btn-arrow">›</div>
     </button>
@@ -557,6 +569,32 @@
     <button class="btn-primary" id="appt-save-btn" onclick="saveNewAppointment()">📅 Save Appointment</button>
     <div style="margin-top:8px;"></div>
     <button class="btn-secondary" onclick="goBack()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: FIND APPOINTMENT                  -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-appt-search">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Find Appointment</div>
+  </div>
+  <div style="padding:12px 16px 0; flex-shrink:0; background:var(--bg);">
+    <!-- Date filter -->
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <button class="appt-filter-btn active" id="appt-filter-upcoming" onclick="setApptFilter('upcoming')">Upcoming</button>
+      <button class="appt-filter-btn" id="appt-filter-today" onclick="setApptFilter('today')">Today</button>
+      <button class="appt-filter-btn" id="appt-filter-all" onclick="setApptFilter('all')">All</button>
+    </div>
+    <!-- Name search -->
+    <div class="search-wrap" style="margin-bottom:10px;">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" id="appt-search-input" type="search" placeholder="Search by name or farm…" oninput="filterApptResults()">
+    </div>
+  </div>
+  <div class="scroll-body" id="appt-search-results" style="padding:0 16px 16px;">
+    <div style="text-align:center; color:var(--text-muted); padding:40px 0; font-size:0.9rem;">Loading…</div>
   </div>
 </div>
 
@@ -1088,6 +1126,84 @@ function continueToInvoiceReview() {
   document.getElementById('review-total').textContent = '$' + total.toFixed(2);
   document.getElementById('review-date').value = new Date().toISOString().split('T')[0];
   goTo('screen-invoice-review');
+}
+
+// ── FIND APPOINTMENT ──
+let allAppts = [];
+let apptFilter = 'upcoming';
+
+async function loadApptSearch() {
+  const resultsEl = document.getElementById('appt-search-results');
+  resultsEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:0.9rem;">Loading…</div>';
+  document.getElementById('appt-search-input').value = '';
+  setApptFilter('upcoming', false);
+
+  try {
+    const snap = await db.collection('appointments')
+      .where('farrierId', '==', state.user.uid)
+      .orderBy('requestedDate', 'desc')
+      .limit(200)
+      .get();
+    allAppts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    filterApptResults();
+  } catch(e) {
+    resultsEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Could not load appointments.</div>';
+  }
+}
+
+function setApptFilter(filter, render = true) {
+  apptFilter = filter;
+  ['upcoming','today','all'].forEach(f => {
+    document.getElementById('appt-filter-' + f)?.classList.toggle('active', f === filter);
+  });
+  if (render) filterApptResults();
+}
+
+function filterApptResults() {
+  const q = (document.getElementById('appt-search-input')?.value || '').toLowerCase().trim();
+  const today = new Date().toISOString().split('T')[0];
+
+  let filtered = allAppts.filter(a => {
+    if (apptFilter === 'today')    return a.requestedDate === today;
+    if (apptFilter === 'upcoming') return a.requestedDate >= today;
+    return true; // all
+  });
+
+  if (q) {
+    filtered = filtered.filter(a =>
+      (a.customerName || '').toLowerCase().includes(q) ||
+      (a.farmName || '').toLowerCase().includes(q) ||
+      (a.requestedDate || '').includes(q)
+    );
+  }
+
+  // Sort ascending for upcoming, descending for all/past
+  filtered.sort((a, b) => {
+    const cmp = (a.requestedDate || '').localeCompare(b.requestedDate || '');
+    return apptFilter === 'all' ? -cmp : cmp;
+  });
+
+  const resultsEl = document.getElementById('appt-search-results');
+  if (!filtered.length) {
+    resultsEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:0.9rem;">No appointments found.</div>';
+    return;
+  }
+
+  resultsEl.innerHTML = filtered.map(a => {
+    const statusColor = a.status === 'confirmed' ? '#15803d' : a.status === 'cancelled' ? '#b91c1c' : '#b45309';
+    const statusLabel = (a.status || 'pending').charAt(0).toUpperCase() + (a.status || 'pending').slice(1);
+    return `
+      <div class="appt-search-row" onclick="selectCustomerById('${a.customerId || ''}', '${(a.customerName||'').replace(/'/g,"\\'")}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div style="font-weight:700;font-size:0.92rem;">${a.customerName || 'Unknown'}${a.farmName ? ' — ' + a.farmName : ''}</div>
+          <span style="font-size:0.72rem;font-weight:700;color:${statusColor};background:${statusColor}18;padding:2px 7px;border-radius:20px;white-space:nowrap;margin-left:8px;">${statusLabel}</span>
+        </div>
+        <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px;">
+          📅 ${a.requestedDate || '—'}${a.requestedTime ? ' @ ' + fmtTime(a.requestedTime) : ''}
+          &nbsp;·&nbsp; ${(a.services||[]).join(', ') || 'No services'}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 // ── REPEAT LAST SERVICE ──
