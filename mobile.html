@@ -1151,12 +1151,11 @@ async function loadApptSearch() {
   try {
     const snap = await db.collection('appointments')
       .where('farrierId', '==', state.user.uid)
-      .orderBy('requestedDate', 'desc')
-      .limit(200)
       .get();
     allAppts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     filterApptResults();
   } catch(e) {
+    console.error('loadApptSearch error:', e);
     resultsEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Could not load appointments.</div>';
   }
 }
