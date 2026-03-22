@@ -11111,9 +11111,9 @@ useEffect(() => {
                     alignItems: 'center',
                     marginBottom: '1rem',
                     padding: '0.75rem',
-                    background: availability[day].enabled ? '#f8f9fa' : '#fff',
-                    borderRadius: '4px',
-                    border: '1px solid #e0e0e0'
+                    background: availability[day].enabled ? 'rgba(38,131,251,0.07)' : 'rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                    border: availability[day].enabled ? '1px solid rgba(38,131,251,0.25)' : '1px solid rgba(255,255,255,0.08)'
                   }}
                 >
                   <label style={{display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0}}>
@@ -11123,7 +11123,7 @@ useEffect(() => {
                       onChange={(e) => updateDayAvailability(day, 'enabled', e.target.checked)}
                       style={{width: '18px', height: '18px'}}
                     />
-                    <span style={{fontWeight: '500', textTransform: 'capitalize'}}>
+                    <span style={{fontWeight: '600', textTransform: 'capitalize', color: '#0D1320'}}>
                       {day}
                     </span>
                   </label>
@@ -11131,7 +11131,7 @@ useEffect(() => {
                   {availability[day].enabled && (
                     <>
                       <div>
-                        <label style={{fontSize: '0.875rem', color: '#666', display: 'block', marginBottom: '0.25rem'}}>
+                        <label style={{fontSize: '0.875rem', color: '#374151', display: 'block', marginBottom: '0.25rem'}}>
                           Start Time
                         </label>
                         <input
@@ -11139,12 +11139,12 @@ useEffect(() => {
                           value={availability[day].start}
                           onChange={(e) => updateDayAvailability(day, 'start', e.target.value)}
                           required
-                          style={{width: '100%'}}
+                          style={{width: '100%', background: '#fff', color: '#0D1320', border: '1.5px solid #cbd5e1'}}
                         />
                       </div>
 
                       <div>
-                        <label style={{fontSize: '0.875rem', color: '#666', display: 'block', marginBottom: '0.25rem'}}>
+                        <label style={{fontSize: '0.875rem', color: '#374151', display: 'block', marginBottom: '0.25rem'}}>
                           End Time
                         </label>
                         <input
@@ -11152,11 +11152,11 @@ useEffect(() => {
                           value={availability[day].end}
                           onChange={(e) => updateDayAvailability(day, 'end', e.target.value)}
                           required
-                          style={{width: '100%'}}
+                          style={{width: '100%', background: '#fff', color: '#0D1320', border: '1.5px solid #cbd5e1'}}
                         />
                       </div>
 
-                      <div style={{fontSize: '0.875rem', color: '#666', textAlign: 'center'}}>
+                      <div style={{fontSize: '0.875rem', color: '#374151', textAlign: 'center', fontWeight: '500'}}>
                         {availability[day].start && availability[day].end && (
                           <>
                             {(() => {
@@ -11172,7 +11172,7 @@ useEffect(() => {
                   )}
 
                   {!availability[day].enabled && (
-                    <div style={{gridColumn: '2 / 5', color: 'var(--text-muted)', fontStyle: 'italic'}}>
+                    <div style={{gridColumn: '2 / 5', color: '#94a3b8', fontStyle: 'italic'}}>
                       Not available
                     </div>
                   )}
