@@ -3662,7 +3662,17 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 types: ['address'],
                 componentRestrictions: { country: 'us' },
               });
-              pac.style.cssText = 'width:100%;display:block;';
+              pac.style.cssText = [
+                'width:100%;display:block;',
+                '--gmp-filled-input-background-color:#ffffff;',
+                '--gmp-filled-input-text-color:#0D1320;',
+                '--gmp-input-placeholder-text-color:#94a3b8;',
+                '--gmp-color-surface:#ffffff;',
+                '--gmp-color-on-surface:#0D1320;',
+                '--gmp-color-on-surface-variant:#0D1320;',
+                '--gmp-color-outline:#cbd5e1;',
+                'color-scheme:light;',
+              ].join('');
               container.appendChild(pac);
               custAddressPacRef.current = pac;
 
@@ -4384,7 +4394,17 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               const pac = new window.google.maps.places.PlaceAutocompleteElement({
                 types: ['address'], componentRestrictions: { country: 'us' }
               });
-              pac.style.cssText = 'width:100%;display:block;';
+              pac.style.cssText = [
+                'width:100%;display:block;',
+                '--gmp-filled-input-background-color:#ffffff;',
+                '--gmp-filled-input-text-color:#0D1320;',
+                '--gmp-input-placeholder-text-color:#94a3b8;',
+                '--gmp-color-surface:#ffffff;',
+                '--gmp-color-on-surface:#0D1320;',
+                '--gmp-color-on-surface-variant:#0D1320;',
+                '--gmp-color-outline:#cbd5e1;',
+                'color-scheme:light;',
+              ].join('');
               container.appendChild(pac);
               startAddressPacRef.current = pac;
               const handleSelect = async (e) => {
@@ -6412,8 +6432,18 @@ function ServicesView({ userId }) {
                 componentRestrictions: { country: 'us' },
               });
 
-              // Style the widget to match the rest of the form
-              pac.style.cssText = 'width:100%;display:block;';
+              // Style the widget to match the rest of the form (light theme override for shadow DOM)
+              pac.style.cssText = [
+                'width:100%;display:block;',
+                '--gmp-filled-input-background-color:#ffffff;',
+                '--gmp-filled-input-text-color:#0D1320;',
+                '--gmp-input-placeholder-text-color:#94a3b8;',
+                '--gmp-color-surface:#ffffff;',
+                '--gmp-color-on-surface:#0D1320;',
+                '--gmp-color-on-surface-variant:#0D1320;',
+                '--gmp-color-outline:#cbd5e1;',
+                'color-scheme:light;',
+              ].join('');
 
               container.appendChild(pac);
               console.log('✅ Google PlaceAutocompleteElement attached');
