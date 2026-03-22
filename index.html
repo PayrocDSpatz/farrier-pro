@@ -11111,52 +11111,46 @@ useEffect(() => {
                     alignItems: 'center',
                     marginBottom: '1rem',
                     padding: '0.75rem',
-                    background: availability[day].enabled ? 'rgba(38,131,251,0.07)' : 'rgba(255,255,255,0.04)',
+                    background: availability[day].enabled ? 'var(--surface, rgba(255,255,255,0.05))' : 'transparent',
                     borderRadius: '8px',
-                    border: availability[day].enabled ? '1px solid rgba(38,131,251,0.25)' : '1px solid rgba(255,255,255,0.08)'
+                    border: '2px solid var(--border)'
                   }}
                 >
-                  <label style={{display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0}}>
+                  <label style={{display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, fontWeight: '600', color: 'var(--text)'}}>
                     <input
                       type="checkbox"
                       checked={availability[day].enabled}
                       onChange={(e) => updateDayAvailability(day, 'enabled', e.target.checked)}
                       style={{width: '18px', height: '18px'}}
                     />
-                    <span style={{fontWeight: '600', textTransform: 'capitalize', color: '#0D1320'}}>
+                    <span style={{textTransform: 'capitalize'}}>
                       {day}
                     </span>
                   </label>
 
                   {availability[day].enabled && (
                     <>
-                      <div>
-                        <label style={{fontSize: '0.875rem', color: '#374151', display: 'block', marginBottom: '0.25rem'}}>
-                          Start Time
-                        </label>
+                      <div className="form-group" style={{margin: 0}}>
+                        <label>Start Time</label>
                         <input
                           type="time"
                           value={availability[day].start}
                           onChange={(e) => updateDayAvailability(day, 'start', e.target.value)}
                           required
-                          style={{width: '100%', background: '#fff', color: '#0D1320', border: '1.5px solid #cbd5e1'}}
                         />
                       </div>
 
-                      <div>
-                        <label style={{fontSize: '0.875rem', color: '#374151', display: 'block', marginBottom: '0.25rem'}}>
-                          End Time
-                        </label>
+                      <div className="form-group" style={{margin: 0}}>
+                        <label>End Time</label>
                         <input
                           type="time"
                           value={availability[day].end}
                           onChange={(e) => updateDayAvailability(day, 'end', e.target.value)}
                           required
-                          style={{width: '100%', background: '#fff', color: '#0D1320', border: '1.5px solid #cbd5e1'}}
                         />
                       </div>
 
-                      <div style={{fontSize: '0.875rem', color: '#374151', textAlign: 'center', fontWeight: '500'}}>
+                      <div style={{fontSize: '0.875rem', color: 'var(--text-muted)', textAlign: 'center', fontWeight: '500'}}>
                         {availability[day].start && availability[day].end && (
                           <>
                             {(() => {
