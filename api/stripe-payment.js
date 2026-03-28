@@ -211,10 +211,10 @@ export default async function handler(req, res) {
       const pi = await stripe.paymentIntents.create({
         amount: amountCents, currency, payment_method: paymentMethodId,
         customer: customerId || undefined, confirm: true,
+        automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
         description: `FarriTech Invoice #${invoiceNumber}`,
         metadata: { farrierId, invoiceId, invoiceNumber },
         receipt_email: customerEmail || undefined,
-        return_url: 'https://app.farritech.com',
       });
       if (pi.status === 'succeeded') {
         let last4 = '', brand = 'Card';
