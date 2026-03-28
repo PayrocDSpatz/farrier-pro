@@ -962,16 +962,12 @@ async function filterCustomers(q) {
   `).join('');
 
   // Event delegation — touchend for instant response on iPad, click as fallback
-  const handleCustomerTap = (e) => {
+  el.onclick = (e) => {
+    if (_custTouchFired) { _custTouchFired = false; return; }
     const row = e.target.closest('[data-cid]');
     if (!row) return;
-    e.preventDefault();
     const found = state.customers.find(c => c.id === row.dataset.cid);
     if (found) selectCustomer(found);
-  };
-  el.addEventListener('touchend', handleCustomerTap, { passive: false });
-  el.onclick = (e) => {
-    if (e.target.closest('[data-cid]')) e.preventDefault(); // suppress click after touchend
   };
 }
 
@@ -1875,6 +1871,17 @@ function showSuccess(title, sub, icon = '✅') {
 }
 
 // ── SEARCH SCREEN INIT ──
+// Single persistent tap handler — set once, never re-added
+let _custTouchFired = false;
+document.getElementById('search-results').addEventListener('touchend', function(e) {
+  const row = e.target.closest('[data-cid]');
+  if (!row) return;
+  e.preventDefault();
+  _custTouchFired = true;
+  const found = state.customers.find(c => c.id === row.dataset.cid);
+  if (found) selectCustomer(found);
+}, { passive: false });
+
 document.getElementById('screen-search').addEventListener('transitionend', function(e) {
   if (e.target !== this) return;
   if (!this.classList.contains('hidden') && !this.classList.contains('slide-left')) {
