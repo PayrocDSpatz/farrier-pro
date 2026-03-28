@@ -1978,6 +1978,7 @@ function seedApptAddressWidget(fullAddress) {
 }
 </script>
 <script>
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/mobile-sw.js')
       .then(reg => console.log('✅ SW registered'))
