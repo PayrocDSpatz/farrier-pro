@@ -96,7 +96,7 @@
   .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; }
 
   /* ── CUSTOMER ROW ── */
-  .customer-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; box-shadow: var(--shadow); transition: transform 0.1s; border: 2px solid transparent; }
+  .customer-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; box-shadow: var(--shadow); transition: transform 0.1s; border: 2px solid transparent; touch-action: manipulation; -webkit-touch-callout: none; }
   .customer-row:active { transform: scale(0.99); border-color: var(--blue); }
   .avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; flex-shrink: 0; }
   .customer-row-name { font-weight: 700; font-size: 0.95rem; }
@@ -951,7 +951,7 @@ async function filterCustomers(q) {
     return;
   }
   el.innerHTML = filtered.map(c => `
-    <div class="customer-row" onclick="selectCustomer(${JSON.stringify(c).replace(/"/g,'&quot;')})">
+    <div class="customer-row" data-cid="${c.id}">
       <div class="avatar">${(c.name||'?')[0].toUpperCase()}</div>
       <div>
         <div class="customer-row-name">${c.name}</div>
@@ -960,6 +960,19 @@ async function filterCustomers(q) {
       <div class="customer-row-arrow">›</div>
     </div>
   `).join('');
+
+  // Event delegation — touchend for instant response on iPad, click as fallback
+  const handleCustomerTap = (e) => {
+    const row = e.target.closest('[data-cid]');
+    if (!row) return;
+    e.preventDefault();
+    const found = state.customers.find(c => c.id === row.dataset.cid);
+    if (found) selectCustomer(found);
+  };
+  el.addEventListener('touchend', handleCustomerTap, { passive: false });
+  el.onclick = (e) => {
+    if (e.target.closest('[data-cid]')) e.preventDefault(); // suppress click after touchend
+  };
 }
 
 async function loadOpenInvoices() {
@@ -1862,7 +1875,8 @@ function showSuccess(title, sub, icon = '✅') {
 }
 
 // ── SEARCH SCREEN INIT ──
-document.getElementById('screen-search').addEventListener('transitionend', function() {
+document.getElementById('screen-search').addEventListener('transitionend', function(e) {
+  if (e.target !== this) return;
   if (!this.classList.contains('hidden') && !this.classList.contains('slide-left')) {
     document.getElementById('search-loading').style.display = 'none';
     document.getElementById('open-invoices-section').style.display = 'none';
