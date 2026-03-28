@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hkTyzbvbUc&libraries=places&v=beta&loading=async"></script>
+<script src="https://js.stripe.com/v3/"></script>
 <style>
   :root {
     --blue: #2683FB;
@@ -510,13 +511,17 @@
       <div class="pay-chip" onclick="selectPayMethod('link', this)"><span class="pay-chip-icon">📲</span>Pay Link</div>
     </div>
 
-    <!-- Card number for manual entry -->
+    <!-- Check number field -->
+    <div id="check-fields" style="display:none;">
+      <div class="field"><label>Check #</label><input type="text" id="check-number" placeholder="e.g. 1042" inputmode="numeric" style="letter-spacing:2px;"></div>
+    </div>
+
+    <!-- Stripe Elements card entry -->
     <div id="card-fields" style="display:none;">
-      <div class="field"><label>Card Last 4</label><input type="number" id="card-last4" placeholder="1234" maxlength="4" style="letter-spacing:4px;"></div>
-      <div class="field"><label>Card Type</label>
-        <select id="card-type">
-          <option>Visa</option><option>Mastercard</option><option>Amex</option><option>Discover</option>
-        </select>
+      <div class="field">
+        <label>Card Details</label>
+        <div id="stripe-card-element" style="padding:14px; border:2px solid var(--border); border-radius:10px; background:var(--surface);"></div>
+        <div id="stripe-card-error" style="color:#dc2626; font-size:0.82rem; margin-top:6px; display:none;"></div>
       </div>
     </div>
 
@@ -1669,8 +1674,11 @@ function openInvoicePayment(inv) {
   document.getElementById('pay-invoice-num').textContent = '#' + (inv.invoiceNumber || '');
   document.getElementById('pay-customer-name').textContent = inv.customerName || '';
   document.getElementById('pay-amount').textContent = '$' + (inv.total||0).toFixed(2);
+  document.getElementById('check-fields').style.display = 'none';
   document.getElementById('card-fields').style.display = 'none';
   document.getElementById('link-fields').style.display = 'none';
+  // Reset Stripe card element for fresh entry each time
+  if (_stripeCard) { _stripeCard.destroy(); _stripeCard = null; }
   document.getElementById('confirm-pay-btn').disabled = true;
   document.querySelectorAll('.pay-chip').forEach(c => c.classList.remove('selected'));
   document.getElementById('confirm-pay-btn').textContent = 'Confirm Payment';
@@ -1681,8 +1689,10 @@ function selectPayMethod(method, el) {
   state.selectedPayMethod = method;
   document.querySelectorAll('.pay-chip').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
-  document.getElementById('card-fields').style.display = method === 'card' ? 'block' : 'none';
-  document.getElementById('link-fields').style.display = method === 'link' ? 'block' : 'none';
+  document.getElementById('check-fields').style.display = method === 'check' ? 'block' : 'none';
+  document.getElementById('card-fields').style.display  = method === 'card'  ? 'block' : 'none';
+  document.getElementById('link-fields').style.display  = method === 'link'  ? 'block' : 'none';
+  if (method === 'card') setTimeout(initStripeElements, 50);
   const btn = document.getElementById('confirm-pay-btn');
   btn.disabled = false;
   btn.textContent = method === 'link' ? '📲 Send Payment Link' : '✓ Confirm Payment';
@@ -1754,16 +1764,23 @@ async function confirmPayment() {
         return;
       }
       showSuccess('Link Sent!', `Payment link sent via ${sent.join(' & ')} to ${inv.customerName}`);
+    } else if (method === 'card') {
+      const ok = await chargeCardViaStripe(inv);
+      if (!ok) {
+        document.getElementById('confirm-pay-btn').disabled = false;
+        document.getElementById('pay-saving').style.display = 'none';
+        return;
+      }
+      showSuccess('Payment Charged!', `$${(inv.total||0).toFixed(2)} collected via card`);
     } else {
-      // Mark as paid
+      // Cash or check — mark as paid
       const updateData = {
         status: 'paid',
         paidAt: firebase.firestore.FieldValue.serverTimestamp(),
         paymentMethod: method,
       };
-      if (method === 'card') {
-        updateData.cardLast4 = document.getElementById('card-last4')?.value || '';
-        updateData.cardType = document.getElementById('card-type')?.value || '';
+      if (method === 'check') {
+        updateData.checkNumber = document.getElementById('check-number')?.value.trim() || '';
       }
       await db.collection('invoices').doc(inv.id).update(updateData);
       showSuccess('Payment Recorded!', `$${(inv.total||0).toFixed(2)} collected via ${method}`);
@@ -1868,6 +1885,93 @@ function showSuccess(title, sub, icon = '✅') {
   document.getElementById('success-sub').textContent = sub;
   state.screenHistory = [];
   goTo('screen-success', false);
+}
+
+// ── STRIPE ELEMENTS FOR CARD PAYMENT ──
+let _stripe = null;
+let _stripeCard = null;
+
+function initStripeElements() {
+  const pubKey = state.userProfile?.stripePublishableKey || '';
+  if (!pubKey || !window.Stripe) return;
+  if (_stripe && _stripeCard) return; // already mounted
+
+  _stripe = window.Stripe(pubKey);
+  const elements = _stripe.elements();
+  _stripeCard = elements.create('card', {
+    style: {
+      base: {
+        fontSize: '16px',
+        color: '#0D1320',
+        fontFamily: "'Outfit', system-ui, sans-serif",
+        '::placeholder': { color: '#94a3b8' }
+      },
+      invalid: { color: '#dc2626' }
+    }
+  });
+  _stripeCard.mount('#stripe-card-element');
+  _stripeCard.on('change', (e) => {
+    const errEl = document.getElementById('stripe-card-error');
+    if (e.error) { errEl.textContent = e.error.message; errEl.style.display = 'block'; }
+    else { errEl.style.display = 'none'; }
+  });
+}
+
+async function chargeCardViaStripe(inv) {
+  if (!_stripe || !_stripeCard) {
+    showToast('Stripe not initialized', 'error'); return false;
+  }
+  const { paymentMethod, error } = await _stripe.createPaymentMethod({ type: 'card', card: _stripeCard });
+  if (error) {
+    const errEl = document.getElementById('stripe-card-error');
+    errEl.textContent = error.message; errEl.style.display = 'block';
+    return false;
+  }
+  const res = await fetch('/api/stripe-payment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'charge',
+      paymentMethodId: paymentMethod.id,
+      amount: inv.total,
+      farrierId: state.user.uid,
+      invoiceId: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      customerEmail: inv.customerEmail || '',
+      customerName: inv.customerName || '',
+      stripeSecretKey: state.userProfile?.stripeSecretKey || ''
+    })
+  });
+  const result = await res.json();
+  if (!result.success) {
+    showToast(result.error || 'Card declined', 'error'); return false;
+  }
+  // Update Firestore — same pattern as desktop
+  const freshDoc = await db.collection('invoices').doc(inv.id).get();
+  const freshData = freshDoc.exists ? freshDoc.data() : {};
+  const existing = freshData.payments || [];
+  const newPayment = {
+    amount: inv.total,
+    method: 'credit_card',
+    memo: result.last4 ? `${result.brand || 'Card'} ending ${result.last4}` : 'Credit card',
+    date: new Date().toISOString(),
+    transactionId: result.transactionId
+  };
+  const allPayments = [...existing, newPayment];
+  const totalPaid = allPayments.reduce((s, p) => s + (p.amount || 0), 0);
+  const newStatus = totalPaid >= inv.total ? 'paid' : 'partial';
+  await db.collection('invoices').doc(inv.id).update({
+    status: newStatus,
+    payments: allPayments,
+    paidAmount: totalPaid,
+    balanceDue: Math.max(0, inv.total - totalPaid),
+    paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null),
+    transactionId: result.transactionId,
+    paymentMethod: 'card',
+    cardLast4: result.last4 || '',
+    cardBrand: result.brand || ''
+  });
+  return true;
 }
 
 // ── SEARCH SCREEN INIT ──
