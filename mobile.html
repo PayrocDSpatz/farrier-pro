@@ -14,6 +14,7 @@
 <title>FarriTech Mobile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hkTyzbvbUc&libraries=places&v=beta&loading=async"></script>
 <style>
   :root {
     --blue: #2683FB;
@@ -581,7 +582,11 @@
     <div class="field"><label>Number of Horses</label><input type="number" id="appt-horses" value="1" min="1"></div>
     <div class="section-label" style="margin-top:4px;">Services</div>
     <div class="service-grid" id="appt-service-grid" style="margin-bottom:16px;"></div>
-    <div class="field"><label>Address</label><input type="text" id="appt-address" placeholder="123 Main St, City, FL"></div>
+    <div class="field">
+      <label>Address</label>
+      <div id="appt-address-pac-container" style="width:100%;"></div>
+      <input type="hidden" id="appt-address">
+    </div>
     <div class="field"><label>Notes</label><textarea id="appt-notes" placeholder="Gate code, special instructions…" rows="2"></textarea></div>
     <button class="btn-primary" id="appt-save-btn" onclick="saveNewAppointment()">📅 Save Appointment</button>
     <div style="margin-top:8px;"></div>
@@ -1798,10 +1803,19 @@ function startNewAppointment() {
   document.getElementById('appt-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('appt-time').value = '';
   document.getElementById('appt-horses').value = '1';
-  document.getElementById('appt-address').value = [state.customer.address, state.customer.city, state.customer.state].filter(Boolean).join(', ');
+  const prefillAddr = [state.customer.address, state.customer.city, state.customer.state].filter(Boolean).join(', ');
   document.getElementById('appt-notes').value = '';
   renderServiceGrid('appt-service-grid');
   goTo('screen-new-appt');
+  // Initialize PAC widget (safe to call multiple times — it guards internally)
+  _apptPac = null; // reset so it re-mounts fresh each time
+  _apptPacTries = 0;
+  // Clear old PAC widget from container
+  const pac_c = document.getElementById('appt-address-pac-container');
+  if (pac_c) pac_c.innerHTML = '';
+  initApptAddressPAC();
+  // Pre-fill after a short delay to let PAC mount
+  if (prefillAddr) setTimeout(() => seedApptAddressWidget(prefillAddr), 400);
 }
 
 async function saveNewAppointment() {
@@ -1872,7 +1886,98 @@ function fmtDate(ts) {
 }
 </script>
 <script>
-if ('serviceWorker' in navigator) {
+// ── GOOGLE PLACES AUTOCOMPLETE FOR APPOINTMENT ADDRESS ──
+let _apptPac = null;
+let _apptPacTries = 0;
+
+function initApptAddressPAC() {
+  const container = document.getElementById('appt-address-pac-container');
+  if (!container) return;
+  // Already initialized
+  if (_apptPac) return;
+
+  if (!window.google?.maps?.places?.PlaceAutocompleteElement) {
+    if (_apptPacTries++ < 40) setTimeout(initApptAddressPAC, 250);
+    return;
+  }
+
+  try {
+    const pac = new window.google.maps.places.PlaceAutocompleteElement({
+      types: ['address'],
+      componentRestrictions: { country: 'us' },
+    });
+    pac.style.cssText = [
+      'width:100%;display:block;',
+      '--gmp-filled-input-background-color:#ffffff;',
+      '--gmp-filled-input-text-color:#0D1320;',
+      '--gmp-input-placeholder-text-color:#94a3b8;',
+      '--gmp-color-surface:#ffffff;',
+      '--gmp-color-on-surface:#0D1320;',
+      '--gmp-color-on-surface-variant:#0D1320;',
+      '--gmp-color-outline:#DDE3EC;',
+      '--gmp-filled-input-border-radius:10px;',
+      'color-scheme:light;',
+    ].join('');
+    container.appendChild(pac);
+    _apptPac = pac;
+
+    const handlePlaceSelect = async (e) => {
+      try {
+        const prediction = e.placePrediction || e.place;
+        if (!prediction) return;
+        const place = prediction.toPlace ? prediction.toPlace() : prediction;
+        await place.fetchFields({ fields: ['formattedAddress', 'addressComponents'] });
+
+        const formatted = place.formattedAddress || '';
+        const comps = place.addressComponents || [];
+
+        const get = (type, short = false) => {
+          for (const c of comps) {
+            if ((c.types || []).includes(type))
+              return short ? (c.shortText || c.short_name || '') : (c.longText || c.long_name || '');
+          }
+          return '';
+        };
+
+        const streetNumber = get('street_number');
+        const route = get('route');
+        const city = get('locality') || get('sublocality') || get('postal_town');
+        const stateShort = get('administrative_area_level_1', true);
+        const zip = get('postal_code');
+
+        const address1 = [streetNumber, route].filter(Boolean).join(' ').trim()
+          || (formatted.split(',')[0] || '').trim();
+
+        // Build full address string and store in hidden input
+        const fullAddr = [address1, city, stateShort, zip].filter(Boolean).join(', ');
+        document.getElementById('appt-address').value = fullAddr;
+
+        // Also update the PAC widget's visible input so it shows the street address
+        const widgetInput = pac.querySelector('input');
+        if (widgetInput && address1) widgetInput.value = address1;
+      } catch (err) {
+        console.error('Appt PAC error:', err);
+      }
+    };
+
+    pac.addEventListener('gmp-placeselect', handlePlaceSelect);
+    pac.addEventListener('gmp-select', handlePlaceSelect);
+  } catch (err) {
+    console.error('Failed to init appt address PAC:', err);
+  }
+}
+
+// Seed the PAC widget's visible text when pre-populating from customer data
+function seedApptAddressWidget(fullAddress) {
+  document.getElementById('appt-address').value = fullAddress;
+  // Try to set the visible input inside the PAC widget
+  if (_apptPac) {
+    const widgetInput = _apptPac.querySelector('input');
+    if (widgetInput) widgetInput.value = fullAddress;
+  }
+}
+</script>
+<script>
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/mobile-sw.js')
       .then(reg => console.log('✅ SW registered'))
