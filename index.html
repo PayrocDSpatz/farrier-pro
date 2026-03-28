@@ -3472,6 +3472,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 { label: '⚙️ Manage', items: [
                   { id: 'services', label: 'Services', icon: '🧾' },
                   { id: 'settings', label: 'Settings', icon: '⚙️' },
+                  { id: 'tutorials', label: 'Video Tutorials', icon: '▶️' },
                 ]},
               ];
 
@@ -3598,6 +3599,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'route' && <RouteSheetView userId={farrierId} userProfile={userProfile} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
             {tab === 'about' && <AboutView />}
+            {tab === 'tutorials' && <TutorialsView />}
             <footer style={{
               textAlign: 'center',
               padding: '16px',
@@ -6154,6 +6156,61 @@ function ServicesView({ userId }) {
               </table>
             </div>
           )}
+        </div>
+      );
+    }
+
+    function TutorialsView() {
+      const videos = [
+        { title: 'Create New Customer', desc: 'Quickly add a new client right from the field — enter their name, farm, phone, and email in seconds.', url: 'https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw' },
+        { title: 'Pay Invoice', desc: 'Collect payment on the spot — accept cash, check, or charge a card directly from your phone.', url: 'https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw' },
+        { title: 'Create Invoice', desc: 'Build and send an invoice right from the field — add services, set the total, and deliver it instantly.', url: 'https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw' },
+        { title: 'Make an Appointment', desc: 'Schedule your next visit on the spot — select the customer, pick a date and time, and you\'re booked.', url: 'https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw' },
+      ];
+      return (
+        <div>
+          <h1 style={{marginBottom: '0.5rem', fontSize: '2rem', color: 'var(--primary)'}}>▶️ Video Tutorials</h1>
+          <p style={{color: 'var(--text-muted)', marginBottom: '1.5rem'}}>Watch step-by-step guides for using FarriTech on mobile.</p>
+          <a
+            href="https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+              background: '#FF0000', color: 'white', padding: '0.75rem 1.5rem',
+              borderRadius: '8px', fontWeight: 700, fontSize: '1rem',
+              textDecoration: 'none', marginBottom: '2rem'
+            }}
+          >
+            ▶ View Full Playlist on YouTube
+          </a>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem'}}>
+            {videos.map((v, i) => (
+              <a
+                key={i}
+                href={v.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block', textDecoration: 'none',
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: '12px', padding: '1.25rem',
+                  transition: 'box-shadow 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(38,131,251,0.15)'}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+              >
+                <div style={{
+                  background: 'linear-gradient(135deg, #FF0000, #cc0000)',
+                  borderRadius: '8px', height: '80px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: '0.75rem', fontSize: '2rem'
+                }}>▶</div>
+                <div style={{fontWeight: 700, color: 'var(--primary)', marginBottom: '0.4rem'}}>{v.title}</div>
+                <div style={{fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5}}>{v.desc}</div>
+              </a>
+            ))}
+          </div>
         </div>
       );
     }
