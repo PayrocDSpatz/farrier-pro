@@ -6161,16 +6161,82 @@ function ServicesView({ userId }) {
     }
 
     function TutorialsView() {
+      const [activeVideo, setActiveVideo] = React.useState(null);
+
       const videos = [
-        { title: 'Create New Customer', desc: 'Quickly add a new client right from the field — enter their name, farm, phone, and email in seconds.', url: 'https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw' },
-        { title: 'Pay Invoice', desc: 'Collect payment on the spot — accept cash, check, or charge a card directly from your phone.', url: 'https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw' },
-        { title: 'Create Invoice', desc: 'Build and send an invoice right from the field — add services, set the total, and deliver it instantly.', url: 'https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw' },
-        { title: 'Make an Appointment', desc: 'Schedule your next visit on the spot — select the customer, pick a date and time, and you\'re booked.', url: 'https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw' },
+        { id: '1y9DPzvF6-E', title: 'Farrier Setup', desc: 'Walk through every section of the Settings screen — business profile, availability, SMS notifications, Stripe payments, and your booking URL.', isShort: false },
+        { id: 'gNW-B_LfBnc', title: 'Book Appointment Via QR Code', desc: 'See exactly what clients experience when they scan your FarriTech QR code — from the mobile booking page to instant SMS confirmation.', isShort: true },
+        { id: 'R0TME_qMmRk', title: 'Book Appointment – Customer View (Desktop)', desc: 'See exactly what your client experiences when they use your signup link via a desktop or laptop computer.', isShort: false },
+        { id: 'VnVmhcrXDCE', title: 'Appointment Confirmation & Google Calendar Sync', desc: 'Learn how to use the Schedule tab to view your full appointment calendar, confirm and manage bookings, and sync everything live to Google Calendar.', isShort: false },
+        { id: '_4lXrQDyjV0', title: 'Appointments and Smart Routing', desc: 'Create and manage appointments inside FarriTech, and let Smart Routing automatically organize your day\'s stops into the most efficient drive order.', isShort: false },
+        { id: 'KI7nklQMod8', title: 'Mobile – Create New Customer', desc: 'Quickly add a new client right from the field — enter their name, farm, phone, and email in seconds.', isShort: true },
+        { id: 'vHfO9bycFAU', title: 'Mobile – Create Invoice', desc: 'Build and send an invoice right from the field — add services, set the total, and deliver it instantly.', isShort: true },
+        { id: 'tRRiRYB-MZM', title: 'Mobile – Pay Invoice', desc: 'Collect payment on the spot — accept cash, check, or charge a card directly from your phone.', isShort: true },
+        { id: 'AxxoaIzcAec', title: 'Mobile – Add an Appointment', desc: 'Schedule your next visit on the spot — select the customer, pick a date and time, and you\'re booked.', isShort: true },
       ];
+
+      const getEmbedUrl = (video) => `https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0`;
+      const getThumbnailUrl = (id) => `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+
       return (
         <div>
+          {activeVideo && (
+            <div
+              onClick={() => setActiveVideo(null)}
+              style={{
+                position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+                zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '1rem'
+              }}
+            >
+              <div
+                onClick={e => e.stopPropagation()}
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  maxWidth: activeVideo.isShort ? '400px' : '900px',
+                  background: '#000',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  boxShadow: '0 24px 64px rgba(0,0,0,0.6)'
+                }}
+              >
+                <button
+                  onClick={() => setActiveVideo(null)}
+                  style={{
+                    position: 'absolute', top: '0.75rem', right: '0.75rem', zIndex: 10,
+                    background: 'rgba(0,0,0,0.7)', border: 'none', color: 'white',
+                    borderRadius: '50%', width: '36px', height: '36px',
+                    fontSize: '1.1rem', cursor: 'pointer', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', lineHeight: 1
+                  }}
+                >✕</button>
+                <div style={{
+                  position: 'relative',
+                  paddingTop: activeVideo.isShort ? '177.78%' : '56.25%',
+                }}>
+                  <iframe
+                    src={getEmbedUrl(activeVideo)}
+                    title={activeVideo.title}
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    style={{
+                      position: 'absolute', top: 0, left: 0,
+                      width: '100%', height: '100%'
+                    }}
+                  />
+                </div>
+                <div style={{padding: '1rem', background: '#111'}}>
+                  <div style={{fontWeight: 700, color: 'white', fontSize: '1rem'}}>{activeVideo.title}</div>
+                  <div style={{fontSize: '0.8rem', color: '#aaa', marginTop: '0.25rem'}}>{activeVideo.desc}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <h1 style={{marginBottom: '0.5rem', fontSize: '2rem', color: 'var(--primary)'}}>▶️ Video Tutorials</h1>
-          <p style={{color: 'var(--text-muted)', marginBottom: '1.5rem'}}>Watch step-by-step guides for using FarriTech on mobile.</p>
+          <p style={{color: 'var(--text-muted)', marginBottom: '1.5rem'}}>Watch step-by-step guides for using FarriTech. Click any video to play it here.</p>
           <a
             href="https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw"
             target="_blank"
@@ -6184,31 +6250,61 @@ function ServicesView({ userId }) {
           >
             ▶ View Full Playlist on YouTube
           </a>
-          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem'}}>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem'}}>
             {videos.map((v, i) => (
-              <a
+              <div
                 key={i}
-                href={v.url}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={() => setActiveVideo(v)}
                 style={{
-                  display: 'block', textDecoration: 'none',
+                  cursor: 'pointer',
                   background: 'var(--surface)', border: '1px solid var(--border)',
-                  borderRadius: '12px', padding: '1.25rem',
-                  transition: 'box-shadow 0.15s',
+                  borderRadius: '12px', overflow: 'hidden',
+                  transition: 'box-shadow 0.15s, transform 0.15s',
                 }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(38,131,251,0.15)'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 6px 20px rgba(38,131,251,0.2)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
               >
-                <div style={{
-                  background: 'linear-gradient(135deg, #FF0000, #cc0000)',
-                  borderRadius: '8px', height: '80px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  marginBottom: '0.75rem', fontSize: '2rem'
-                }}>▶</div>
-                <div style={{fontWeight: 700, color: 'var(--primary)', marginBottom: '0.4rem'}}>{v.title}</div>
-                <div style={{fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5}}>{v.desc}</div>
-              </a>
+                <div style={{position: 'relative', paddingTop: '56.25%', background: '#000', overflow: 'hidden'}}>
+                  <img
+                    src={getThumbnailUrl(v.id)}
+                    alt={v.title}
+                    style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover'}}
+                    onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                  />
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'linear-gradient(135deg, #FF0000, #cc0000)',
+                    display: 'none', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '2rem', color: 'white'
+                  }}>▶</div>
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.2)'
+                  }}>
+                    <div style={{
+                      width: '52px', height: '52px', borderRadius: '50%',
+                      background: 'rgba(255,0,0,0.92)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.5)'
+                    }}>
+                      <span style={{color: 'white', fontSize: '1.4rem', marginLeft: '4px'}}>▶</span>
+                    </div>
+                  </div>
+                  {v.isShort && (
+                    <div style={{
+                      position: 'absolute', top: '0.5rem', right: '0.5rem',
+                      background: 'rgba(0,0,0,0.75)', color: 'white',
+                      fontSize: '0.7rem', fontWeight: 700, padding: '2px 7px',
+                      borderRadius: '4px', letterSpacing: '0.03em'
+                    }}>SHORT</div>
+                  )}
+                </div>
+                <div style={{padding: '0.9rem 1rem 1rem'}}>
+                  <div style={{fontWeight: 700, color: 'var(--primary)', marginBottom: '0.35rem', fontSize: '0.95rem'}}>{v.title}</div>
+                  <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5}}>{v.desc}</div>
+                </div>
+              </div>
             ))}
           </div>
         </div>
