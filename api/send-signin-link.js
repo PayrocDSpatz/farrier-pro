@@ -1,19 +1,11 @@
 // api/send-signin-link.js
-// Generates a Firebase email sign-in link via Admin SDK and sends it via Resend.
-// Requires env vars: FIREBASE_SERVICE_ACCOUNT (JSON string), RESEND_API_KEY
-
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+// Generates a Firebase email sign-in link via REST API and sends it via Resend.
+// Requires env vars: FIREBASE_WEB_API_KEY, RESEND_API_KEY
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY;
 const FROM = 'FarriTech <noreply@farritech.com>';
 const PORTAL_URL = 'https://app.farritech.com/customer-portal.html';
-
-function getAdminApp() {
-  if (getApps().length > 0) return getApps()[0];
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-  return initializeApp({ credential: cert(serviceAccount) });
-}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -28,21 +20,41 @@ export default async function handler(req, res) {
   if (!email) return res.status(400).json({ error: 'Email required' });
 
   if (!RESEND_API_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured' });
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT) return res.status(500).json({ error: 'FIREBASE_SERVICE_ACCOUNT not configured' });
+  if (!FIREBASE_WEB_API_KEY) return res.status(500).json({ error: 'FIREBASE_WEB_API_KEY not configured' });
 
   try {
-    // Generate magic link via Firebase Admin
-    const app = getAdminApp();
-    const adminAuth = getAuth(app);
+    // Generate magic link via Firebase REST API (no Admin SDK / service account needed)
+    const firebaseRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_WEB_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestType: 'EMAIL_SIGNIN',
+          email,
+          continueUrl: PORTAL_URL,
+          canHandleCodeInApp: true,
+        }),
+      }
+    );
 
-    const actionCodeSettings = {
-      url: PORTAL_URL,
-      handleCodeInApp: true,
-    };
+    const firebaseData = await firebaseRes.json();
 
-    const link = await adminAuth.generateSignInWithEmailLink(email, actionCodeSettings);
+    if (!firebaseRes.ok) {
+      const msg = firebaseData?.error?.message || 'Firebase error';
+      throw new Error(msg);
+    }
 
-    // Send branded email via Resend
+    // Firebase sends its own email by default — we need to intercept.
+    // Since we can't fully suppress Firebase's email via REST,
+    // we use the oobCode from the response to build the link ourselves
+    // and send our branded email via Resend.
+    const oobCode = firebaseData.oobCode;
+    if (!oobCode) throw new Error('No oobCode returned from Firebase');
+
+    // Build the magic link using the oobCode
+    const magicLink = `https://app.farritech.com/customer-portal.html?mode=signIn&oobCode=${oobCode}&apiKey=${FIREBASE_WEB_API_KEY}&lang=en`;
+
     const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
@@ -53,20 +65,22 @@ export default async function handler(req, res) {
   <div style="background:#fff;padding:32px 30px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px;">
     <h2 style="margin:0 0 0.5rem;color:#0D1320;font-size:1.4rem;">Your Sign-In Link</h2>
     <p style="color:#6b7280;margin:0 0 1.5rem;font-size:0.95rem;">
-      Click the button below to sign in to your FarriTech customer portal and view your invoices. This link expires in 1 hour.
+      Click the button below to securely sign in to your FarriTech customer portal and view your invoices.
+      This link expires in 1 hour and can only be used once.
     </p>
     <div style="text-align:center;margin:1.5rem 0;">
-      <a href="${link}" style="background:linear-gradient(135deg,#2683FB 0%,#46C5FF 100%);color:#fff;padding:14px 36px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:1rem;">
+      <a href="${magicLink}" style="background:linear-gradient(135deg,#2683FB 0%,#46C5FF 100%);color:#fff;padding:14px 36px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:1rem;">
         Sign In to FarriTech
       </a>
     </div>
     <p style="color:#9ca3af;font-size:0.8rem;text-align:center;margin:1.5rem 0 0;">
-      If you didn't request this, you can safely ignore this email.<br/>
+      If you didn't request this link, you can safely ignore this email.<br/>
       This link can only be used once and expires in 1 hour.
     </p>
   </div>
   <p style="text-align:center;color:#9ca3af;font-size:0.75rem;margin-top:1rem;">
-    &copy; ${new Date().getFullYear()} FarriTech &mdash; Advanced Farrier Solutions
+    &copy; ${new Date().getFullYear()} FarriTech &mdash; Advanced Farrier Solutions<br/>
+    <a href="https://farritech.com" style="color:#9ca3af;">farritech.com</a>
   </p>
 </body>
 </html>`;
