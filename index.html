@@ -3598,7 +3598,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'mileage' && <MileageLogView userId={farrierId} userProfile={userProfile} />}
             {tab === 'route' && <RouteSheetView userId={farrierId} userProfile={userProfile} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
-            {tab === 'about' && <AboutView />}
+            {tab === 'about' && <AboutView user={user} userProfile={userProfile} />}
             {tab === 'tutorials' && <TutorialsView />}
             <footer style={{
               textAlign: 'center',
@@ -6311,7 +6311,53 @@ function ServicesView({ userId }) {
       );
     }
 
-    function AboutView() {
+    function AboutView({ user, userProfile }) {
+      const [refName,   setRefName]   = React.useState('');
+      const [refEmail,  setRefEmail]  = React.useState('');
+      const [refPhone,  setRefPhone]  = React.useState('');
+      const [refStatus, setRefStatus] = React.useState(null);
+      const [refMsg,    setRefMsg]    = React.useState('');
+
+      const handleReferral = async (e) => {
+        e.preventDefault();
+        if (!refName.trim() || !refEmail.trim()) {
+          setRefStatus('error'); setRefMsg('Name and email are required.'); return;
+        }
+        setRefStatus('sending'); setRefMsg('');
+        const referrerName  = userProfile?.ownerName || user?.displayName || '';
+        const referrerEmail = user?.email || '';
+        try {
+          await db.collection('referrals').add({
+            referrerUid:   user?.uid   || '',
+            referrerEmail,
+            referrerName,
+            refereeName:   refName.trim(),
+            refereeEmail:  refEmail.trim().toLowerCase(),
+            refereePhone:  refPhone.trim(),
+            status:        'pending',
+            creditApplied: false,
+            createdAt:     firebase.firestore.FieldValue.serverTimestamp(),
+            expiresAt:     new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+          });
+          await fetch('https://www.farritech.com/api/send-referral-emails', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              referrerName,
+              referrerEmail,
+              refereeName:  refName.trim(),
+              refereeEmail: refEmail.trim().toLowerCase(),
+              refereePhone: refPhone.trim(),
+            }),
+          });
+          setRefStatus('success');
+          setRefName(''); setRefEmail(''); setRefPhone('');
+        } catch (err) {
+          console.error('Referral error:', err);
+          setRefStatus('error'); setRefMsg('Something went wrong. Please try again.');
+        }
+      };
+
       return (
         <div>
           <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>
@@ -6428,6 +6474,101 @@ function ServicesView({ userId }) {
                   Built with ❤️ for professional farriers
                 </p>
               </div>
+
+              {/* ── Referral Card ────────────────────────────────────────── */}
+              <div className="card" style={{marginTop: '2rem'}}>
+                <h3 style={{fontSize: '1.25rem', marginBottom: '0.5rem', color: 'var(--primary)'}}>
+                  🤝 Refer a Farrier — Get a Free Month
+                </h3>
+                <p style={{fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem'}}>
+                  Know another farrier who could use FarriTech? Send them an invite.
+                  If they sign up within 60 days you'll get <strong>1 free month</strong> added to your account automatically.
+                </p>
+
+                {refStatus === 'success' ? (
+                  <div style={{background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:'8px', padding:'1.25rem', textAlign:'center'}}>
+                    <div style={{fontSize:'2rem', marginBottom:'0.5rem'}}>🎉</div>
+                    <p style={{color:'#16a34a', fontWeight:'600', margin:0}}>Referral sent! We emailed them and sent you a confirmation.</p>
+                    <button
+                      onClick={() => setRefStatus(null)}
+                      style={{marginTop:'1rem', background:'none', border:'1px solid #16a34a', color:'#16a34a', borderRadius:'6px', padding:'0.4rem 1rem', cursor:'pointer', fontSize:'0.85rem'}}
+                    >Refer someone else</button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleReferral} noValidate>
+                    <div style={{display:'grid', gap:'0.75rem'}}>
+                      <div>
+                        <label style={{display:'block', fontSize:'0.85rem', fontWeight:'600', marginBottom:'0.3rem', color:'var(--text-muted)'}}>
+                          Their Name *
+                        </label>
+                        <input
+                          className="form-input"
+                          type="text"
+                          placeholder="John Smith"
+                          value={refName}
+                          onChange={e => { setRefName(e.target.value); setRefStatus(null); }}
+                          disabled={refStatus === 'sending'}
+                          required
+                          style={{width:'100%', boxSizing:'border-box'}}
+                        />
+                      </div>
+                      <div>
+                        <label style={{display:'block', fontSize:'0.85rem', fontWeight:'600', marginBottom:'0.3rem', color:'var(--text-muted)'}}>
+                          Their Email *
+                        </label>
+                        <input
+                          className="form-input"
+                          type="email"
+                          placeholder="john@example.com"
+                          value={refEmail}
+                          onChange={e => { setRefEmail(e.target.value); setRefStatus(null); }}
+                          disabled={refStatus === 'sending'}
+                          required
+                          style={{width:'100%', boxSizing:'border-box'}}
+                        />
+                      </div>
+                      <div>
+                        <label style={{display:'block', fontSize:'0.85rem', fontWeight:'600', marginBottom:'0.3rem', color:'var(--text-muted)'}}>
+                          Their Phone <span style={{fontWeight:'400'}}>(optional)</span>
+                        </label>
+                        <input
+                          className="form-input"
+                          type="tel"
+                          placeholder="(555) 555-5555"
+                          value={refPhone}
+                          onChange={e => setRefPhone(e.target.value)}
+                          disabled={refStatus === 'sending'}
+                          style={{width:'100%', boxSizing:'border-box'}}
+                        />
+                      </div>
+                    </div>
+
+                    {refStatus === 'error' && (
+                      <p style={{color:'#ef4444', fontSize:'0.85rem', marginTop:'0.5rem'}}>{refMsg}</p>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={refStatus === 'sending'}
+                      style={{
+                        marginTop: '1rem',
+                        width: '100%',
+                        padding: '0.75rem',
+                        background: refStatus === 'sending' ? '#94a3b8' : 'linear-gradient(135deg, #2563eb 0%, #06b6d4 100%)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontWeight: '600',
+                        fontSize: '1rem',
+                        cursor: refStatus === 'sending' ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {refStatus === 'sending' ? 'Sending…' : 'Send Referral Invite →'}
+                    </button>
+                  </form>
+                )}
+              </div>
+
             </div>
           </div>
         </div>
