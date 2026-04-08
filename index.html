@@ -6641,7 +6641,30 @@ function ServicesView({ userId }) {
             </p>
 
             <div className="qr-code-container">
+              <div style={{
+                fontSize: '1.1rem',
+                fontWeight: '800',
+                letterSpacing: '0.18em',
+                color: '#333',
+                textTransform: 'uppercase',
+                marginBottom: '0.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem'
+              }}>
+                <span style={{fontSize: '1.2rem'}}>👆</span> SCAN ME
+              </div>
               <img src={qrImageUrl} alt="QR Code" style={{display: 'block', maxWidth: '100%'}} />
+              <div style={{
+                fontSize: '0.85rem',
+                fontWeight: '600',
+                color: '#555',
+                marginTop: '0.5rem',
+                letterSpacing: '0.05em'
+              }}>
+                to book an appointment
+              </div>
             </div>
 
             <div style={{display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap'}}>
