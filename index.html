@@ -6581,14 +6581,65 @@ function ServicesView({ userId }) {
       const farrierId = (userProfile && (userProfile.farrierId || userProfile.id || userProfile.uid)) || (user && user.uid) || '';
       const bookingUrl = window.location.origin + window.location.pathname + '?farrier=' + encodeURIComponent(safeFarrierId);
       
-      // Use Google Charts API for QR code as backup
-      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(bookingUrl)}&color=2D5016&bgcolor=FFFFFF`;
+      const QR_PRESETS = [
+        { label: 'Forest Green', hex: '#2D5016' },
+        { label: 'Black',        hex: '#000000' },
+        { label: 'Navy Blue',    hex: '#1a2e6e' },
+        { label: 'Crimson Red',  hex: '#b91c1c' },
+        { label: 'Deep Purple',  hex: '#6b21a8' },
+        { label: 'Burnt Orange', hex: '#c2410c' },
+        { label: 'Teal',         hex: '#0f766e' },
+      ];
+
+      const [qrColor, setQrColor] = React.useState('#2D5016');
+      const [isCustom, setIsCustom] = React.useState(false);
+      const [customColor, setCustomColor] = React.useState('#2D5016');
+
+      const activeColor = isCustom ? customColor : qrColor;
+      const qrColorParam = activeColor.replace('#', '');
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(bookingUrl)}&color=${qrColorParam}&bgcolor=FFFFFF`;
 
       const downloadQR = () => {
-        const link = document.createElement('a');
-        link.download = 'farrier-booking-qr.png';
-        link.href = qrImageUrl;
-        link.click();
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const padding = 32;
+          const topTextH = 48;
+          const bottomTextH = 40;
+          const qrSize = img.width;
+          const canvasW = qrSize + padding * 2;
+          const canvasH = qrSize + padding * 2 + topTextH + bottomTextH;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = canvasW;
+          canvas.height = canvasH;
+          const ctx = canvas.getContext('2d');
+
+          // White background
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvasW, canvasH);
+
+          // "SCAN ME" top text in chosen color
+          ctx.fillStyle = activeColor;
+          ctx.font = 'bold 26px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('👆 SCAN ME', canvasW / 2, padding + topTextH / 2);
+
+          // QR code image
+          ctx.drawImage(img, padding, padding + topTextH, qrSize, qrSize);
+
+          // "to book an appointment" bottom text in chosen color
+          ctx.fillStyle = activeColor;
+          ctx.font = '18px Arial, sans-serif';
+          ctx.fillText('to book an appointment', canvasW / 2, padding + topTextH + qrSize + bottomTextH / 2);
+
+          const link = document.createElement('a');
+          link.download = 'farritech-booking-qr.png';
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+        };
+        img.src = qrImageUrl;
       };
 
       const copyLink = () => {
@@ -6645,7 +6696,7 @@ function ServicesView({ userId }) {
                 fontSize: '1.1rem',
                 fontWeight: '800',
                 letterSpacing: '0.18em',
-                color: '#333',
+                color: activeColor,
                 textTransform: 'uppercase',
                 marginBottom: '0.5rem',
                 display: 'flex',
@@ -6659,12 +6710,64 @@ function ServicesView({ userId }) {
               <div style={{
                 fontSize: '0.85rem',
                 fontWeight: '600',
-                color: '#555',
+                color: activeColor,
                 marginTop: '0.5rem',
                 letterSpacing: '0.05em'
               }}>
                 to book an appointment
               </div>
+            </div>
+
+            {/* Color picker */}
+            <div style={{marginBottom: '1.25rem'}}>
+              <p style={{marginBottom: '0.6rem', fontWeight: '600', fontSize: '0.95rem'}}>🎨 Choose QR Code Color</p>
+              <div style={{display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '0.75rem'}}>
+                {QR_PRESETS.map(preset => (
+                  <button
+                    key={preset.hex}
+                    title={preset.label}
+                    onClick={() => { setQrColor(preset.hex); setIsCustom(false); }}
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '50%',
+                      background: preset.hex,
+                      border: (!isCustom && qrColor === preset.hex) ? '3px solid white' : '2px solid rgba(255,255,255,0.4)',
+                      boxShadow: (!isCustom && qrColor === preset.hex) ? '0 0 0 2px ' + preset.hex : 'none',
+                      cursor: 'pointer',
+                      transition: 'transform 0.1s',
+                      transform: (!isCustom && qrColor === preset.hex) ? 'scale(1.15)' : 'scale(1)',
+                    }}
+                  />
+                ))}
+                {/* Custom color swatch */}
+                <label title="Custom color" style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
+                  border: isCustom ? '3px solid white' : '2px solid rgba(255,255,255,0.4)',
+                  boxShadow: isCustom ? '0 0 0 2px ' + customColor : 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '14px',
+                  transform: isCustom ? 'scale(1.15)' : 'scale(1)',
+                  transition: 'transform 0.1s',
+                  overflow: 'hidden',
+                }}>
+                  <input
+                    type="color"
+                    value={customColor}
+                    onChange={e => { setCustomColor(e.target.value); setIsCustom(true); }}
+                    onClick={() => setIsCustom(true)}
+                    style={{ opacity: 0, position: 'absolute', width: '34px', height: '34px', cursor: 'pointer' }}
+                  />
+                  🎨
+                </label>
+              </div>
+              <p style={{fontSize: '0.75rem', opacity: 0.75}}>Selected: <strong>{isCustom ? customColor : QR_PRESETS.find(p => p.hex === qrColor)?.label}</strong></p>
             </div>
 
             <div style={{display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap'}}>
