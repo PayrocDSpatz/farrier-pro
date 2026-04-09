@@ -7680,6 +7680,29 @@ function ServicesView({ userId }) {
                       <a href="https://www.farritech.com/privacy" target="_blank" rel="noopener noreferrer" style={{color: '#4f6ef7', textDecoration: 'underline'}}>Privacy Policy</a>.
                     </p>
                   </form>
+                  {farrierInfo.phone && (
+                    <div style={{
+                      textAlign: 'center',
+                      marginTop: '1.25rem',
+                      paddingTop: '1rem',
+                      borderTop: '1px solid rgba(148,163,184,0.2)',
+                      fontSize: '0.85rem',
+                      color: 'var(--text-muted)',
+                    }}>
+                      Prefer to call?{' '}
+                      <a
+                        href={`tel:${farrierInfo.phone}`}
+                        style={{
+                          color: '#2683FB',
+                          fontWeight: '700',
+                          textDecoration: 'none',
+                          fontSize: '0.9rem',
+                        }}
+                      >
+                        📞 {farrierInfo.phone}
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
