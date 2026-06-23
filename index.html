@@ -2352,17 +2352,17 @@ if (support) {
   }
 
   return <SupportPortal user={user} />;
-}
-
- // Finish signup (post-billing activation)
-if (finishSignup) {
-  // Only sign out a pre-existing cached session, never one just created by handleComplete
-  if (user && !window.__finishSignupInProgress__) {
-    auth.signOut().catch(() => {});
-    return null;
   }
-  return <FinishSignupView />;
-}
+
+  // Finish signup (post-billing activation)
+  if (finishSignup) {
+    // Only sign out a pre-existing cached session, never one just created by handleComplete
+    if (user && !window.__finishSignupInProgress__) {
+      auth.signOut().catch(() => {});
+      return null;
+    }
+    return <FinishSignupView />;
+  }
 
   // Authentication view
   if (!user) {
