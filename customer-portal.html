@@ -1002,7 +1002,7 @@
           <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
             Sponsored
           </div>
-          <div style={{ overflow: 'hidden', maxWidth: '468px', boxShadow: '0 0 0 1px var(--border)' }}>
+          <div style={{ overflow: 'hidden', width: '100%', maxHeight: '60px', boxShadow: '0 0 0 1px var(--border)' }}>
             <div style={{ display: 'flex', transform: `translateX(-${index * 100}%)`, transition: 'transform 0.6s ease' }}>
               {banners.map(b => (
                 <a
@@ -1011,12 +1011,12 @@
                   target="_blank"
                   rel="noopener noreferrer sponsored"
                   title={b.businessName}
-                  style={{ flex: '0 0 100%', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 0, background: '#FFFFFF' }}
+                  style={{ flex: '0 0 100%', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 0, background: '#FFFFFF', height: '60px' }}
                 >
                   <img
                     src={b.imageUrl}
                     alt={b.businessName}
-                    style={{ display: 'block', maxWidth: '100%' }}
+                    style={{ display: 'block', maxHeight: '100%', maxWidth: '100%' }}
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 </a>
