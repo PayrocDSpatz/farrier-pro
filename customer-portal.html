@@ -651,52 +651,11 @@
     }
 
     // Auth Page Component
-    // One-time logo splash intro — plays once per device (localStorage), then fades
-    // out into the real sign-in screen. Skippable by clicking anywhere.
-    function SplashIntro({ onDone }) {
-      const [fading, setFading] = useState(false);
-      const finish = () => {
-        if (fading) return;
-        setFading(true);
-        window.localStorage.setItem('ft_splash_seen', '1');
-        setTimeout(onDone, 400); // matches CSS transition below
-      };
-      return (
-        <div
-          onClick={finish}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 2000, background: '#0D1320',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', opacity: fading ? 0 : 1, transition: 'opacity 0.4s ease',
-          }}
-        >
-          <video
-            src="/public/logo-intro.mp4"
-            autoPlay
-            muted
-            playsInline
-            onEnded={finish}
-            style={{ maxWidth: '340px', width: '70%', height: 'auto' }}
-          />
-          <div style={{ position: 'absolute', bottom: '2rem', color: 'rgba(232,240,254,0.5)', fontSize: '0.8rem' }}>
-            Tap to skip
-          </div>
-        </div>
-      );
-    }
-
     function AuthPage() {
       const [email, setEmail] = useState('');
       const [loading, setLoading] = useState(false);
       const [sent, setSent] = useState(false);
       const [error, setError] = useState('');
-      const [showSplash, setShowSplash] = useState(() => {
-        try { return !window.localStorage.getItem('ft_splash_seen'); } catch (e) { return false; }
-      });
-
-      if (showSplash) {
-        return <SplashIntro onDone={() => setShowSplash(false)} />;
-      }
 
       const handleSendLink = async (e) => {
         e.preventDefault();
