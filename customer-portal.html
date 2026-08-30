@@ -1353,6 +1353,7 @@
           </header>
 
           <main className="main-content" style={isMobile ? {padding: '1rem'} : {}}>
+            <SponsorBannerStrip banners={sponsorBanners} />
             <div style={{marginBottom: '1.5rem'}}>
               <h1 style={{fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: isMobile ? '1.75rem' : '2.5rem', color: 'var(--primary)', marginBottom: '0.5rem'}}>
                 Your Invoices
@@ -1400,8 +1401,6 @@
                 );
               })()}
             </div>
-
-            <SponsorBannerStrip banners={sponsorBanners} />
 
             {/* Date Filter Buttons */}
             <div style={{
