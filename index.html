@@ -3286,8 +3286,12 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
 }
 
 
+// Emails allowed to manage sponsor banners on the customer portal (FarriTech support/admins only — not farrier accounts)
+const SPONSOR_ADMIN_EMAILS = ['david@dasconsulting.com', 'david@dasdigitalai.com', 'eaven777@gmail.com'];
+
 function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupportMode, supportSession, clearSupportSession }) {
 
+      const isSponsorAdmin = SPONSOR_ADMIN_EMAILS.includes((user?.email || '').toLowerCase());
       const [tab, setTab] = useState('qrcode');
       const [openNavGroup, setOpenNavGroup] = useState(null);
 
@@ -3482,6 +3486,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   { id: 'services', label: 'Services', icon: '🧾' },
                   { id: 'settings', label: 'Settings', icon: '⚙️' },
                   { id: 'tutorials', label: 'Video Tutorials', icon: '▶️' },
+                  ...(isSponsorAdmin ? [{ id: 'sponsors', label: 'Sponsor Banners', icon: '📢' }] : []),
                 ]},
               ];
 
@@ -3602,6 +3607,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'appointments' && <AppointmentsView userId={farrierId} userProfile={userProfile} />}
             {tab === 'invoices' && <InvoicesView userId={farrierId} userProfile={userProfile} />}
             {tab === 'customers' && <CustomersView userId={farrierId} userProfile={userProfile} />}
+            {tab === 'sponsors' && isSponsorAdmin && <SponsorBannersView />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
             {tab === 'reports' && <ReportsView userId={farrierId} />}
             {tab === 'mileage' && <MileageLogView userId={farrierId} userProfile={userProfile} />}
@@ -4359,6 +4365,239 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
                   <button className="btn btn-sm btn-outline" onClick={() => setConfirmDelete(null)}>Cancel</button>
                   <button className="btn btn-sm" style={{ background: '#ef4444', color: '#fff' }} onClick={() => deleteCustomer(confirmDelete)}>🗑️ Delete</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ─────────────────────────────────────────
+    // SPONSOR BANNERS VIEW (FarriTech admin only — controls the
+    // sponsor banners shown to customers on the customer portal)
+    // ─────────────────────────────────────────
+    function SponsorBannersView() {
+      const [banners, setBanners] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [showAddEdit, setShowAddEdit] = useState(false);
+      const [editingBanner, setEditingBanner] = useState(null);
+      const [saving, setSaving] = useState(false);
+      const [confirmDelete, setConfirmDelete] = useState(null);
+
+      const [formBusinessName, setFormBusinessName] = useState('');
+      const [formImageUrl, setFormImageUrl] = useState('');
+      const [formLinkUrl, setFormLinkUrl] = useState('');
+      const [formOrder, setFormOrder] = useState(0);
+      const [formActive, setFormActive] = useState(true);
+
+      const loadBanners = async () => {
+        if (!db) return;
+        setLoading(true);
+        try {
+          const snap = await db.collection('sponsorBanners').get();
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => (a.order || 0) - (b.order || 0));
+          setBanners(list);
+        } catch (e) {
+          console.error('Error loading sponsor banners:', e);
+        }
+        setLoading(false);
+      };
+
+      useEffect(() => { loadBanners(); }, []);
+
+      const openAdd = () => {
+        setEditingBanner(null);
+        setFormBusinessName(''); setFormImageUrl(''); setFormLinkUrl('');
+        setFormOrder(banners.length); setFormActive(true);
+        setShowAddEdit(true);
+      };
+
+      const openEdit = (b) => {
+        setEditingBanner(b);
+        setFormBusinessName(b.businessName || ''); setFormImageUrl(b.imageUrl || '');
+        setFormLinkUrl(b.linkUrl || ''); setFormOrder(b.order || 0); setFormActive(b.active !== false);
+        setShowAddEdit(true);
+      };
+
+      const saveBanner = async () => {
+        if (!formBusinessName.trim() || !formImageUrl.trim() || !formLinkUrl.trim()) {
+          alert('Business name, image URL, and link URL are all required.');
+          return;
+        }
+        setSaving(true);
+        try {
+          const data = {
+            businessName: formBusinessName.trim(),
+            imageUrl: formImageUrl.trim(),
+            linkUrl: formLinkUrl.trim(),
+            order: Number(formOrder) || 0,
+            active: !!formActive,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          };
+          if (editingBanner) {
+            await db.collection('sponsorBanners').doc(editingBanner.id).update(data);
+          } else {
+            data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('sponsorBanners').add(data);
+          }
+          setShowAddEdit(false);
+          await loadBanners();
+        } catch (e) {
+          console.error('Error saving sponsor banner:', e);
+          alert('Failed to save banner. Check console for details.');
+        }
+        setSaving(false);
+      };
+
+      const toggleActive = async (b) => {
+        try {
+          await db.collection('sponsorBanners').doc(b.id).update({ active: !(b.active !== false) });
+          setBanners(prev => prev.map(x => x.id === b.id ? { ...x, active: !(x.active !== false) } : x));
+        } catch (e) {
+          console.error('Error toggling banner:', e);
+        }
+      };
+
+      const deleteBanner = async (b) => {
+        try {
+          await db.collection('sponsorBanners').doc(b.id).delete();
+          setConfirmDelete(null);
+          await loadBanners();
+        } catch (e) {
+          console.error('Error deleting banner:', e);
+        }
+      };
+
+      if (showAddEdit) return (
+        <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h2 style={{ margin: 0, color: 'var(--primary)' }}>{editingBanner ? '✏️ Edit Sponsor Banner' : '➕ Add Sponsor Banner'}</h2>
+            <button className="btn btn-sm btn-outline" onClick={() => setShowAddEdit(false)}>✕ Cancel</button>
+          </div>
+
+          <div className="form-group">
+            <label>Business Name *</label>
+            <input type="text" value={formBusinessName} placeholder="Sunny Acres Tack & Feed"
+              onChange={e => setFormBusinessName(e.target.value)}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+          </div>
+
+          <div className="form-group">
+            <label>Banner Image URL *</label>
+            <input type="text" value={formImageUrl} placeholder="https://…/banner.png"
+              onChange={e => setFormImageUrl(e.target.value)}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+              Paste a hosted image link (wide, e.g. 600×150). No upload here — host it anywhere (email attachment → your own site, imgur, etc.) and paste the link.
+            </div>
+            {formImageUrl && (
+              <div style={{ marginTop: '0.6rem', padding: '0.6rem', background: 'rgba(38,131,251,0.06)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                <img src={formImageUrl} alt="Preview" style={{ maxWidth: '100%', maxHeight: 100, display: 'block', margin: '0 auto', borderRadius: 4 }}
+                  onError={e => { e.target.style.display = 'none'; }} />
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label>Link URL (where customers go when they click) *</label>
+            <input type="text" value={formLinkUrl} placeholder="https://sponsorwebsite.com"
+              onChange={e => setFormLinkUrl(e.target.value)}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Display Order</label>
+              <input type="number" value={formOrder}
+                onChange={e => setFormOrder(e.target.value)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>Lower numbers show first.</div>
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label>Status</label>
+              <button type="button" onClick={() => setFormActive(!formActive)}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid', borderColor: formActive ? '#16a34a' : 'var(--border)', background: formActive ? '#dcfce7' : 'transparent', color: formActive ? '#16a34a' : 'var(--text-muted)', fontWeight: 700, cursor: 'pointer', fontFamily: 'Outfit,sans-serif' }}>
+                {formActive ? '✅ Active (live on portal)' : '⏸️ Inactive (hidden)'}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+            <button className="btn btn-primary" onClick={saveBanner} disabled={saving} style={{ flex: 1 }}>
+              {saving ? '⏳ Saving…' : (editingBanner ? '💾 Save Changes' : '✅ Add Banner')}
+            </button>
+            <button className="btn btn-outline" onClick={() => setShowAddEdit(false)} style={{ flex: 0 }}>Cancel</button>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <h2 style={{ margin: 0, color: 'var(--primary)' }}>📢 Sponsor Banners ({banners.length})</h2>
+            <button className="btn btn-primary btn-sm" onClick={openAdd}>➕ Add Banner</button>
+          </div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+            These banners appear on the customer portal (the invoice/payment page your customers use). Toggle a banner off instead of deleting it to swap sponsors quickly.
+          </div>
+
+          {loading && <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>⏳ Loading banners…</div>}
+
+          {!loading && banners.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+              No sponsor banners yet. Add one to feature it on the customer portal.
+            </div>
+          )}
+
+          {!loading && banners.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {banners.map(b => {
+                const isActive = b.active !== false;
+                return (
+                  <div key={b.id}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1.1rem', background: 'var(--surface)', borderRadius: 12, border: '2px solid rgba(38,131,251,0.45)', flexWrap: 'wrap', gap: '0.75rem' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', minWidth: 0 }}>
+                      <div style={{ width: 88, height: 48, borderRadius: 8, background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, border: '1px solid var(--border)' }}>
+                        {b.imageUrl && <img src={b.imageUrl} alt={b.businessName} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{b.businessName}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>{b.linkUrl}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span onClick={() => toggleActive(b)} title="Click to toggle" style={{
+                        cursor: 'pointer', padding: '0.2rem 0.6rem', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600,
+                        background: isActive ? '#dcfce7' : '#fee2e2',
+                        color: isActive ? '#16a34a' : '#dc2626',
+                      }}>
+                        {isActive ? '✅ Active' : '⏸️ Inactive'}
+                      </span>
+                      <button className="btn btn-sm btn-outline" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}
+                        onClick={() => openEdit(b)}>✏️</button>
+                      <button className="btn btn-sm btn-outline" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', borderColor: '#ef4444', color: '#ef4444' }}
+                        onClick={() => setConfirmDelete(b)}>🗑️</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {confirmDelete && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+              <div style={{ background: 'var(--surface)', color: '#1e293b', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
+                <h3 style={{ marginBottom: '0.5rem' }}>Delete {confirmDelete.businessName}?</h3>
+                <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                  This removes the banner permanently. If you just want to hide it temporarily, use the Active toggle instead.
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                  <button className="btn btn-sm btn-outline" onClick={() => setConfirmDelete(null)}>Cancel</button>
+                  <button className="btn btn-sm" style={{ background: '#ef4444', color: '#fff' }} onClick={() => deleteBanner(confirmDelete)}>🗑️ Delete</button>
                 </div>
               </div>
             </div>
