@@ -978,45 +978,66 @@
       }
     }
 
-    // Sponsor banner strip — featured equine businesses, managed by FarriTech admins
+    // Sponsor banner strip — featured equine businesses, managed by FarriTech admins.
+    // Shows one banner at a time, auto-rotating every 5s when there's more than one.
     function SponsorBannerStrip({ banners }) {
+      const [index, setIndex] = useState(0);
+      const [fading, setFading] = useState(false);
+
+      useEffect(() => {
+        setIndex(0);
+      }, [banners.length]);
+
+      useEffect(() => {
+        if (!banners || banners.length < 2) return;
+        const timer = setInterval(() => {
+          setFading(true);
+          setTimeout(() => {
+            setIndex(i => (i + 1) % banners.length);
+            setFading(false);
+          }, 250); // matches CSS transition below
+        }, 5000);
+        return () => clearInterval(timer);
+      }, [banners.length]);
+
       if (!banners || banners.length === 0) return null;
+      const b = banners[index % banners.length];
+
       return (
         <div style={{ marginBottom: '1.5rem' }}>
           <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
             Sponsored
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-            {banners.map(b => (
-              <a
-                key={b.id}
-                href={b.linkUrl}
-                target="_blank"
-                rel="noopener noreferrer sponsored"
-                title={b.businessName}
-                style={{
-                  flex: '1 1 260px',
-                  maxWidth: banners.length === 1 ? '100%' : '360px',
-                  display: 'block',
-                  background: '#FFFFFF',
-                  border: '1px solid var(--border)',
-                  borderRadius: '12px',
-                  padding: '0.5rem',
-                  textAlign: 'center',
-                  transition: 'transform 0.15s, box-shadow 0.15s',
-                }}
-                onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(38,131,251,0.25)'; }}
-                onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
-              >
-                <img
-                  src={b.imageUrl}
-                  alt={b.businessName}
-                  style={{ maxWidth: '100%', maxHeight: '90px', objectFit: 'contain', display: 'block', margin: '0 auto', borderRadius: '6px' }}
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              </a>
-            ))}
-          </div>
+          <a
+            key={b.id}
+            href={b.linkUrl}
+            target="_blank"
+            rel="noopener noreferrer sponsored"
+            title={b.businessName}
+            style={{
+              display: 'inline-block',
+              lineHeight: 0,
+              opacity: fading ? 0 : 1,
+              transition: 'opacity 0.25s ease, box-shadow 0.15s',
+              boxShadow: '0 0 0 1px var(--border)',
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.boxShadow = '0 0 0 1px var(--primary)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.boxShadow = '0 0 0 1px var(--border)'; }}
+          >
+            <img
+              src={b.imageUrl}
+              alt={b.businessName}
+              style={{ display: 'block', maxWidth: '100%' }}
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+          </a>
+          {banners.length > 1 && (
+            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
+              {banners.map((bn, i) => (
+                <span key={bn.id} style={{ width: 6, height: 6, borderRadius: '50%', background: i === index ? 'var(--primary)' : 'var(--border)' }} />
+              ))}
+            </div>
+          )}
         </div>
       );
     }
