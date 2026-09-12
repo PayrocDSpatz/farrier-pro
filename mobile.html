@@ -198,6 +198,23 @@
 
   /* Today's schedule pill */
   .today-pill { background: var(--blue); color: white; border-radius: 20px; padding: 6px 14px; font-size: 0.8rem; font-weight: 700; display: inline-block; margin-bottom: 16px; }
+
+  /* ── HOW-TO TOUR ── */
+  .tour-step { display: none; flex-direction: column; align-items: center; text-align: center; padding: 8px 8px 24px; }
+  .tour-step.active { display: flex; }
+  .tour-step-icon { width: 84px; height: 84px; border-radius: 50%; background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 2.4rem; margin-bottom: 20px; }
+  .tour-step-title { font-size: 1.2rem; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+  .tour-step-desc { font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; max-width: 320px; }
+  .tour-dots { display: flex; justify-content: center; gap: 7px; margin: 4px 0 20px; }
+  .tour-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: background 0.2s, transform 0.2s; }
+  .tour-dot.active { background: var(--blue); transform: scale(1.3); }
+  .tour-video-card { display: flex; gap: 12px; align-items: center; background: var(--surface); border-radius: var(--radius-sm); padding: 10px; box-shadow: var(--shadow); margin-bottom: 10px; text-decoration: none; color: inherit; }
+  .tour-video-thumb { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: #000; }
+  .tour-video-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.85; }
+  .tour-video-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: white; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+  .tour-video-step { font-size: 0.7rem; font-weight: 800; color: var(--blue); text-transform: uppercase; letter-spacing: 0.4px; }
+  .tour-video-title { font-weight: 700; font-size: 0.9rem; margin: 2px 0 3px; }
+  .tour-video-desc { font-size: 0.78rem; color: var(--text-muted); line-height: 1.35; }
 </style>
 </head>
 <body>
@@ -317,14 +334,14 @@
       </div>
       <div class="big-btn-arrow">›</div>
     </button>
-    <a href="https://www.youtube.com/playlist?list=PL8TxJEnhh3p2JLOoCTJA4csE61z-9vvPw" target="_blank" rel="noopener" class="big-btn" style="text-decoration:none;">
+    <button class="big-btn" onclick="startTour()">
       <div class="big-btn-icon" style="background:#FF0000;">▶️</div>
       <div>
-        <div class="big-btn-label">Video Tutorials</div>
-        <div class="big-btn-sub">Watch how-to guides for the app</div>
+        <div class="big-btn-label">How to Use FarriTech</div>
+        <div class="big-btn-sub">Quick guide + video walkthrough</div>
       </div>
       <div class="big-btn-arrow">›</div>
-    </a>
+    </button>
   </div>
 </div>
 
@@ -683,6 +700,30 @@
 </div>
 
 <!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: HOW TO USE FARRITECH               -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-tour">
+  <div class="header">
+    <button class="back-btn" onclick="goToDashboard()">‹</button>
+    <div class="header-title">How to Use FarriTech</div>
+  </div>
+  <div class="scroll-body" style="padding:20px 16px 32px;">
+
+    <div id="tour-steps"></div>
+    <div class="tour-dots" id="tour-dots"></div>
+    <div class="row-btns" style="margin-bottom:8px;">
+      <button class="btn-secondary" id="tour-back-btn" onclick="tourPrev()">Back</button>
+      <button class="btn-primary" id="tour-next-btn" onclick="tourNext()">Next</button>
+    </div>
+    <button class="btn-secondary" id="tour-skip-btn" onclick="finishTour()" style="border:none; color:var(--text-muted); font-weight:600;">Skip for now</button>
+
+    <div style="height:28px;"></div>
+    <div class="section-label">📺 Watch the Full Walkthrough</div>
+    <div id="tour-videos"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
 <!-- SCREEN 9: SUCCESS                         -->
 <!-- ══════════════════════════════════════════ -->
 <div class="screen hidden" id="screen-success">
@@ -791,6 +832,75 @@ function goToDashboard() {
   loadDashboard();
 }
 
+// ── HOW-TO TOUR ──
+const TOUR_SEEN_KEY = 'farritech_tour_seen';
+let tourStepIndex = 0;
+const tourSteps = [
+  { icon: '🔐', title: 'Sign In', desc: 'Log in with the email and password for your farrier business. You\'ll land right on your dashboard.' },
+  { icon: '➕', title: 'Add a Customer', desc: 'Tap "New Customer" on the dashboard to save a client\'s name, farm, and contact info in a few seconds.' },
+  { icon: '📅', title: 'Schedule a Visit', desc: 'From a customer\'s profile, tap "New Appt" to pick a date, time, and the services you\'ll be doing.' },
+  { icon: '📄', title: 'Create an Invoice', desc: 'After the visit, tap "New Invoice" from the customer\'s profile — pick services and it totals everything for you.' },
+  { icon: '💳', title: 'Get Paid', desc: 'Collect payment on the spot — cash, check, or card — right from your phone. You\'re done!' },
+];
+const tourVideos = [
+  { id: 'KI7nklQMod8', step: 'Step 1', title: 'Create a New Customer', desc: 'Quickly add a new client right from the field.' },
+  { id: 'AxxoaIzcAec', step: 'Step 2', title: 'Add an Appointment', desc: 'Select the customer, pick a date and time, and you\'re booked.' },
+  { id: 'vHfO9bycFAU', step: 'Step 3', title: 'Create an Invoice', desc: 'Add services, set the total, and deliver it instantly.' },
+  { id: 'tRRiRYB-MZM', step: 'Step 4', title: 'Pay an Invoice', desc: 'Accept cash, check, or charge a card directly from your phone.' },
+];
+
+function startTour() {
+  tourStepIndex = 0;
+  document.getElementById('tour-steps').innerHTML = tourSteps.map((s, i) => `
+    <div class="tour-step${i === 0 ? ' active' : ''}" id="tour-step-${i}">
+      <div class="tour-step-icon">${s.icon}</div>
+      <div class="tour-step-title">${s.title}</div>
+      <div class="tour-step-desc">${s.desc}</div>
+    </div>
+  `).join('');
+  document.getElementById('tour-dots').innerHTML = tourSteps.map((s, i) =>
+    `<div class="tour-dot${i === 0 ? ' active' : ''}" id="tour-dot-${i}"></div>`
+  ).join('');
+  document.getElementById('tour-videos').innerHTML = tourVideos.map(v => `
+    <a class="tour-video-card" href="https://www.youtube.com/watch?v=${v.id}" target="_blank" rel="noopener">
+      <div class="tour-video-thumb">
+        <img src="https://img.youtube.com/vi/${v.id}/hqdefault.jpg" alt="${v.title}" loading="lazy">
+        <div class="tour-video-play">▶️</div>
+      </div>
+      <div>
+        <div class="tour-video-step">${v.step}</div>
+        <div class="tour-video-title">${v.title}</div>
+        <div class="tour-video-desc">${v.desc}</div>
+      </div>
+    </a>
+  `).join('');
+  renderTourStep();
+  goTo('screen-tour');
+}
+
+function renderTourStep() {
+  tourSteps.forEach((s, i) => {
+    document.getElementById(`tour-step-${i}`)?.classList.toggle('active', i === tourStepIndex);
+    document.getElementById(`tour-dot-${i}`)?.classList.toggle('active', i === tourStepIndex);
+  });
+  document.getElementById('tour-back-btn').style.visibility = tourStepIndex === 0 ? 'hidden' : 'visible';
+  document.getElementById('tour-next-btn').textContent = tourStepIndex === tourSteps.length - 1 ? 'Got it!' : 'Next';
+}
+
+function tourNext() {
+  if (tourStepIndex < tourSteps.length - 1) { tourStepIndex++; renderTourStep(); }
+  else finishTour();
+}
+
+function tourPrev() {
+  if (tourStepIndex > 0) { tourStepIndex--; renderTourStep(); }
+}
+
+function finishTour() {
+  try { localStorage.setItem(TOUR_SEEN_KEY, '1'); } catch(e) {}
+  goToDashboard();
+}
+
 // ── TOAST ──
 function showToast(msg, type = '') {
   const t = document.getElementById('toast');
@@ -810,8 +920,14 @@ auth.onAuthStateChanged(async (user) => {
     await loadUserProfile();
     await loadServices();
     await loadCustomers();
-    goTo('screen-dashboard', false);
-    loadDashboard();
+    let tourSeen = true;
+    try { tourSeen = !!localStorage.getItem(TOUR_SEEN_KEY); } catch(e) {}
+    if (!tourSeen) {
+      startTour();
+    } else {
+      goTo('screen-dashboard', false);
+      loadDashboard();
+    }
   } else {
     state.user = null;
     document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
