@@ -588,7 +588,7 @@
   <div class="scroll-body">
     <div class="field"><label>Owner Name *</label><input type="text" id="nc-name" placeholder="Jane Smith" autocomplete="name"></div>
     <div class="field"><label>Farm / Business Name</label><input type="text" id="nc-farm" placeholder="Sunny Acres Farm"></div>
-    <div class="field"><label>Phone</label><input type="tel" id="nc-phone" placeholder="(555) 555-5555" autocomplete="tel"></div>
+    <div class="field"><label>Phone</label><input type="tel" id="nc-phone" placeholder="(555) 555-5555" autocomplete="tel" inputmode="tel" oninput="formatPhoneInput(this)"></div>
     <div class="field"><label>Email</label><input type="email" id="nc-email" placeholder="jane@example.com" autocomplete="email"></div>
     <div class="field"><label>Horse Name(s) / Notes</label><textarea id="nc-notes" placeholder="Horse names, special instructions…"></textarea></div>
     <button class="btn-primary" id="nc-save-btn" onclick="saveNewCustomer()">Save Customer</button>
@@ -1979,6 +1979,7 @@ function startEditCustomer(c) {
   document.getElementById('nc-name').value = c.name || '';
   document.getElementById('nc-farm').value = c.farmName || '';
   document.getElementById('nc-phone').value = c.phone || '';
+  formatPhoneInput(document.getElementById('nc-phone'));
   document.getElementById('nc-email').value = c.email || '';
   document.getElementById('nc-notes').value = c.notes || '';
   goTo('screen-new-customer');
@@ -2364,6 +2365,15 @@ document.getElementById('screen-search').addEventListener('transitionend', funct
 });
 
 // ── HELPERS ──
+function formatPhoneInput(el) {
+  const digits = el.value.replace(/\D/g, '').slice(0, 10);
+  let formatted = digits;
+  if (digits.length > 6) formatted = `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+  else if (digits.length > 3) formatted = `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+  else if (digits.length > 0) formatted = `(${digits}`;
+  el.value = formatted;
+}
+
 function fmtTime(t) {
   if (!t) return '';
   const [h, m] = t.split(':');

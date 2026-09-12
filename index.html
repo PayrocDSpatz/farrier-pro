@@ -3979,12 +3979,12 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             { label: 'Full Name *', val: formName, set: setFormName, type: 'text', ph: 'Jane Smith' },
             { label: 'Farm / Business Name', val: formFarmName, set: setFormFarmName, type: 'text', ph: 'Sunny Acres Farm' },
             { label: 'Email', val: formEmail, set: setFormEmail, type: 'email', ph: 'jane@example.com' },
-            { label: 'Phone', val: formPhone, set: setFormPhone, type: 'tel', ph: '(555) 555-5555' },
+            { label: 'Phone', val: formPhone, set: setFormPhone, type: 'tel', ph: '(555) 555-5555', isPhone: true },
           ].map(f => (
             <div className="form-group" key={f.label}>
               <label>{f.label}</label>
-              <input type={f.type} value={f.val} placeholder={f.ph}
-                onChange={e => f.set(e.target.value)}
+              <input type={f.type} value={f.isPhone ? fmtPhone(f.val) : f.val} placeholder={f.ph}
+                onChange={e => f.set(f.isPhone ? e.target.value.replace(/\D/g, '').slice(0, 11) : e.target.value)}
                 style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' }} />
             </div>
           ))}
@@ -7711,8 +7711,8 @@ function ServicesView({ userId }) {
 
                     <div className="form-group">
                       <label>Phone Number *</label>
-                      <input type="tel" required value={formData.phone}
-                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      <input type="tel" required value={fmtPhone(formData.phone)}
+                        onChange={(e) => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 11)})}
                         placeholder="(555) 555-5555"
                         style={isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {}}
                       />
@@ -9604,11 +9604,11 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
               <div className="form-group">
                 <label>Phone Number *</label>
-                <input 
+                <input
                   type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="561-555-0123"
+                  value={fmtPhone(phone)}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                  placeholder="(555) 555-5555"
                 />
               </div>
 
@@ -11397,16 +11397,17 @@ useEffect(() => {
 
             <div className="form-group">
               <label>Customer Phone {phoneSearching && <span style={{color: 'var(--primary)'}}>🔍 Searching...</span>}</label>
-              <input 
+              <input
                 type="tel"
-                value={customerPhone}
+                value={fmtPhone(customerPhone)}
                 onChange={(e) => {
-                  setCustomerPhone(e.target.value);
-                  if (e.target.value.replace(/\D/g, '').length >= 10) {
-                    lookupByPhone(e.target.value);
+                  const raw = e.target.value.replace(/\D/g, '').slice(0, 11);
+                  setCustomerPhone(raw);
+                  if (raw.length >= 10) {
+                    lookupByPhone(raw);
                   }
                 }}
-                placeholder="555-123-4567 (auto-fills customer info)"
+                placeholder="(555) 123-4567 (auto-fills customer info)"
               />
               <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
                 Enter phone to auto-fill customer details
