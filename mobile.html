@@ -588,6 +588,14 @@
     <div class="field"><label>Farm / Business Name</label><input type="text" id="nc-farm" placeholder="Sunny Acres Farm"></div>
     <div class="field"><label>Phone</label><input type="tel" id="nc-phone" placeholder="(555) 555-5555" autocomplete="tel" inputmode="tel" oninput="formatPhoneInput(this)"></div>
     <div class="field"><label>Email</label><input type="email" id="nc-email" placeholder="jane@example.com" autocomplete="email"></div>
+    <div class="field">
+      <label>Address <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+      <div id="cust-address-pac-container" style="width:100%;"></div>
+      <input type="hidden" id="nc-address">
+      <input type="hidden" id="nc-city">
+      <input type="hidden" id="nc-state">
+      <input type="hidden" id="nc-zip">
+    </div>
     <div class="field"><label>Horse Name(s) / Notes</label><textarea id="nc-notes" placeholder="Horse names, special instructions…"></textarea></div>
     <button class="btn-primary" id="nc-save-btn" onclick="saveNewCustomer()">Save Customer</button>
     <div style="margin-top:8px;"></div>
@@ -1955,8 +1963,13 @@ function startNewCustomer() {
   state.editingCustomerId = null;
   document.getElementById('nc-form-title').textContent = 'New Customer';
   document.getElementById('nc-save-btn').textContent = 'Save Customer';
-  ['nc-name','nc-farm','nc-phone','nc-email','nc-notes'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['nc-name','nc-farm','nc-phone','nc-email','nc-notes','nc-address','nc-city','nc-state','nc-zip'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   goTo('screen-new-customer');
+  _custPac = null;
+  _custPacTries = 0;
+  const pac_c = document.getElementById('cust-address-pac-container');
+  if (pac_c) pac_c.innerHTML = '';
+  initCustAddressPAC();
 }
 
 function startEditCustomer(c) {
@@ -1970,7 +1983,18 @@ function startEditCustomer(c) {
   formatPhoneInput(document.getElementById('nc-phone'));
   document.getElementById('nc-email').value = c.email || '';
   document.getElementById('nc-notes').value = c.notes || '';
+  document.getElementById('nc-address').value = c.address || '';
+  document.getElementById('nc-city').value = c.city || '';
+  document.getElementById('nc-state').value = c.state || '';
+  document.getElementById('nc-zip').value = c.zip || '';
   goTo('screen-new-customer');
+  _custPac = null;
+  _custPacTries = 0;
+  const pac_c = document.getElementById('cust-address-pac-container');
+  if (pac_c) pac_c.innerHTML = '';
+  initCustAddressPAC();
+  const addrDisplay = [c.address, c.city, c.state].filter(Boolean).join(', ');
+  if (addrDisplay) seedCustAddressWidget(addrDisplay);
 }
 
 async function saveNewCustomer() {
@@ -1985,6 +2009,10 @@ async function saveNewCustomer() {
     phone: document.getElementById('nc-phone').value.trim(),
     email: document.getElementById('nc-email').value.trim(),
     notes: document.getElementById('nc-notes').value.trim(),
+    address: document.getElementById('nc-address').value.trim(),
+    city: document.getElementById('nc-city').value.trim(),
+    state: document.getElementById('nc-state').value.trim(),
+    zip: document.getElementById('nc-zip').value.trim(),
   };
   try {
     if (editingId) {
@@ -2461,6 +2489,97 @@ function fmtDate(ts) {
 }
 </script>
 <script>
+// ── GOOGLE PLACES AUTOCOMPLETE FOR CUSTOMER ADDRESS (optional field) ──
+let _custPac = null;
+let _custPacTries = 0;
+
+function initCustAddressPAC() {
+  const container = document.getElementById('cust-address-pac-container');
+  if (!container) return;
+  if (_custPac) return;
+
+  if (!window.google?.maps?.places?.PlaceAutocompleteElement) {
+    if (_custPacTries === 0) loadScriptOnce(MAPS_SCRIPT_SRC).catch(err => console.error('Failed to load Maps script:', err));
+    if (_custPacTries++ < 40) setTimeout(initCustAddressPAC, 250);
+    return;
+  }
+
+  try {
+    const pac = new window.google.maps.places.PlaceAutocompleteElement({
+      types: ['address'],
+      componentRestrictions: { country: 'us' },
+    });
+    pac.style.cssText = [
+      'width:100%;display:block;',
+      '--gmp-filled-input-background-color:#ffffff;',
+      '--gmp-filled-input-text-color:#0D1320;',
+      '--gmp-input-placeholder-text-color:#94a3b8;',
+      '--gmp-color-surface:#ffffff;',
+      '--gmp-color-on-surface:#0D1320;',
+      '--gmp-color-on-surface-variant:#0D1320;',
+      '--gmp-color-outline:#DDE3EC;',
+      '--gmp-filled-input-border-radius:10px;',
+      'color-scheme:light;',
+    ].join('');
+    container.appendChild(pac);
+    _custPac = pac;
+
+    const handlePlaceSelect = async (e) => {
+      try {
+        const prediction = e.placePrediction || e.place;
+        if (!prediction) return;
+        const place = prediction.toPlace ? prediction.toPlace() : prediction;
+        await place.fetchFields({ fields: ['formattedAddress', 'addressComponents'] });
+
+        const formatted = place.formattedAddress || '';
+        const comps = place.addressComponents || [];
+
+        const get = (type, short = false) => {
+          for (const c of comps) {
+            if ((c.types || []).includes(type))
+              return short ? (c.shortText || c.short_name || '') : (c.longText || c.long_name || '');
+          }
+          return '';
+        };
+
+        const streetNumber = get('street_number');
+        const route = get('route');
+        const city = get('locality') || get('sublocality') || get('postal_town');
+        const stateShort = get('administrative_area_level_1', true);
+        const zip = get('postal_code');
+        const address1 = [streetNumber, route].filter(Boolean).join(' ').trim()
+          || (formatted.split(',')[0] || '').trim();
+
+        document.getElementById('nc-address').value = address1;
+        document.getElementById('nc-city').value = city;
+        document.getElementById('nc-state').value = stateShort;
+        document.getElementById('nc-zip').value = zip;
+
+        const widgetInput = pac.querySelector('input');
+        if (widgetInput && address1) widgetInput.value = address1;
+      } catch (err) {
+        console.error('Customer PAC error:', err);
+      }
+    };
+
+    pac.addEventListener('gmp-placeselect', handlePlaceSelect);
+    pac.addEventListener('gmp-select', handlePlaceSelect);
+  } catch (err) {
+    console.error('Failed to init customer address PAC:', err);
+  }
+}
+
+// Seed the widget's visible text when editing a customer that already has an
+// address saved. Retries until the widget actually finishes mounting.
+function seedCustAddressWidget(text, tries = 0) {
+  if (_custPac) {
+    const widgetInput = _custPac.querySelector('input');
+    if (widgetInput) widgetInput.value = text;
+    return;
+  }
+  if (tries < 40) setTimeout(() => seedCustAddressWidget(text, tries + 1), 250);
+}
+
 // ── GOOGLE PLACES AUTOCOMPLETE FOR APPOINTMENT ADDRESS ──
 let _apptPac = null;
 let _apptPacTries = 0;
