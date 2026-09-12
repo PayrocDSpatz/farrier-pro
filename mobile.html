@@ -1041,7 +1041,7 @@ async function loadUserProfile() {
 async function loadServices() {
   if (!state.user) return;
   try {
-    const snap = await db.collection('services').where('farrierId', '==', state.user.uid).where('active', '==', true).get();
+    const snap = await db.collection('services').where('farrierId', '==', state.user.uid).where('isActive', '==', true).get();
     state.services = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (!state.services.length) {
       // defaults
