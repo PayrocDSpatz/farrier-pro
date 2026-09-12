@@ -14,8 +14,9 @@
 <title>FarriTech Mobile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hkTyzbvbUc&libraries=places&v=beta&loading=async"></script>
-<script src="https://js.stripe.com/v3/"></script>
+<!-- Google Maps (Places) and Stripe.js are loaded on demand, not here — see loadScriptOnce below.
+     They're each 200KB+ and were previously blocking first paint on every app open, even though
+     they're only needed on the "new appointment" address field and the card-payment screen. -->
 <style>
   :root {
     --blue: #2683FB;
@@ -706,6 +707,29 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+
+// ── LAZY-LOAD MAPS & STRIPE ──
+// These are only needed deep in specific flows (address autocomplete, card payment),
+// so they're fetched on demand instead of blocking every app launch.
+const MAPS_SCRIPT_SRC = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hkTyzbvbUc&libraries=places&v=beta&loading=async';
+const STRIPE_SCRIPT_SRC = 'https://js.stripe.com/v3/';
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === 'true') { resolve(); return; }
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', reject, { once: true });
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    s.onload = () => { s.dataset.loaded = 'true'; resolve(); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
 
 // ── STATE ──
 const state = {
@@ -1700,7 +1724,11 @@ function selectPayMethod(method, el) {
   document.getElementById('check-fields').style.display = method === 'check' ? 'block' : 'none';
   document.getElementById('card-fields').style.display  = method === 'card'  ? 'block' : 'none';
   document.getElementById('link-fields').style.display  = method === 'link'  ? 'block' : 'none';
-  if (method === 'card') setTimeout(initStripeElements, 50);
+  if (method === 'card') {
+    loadScriptOnce(STRIPE_SCRIPT_SRC)
+      .then(() => setTimeout(initStripeElements, 50))
+      .catch(() => showToast('Failed to load payment form', 'error'));
+  }
   const btn = document.getElementById('confirm-pay-btn');
   btn.disabled = false;
   btn.textContent = method === 'link' ? '📲 Send Payment Link' : '✓ Confirm Payment';
@@ -2030,6 +2058,7 @@ function initApptAddressPAC() {
   if (_apptPac) return;
 
   if (!window.google?.maps?.places?.PlaceAutocompleteElement) {
+    if (_apptPacTries === 0) loadScriptOnce(MAPS_SCRIPT_SRC).catch(err => console.error('Failed to load Maps script:', err));
     if (_apptPacTries++ < 40) setTimeout(initApptAddressPAC, 250);
     return;
   }
