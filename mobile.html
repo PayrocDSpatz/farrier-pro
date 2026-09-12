@@ -856,17 +856,54 @@ const tourChapters = [
   { time: 147, label: 'New Appointment' },
 ];
 
+const TOUR_PLAYBACK_RATE = 1.5; // "sped up a bit" per feedback — adjust here if a different speed is wanted
+let tourPlayer = null;
+let tourPlayerReady = false;
+
 function fmtChapterTime(sec) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function loadYouTubeAPI(callback) {
+  if (window.YT && window.YT.Player) { callback(); return; }
+  const prevCallback = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = () => { if (prevCallback) prevCallback(); callback(); };
+  if (!document.getElementById('yt-iframe-api')) {
+    const s = document.createElement('script');
+    s.id = 'yt-iframe-api';
+    s.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(s);
+  }
+}
+
+function initTourPlayer(startAt, autoplay) {
+  tourPlayerReady = false;
+  loadYouTubeAPI(() => {
+    tourPlayer = new YT.Player('tour-video-wrap', {
+      videoId: TOUR_VIDEO_ID,
+      playerVars: { start: startAt, autoplay: autoplay ? 1 : 0, rel: 0, playsinline: 1 },
+      events: {
+        onReady: (e) => {
+          tourPlayerReady = true;
+          e.target.setPlaybackRate(TOUR_PLAYBACK_RATE);
+        },
+      },
+    });
+  });
+}
+
 function playTourChapter(i, autoplay = true) {
   const t = tourChapters[i].time;
-  document.getElementById('tour-video-wrap').innerHTML =
-    `<iframe src="https://www.youtube.com/embed/${TOUR_VIDEO_ID}?start=${t}${autoplay ? '&autoplay=1' : ''}&rel=0" title="How to Use FarriTech" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
   document.querySelectorAll('.tour-chapter-btn').forEach((btn, idx) => btn.classList.toggle('active', idx === i));
+  if (tourPlayer && tourPlayerReady) {
+    tourPlayer.seekTo(t, true);
+    tourPlayer.setPlaybackRate(TOUR_PLAYBACK_RATE);
+    if (autoplay) tourPlayer.playVideo();
+  } else {
+    initTourPlayer(t, autoplay);
+  }
 }
 
 function startTour() {
