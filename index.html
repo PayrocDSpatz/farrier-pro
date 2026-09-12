@@ -2585,14 +2585,11 @@ if (support) {
     return <AuthView />;
   }
 
-  // First-time setup gate — before the dashboard/QR code, not after
-  if (needsSetupWizard === null) {
-    return (
-      <div style={{display: "flex", justifyContent: "center", alignItems: "center", height: "100vh"}}>
-        <div className="spinner"></div>
-      </div>
-    );
-  }
+  // First-time setup gate — before the dashboard/QR code, not after.
+  // Deliberately fails open: while the check is still running (null), we
+  // render the normal dashboard rather than blocking behind another spinner,
+  // so a slow/unsettled auth state can never brick the whole app. The wizard
+  // only interjects once the check positively confirms it's actually needed.
   if (needsSetupWizard) {
     return (
       <SetupWizardView
