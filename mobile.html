@@ -360,6 +360,7 @@
   <div class="header">
     <button class="back-btn" onclick="goBack()">‹</button>
     <div class="header-title" id="customer-header-name">Customer</div>
+    <button onclick="startEditCustomer(state.customer)" style="background:rgba(255,255,255,0.18);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">✏️ Edit</button>
   </div>
   <div class="scroll-body">
     <!-- Hero -->
@@ -564,7 +565,7 @@
 <div class="screen hidden" id="screen-new-customer">
   <div class="header">
     <button class="back-btn" onclick="goBack()">‹</button>
-    <div class="header-title">New Customer</div>
+    <div class="header-title" id="nc-form-title">New Customer</div>
   </div>
   <div class="scroll-body">
     <div class="field"><label>Owner Name *</label><input type="text" id="nc-name" placeholder="Jane Smith" autocomplete="name"></div>
@@ -584,12 +585,18 @@
 <div class="screen hidden" id="screen-new-appt">
   <div class="header">
     <button class="back-btn" onclick="goBack()">‹</button>
-    <div class="header-title">New Appointment</div>
+    <div class="header-title" id="appt-form-title">New Appointment</div>
   </div>
   <div class="scroll-body">
-    <div class="card" style="margin-bottom:12px;">
-      <div style="font-weight:700; color:var(--blue);" id="appt-customer-name"></div>
-      <div style="font-size:0.85rem; color:var(--text-muted);" id="appt-customer-farm"></div>
+    <div class="card" style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <div>
+        <div style="font-weight:700; color:var(--blue);" id="appt-customer-name"></div>
+        <div style="font-size:0.85rem; color:var(--text-muted);" id="appt-customer-farm"></div>
+      </div>
+      <button id="appt-view-customer-btn" onclick="goTo('screen-customer'); loadCustomerDetail(state.customer);" style="display:none; background:var(--bg); border:1.5px solid var(--border); color:var(--blue); font-weight:700; font-size:0.78rem; padding:7px 12px; border-radius:8px; white-space:nowrap;">View Customer</button>
+    </div>
+    <div id="appt-cancelled-banner" style="display:none; background:var(--danger-bg); border:2px solid #fca5a5; color:var(--danger); border-radius:10px; padding:10px 14px; margin-bottom:12px; font-weight:700; font-size:0.85rem;">
+      ⚠️ This appointment is cancelled
     </div>
     <div class="field"><label>Date *</label><input type="date" id="appt-date"></div>
     <div class="field"><label>Time *</label><input type="time" id="appt-time"></div>
@@ -604,7 +611,10 @@
     <div class="field"><label>Notes</label><textarea id="appt-notes" placeholder="Gate code, special instructions…" rows="2"></textarea></div>
     <button class="btn-primary" id="appt-save-btn" onclick="saveNewAppointment()">📅 Save Appointment</button>
     <div style="margin-top:8px;"></div>
-    <button class="btn-secondary" onclick="goBack()">Cancel</button>
+    <button class="btn-secondary" onclick="goBack()">Discard, Go Back</button>
+    <div id="appt-cancel-appt-wrap" style="display:none; margin-top:20px;">
+      <button class="btn-danger" onclick="cancelAppointment()">🚫 Cancel This Appointment</button>
+    </div>
   </div>
 </div>
 
@@ -744,6 +754,8 @@ const state = {
   selectedPayMethod: null,
   screenHistory: [],
   lastService: null,
+  editingCustomerId: null,
+  editingApptId: null,
 };
 
 // ── SCREEN NAVIGATION ──
@@ -935,7 +947,7 @@ async function loadDashboard() {
     if (appts.length > 0) {
       document.getElementById('today-appts-section').style.display = 'block';
       document.getElementById('today-appts-list').innerHTML = appts.map(a => `
-        <div class="appt-row" onclick="selectCustomerById('${a.customerId || ''}', '${a.customerName}')">
+        <div class="appt-row" onclick="startEditAppointment(${JSON.stringify(a).replace(/"/g,'&quot;')})">
           <div class="appt-row-top">${a.customerName || 'Unknown'}${a.farmName ? ' — ' + a.farmName : ''}</div>
           <div class="appt-row-bottom">${fmtTime(a.requestedTime)} · ${(a.services||[]).join(', ')||'No services listed'}</div>
         </div>
@@ -1325,7 +1337,7 @@ function filterApptResults() {
     const statusColor = a.status === 'confirmed' ? '#15803d' : a.status === 'cancelled' ? '#b91c1c' : '#b45309';
     const statusLabel = (a.status || 'pending').charAt(0).toUpperCase() + (a.status || 'pending').slice(1);
     return `
-      <div class="appt-search-row" onclick="selectCustomerById('${a.customerId || ''}', '${(a.customerName||'').replace(/'/g,"\\'")}')">
+      <div class="appt-search-row" onclick="startEditAppointment(${JSON.stringify(a).replace(/"/g,'&quot;')})">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
           <div style="font-weight:700;font-size:0.92rem;">${a.customerName || 'Unknown'}${a.farmName ? ' — ' + a.farmName : ''}</div>
           <span style="font-size:0.72rem;font-weight:700;color:${statusColor};background:${statusColor}18;padding:2px 7px;border-radius:20px;white-space:nowrap;margin-left:8px;">${statusLabel}</span>
@@ -1829,9 +1841,25 @@ async function confirmPayment() {
   document.getElementById('pay-saving').style.display = 'none';
 }
 
-// ── NEW CUSTOMER ──
+// ── NEW / EDIT CUSTOMER ──
 function startNewCustomer() {
+  state.editingCustomerId = null;
+  document.getElementById('nc-form-title').textContent = 'New Customer';
+  document.getElementById('nc-save-btn').textContent = 'Save Customer';
   ['nc-name','nc-farm','nc-phone','nc-email','nc-notes'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  goTo('screen-new-customer');
+}
+
+function startEditCustomer(c) {
+  if (!c) return;
+  state.editingCustomerId = c.id;
+  document.getElementById('nc-form-title').textContent = 'Edit Customer';
+  document.getElementById('nc-save-btn').textContent = 'Save Changes';
+  document.getElementById('nc-name').value = c.name || '';
+  document.getElementById('nc-farm').value = c.farmName || '';
+  document.getElementById('nc-phone').value = c.phone || '';
+  document.getElementById('nc-email').value = c.email || '';
+  document.getElementById('nc-notes').value = c.notes || '';
   goTo('screen-new-customer');
 }
 
@@ -1839,28 +1867,49 @@ async function saveNewCustomer() {
   const name = document.getElementById('nc-name').value.trim();
   if (!name) { showToast('Name is required', 'error'); return; }
   const btn = document.getElementById('nc-save-btn');
+  const editingId = state.editingCustomerId;
   btn.disabled = true; btn.textContent = 'Saving…';
+  const fields = {
+    name,
+    farmName: document.getElementById('nc-farm').value.trim(),
+    phone: document.getElementById('nc-phone').value.trim(),
+    email: document.getElementById('nc-email').value.trim(),
+    notes: document.getElementById('nc-notes').value.trim(),
+  };
   try {
-    const docRef = await db.collection('customers').add({
-      farrierId: state.user.uid,
-      name,
-      farmName: document.getElementById('nc-farm').value.trim(),
-      phone: document.getElementById('nc-phone').value.trim(),
-      email: document.getElementById('nc-email').value.trim(),
-      notes: document.getElementById('nc-notes').value.trim(),
-      source: 'mobile_app',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    const newCustomer = { id: docRef.id, name, farmName: document.getElementById('nc-farm').value.trim(), phone: document.getElementById('nc-phone').value.trim(), email: document.getElementById('nc-email').value.trim(), notes: document.getElementById('nc-notes').value.trim() };
-    state.customers.unshift(newCustomer);
-    showToast('Customer added!', 'success');
-    selectCustomer(newCustomer);
+    if (editingId) {
+      await db.collection('customers').doc(editingId).update(fields);
+      const updated = { id: editingId, ...fields };
+      const idx = state.customers.findIndex(c => c.id === editingId);
+      if (idx >= 0) state.customers[idx] = { ...state.customers[idx], ...updated };
+      state.customer = updated;
+      showToast('Customer updated!', 'success');
+      goBack();
+      loadCustomerDetail(updated);
+    } else {
+      const docRef = await db.collection('customers').add({
+        farrierId: state.user.uid,
+        ...fields,
+        source: 'mobile_app',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      const newCustomer = { id: docRef.id, ...fields };
+      state.customers.unshift(newCustomer);
+      showToast('Customer added!', 'success');
+      selectCustomer(newCustomer);
+    }
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
-  btn.disabled = false; btn.textContent = 'Save Customer';
+  btn.disabled = false; btn.textContent = editingId ? 'Save Changes' : 'Save Customer';
 }
 
-// ── NEW APPOINTMENT ──
+// ── NEW / EDIT APPOINTMENT ──
 function startNewAppointment() {
+  state.editingApptId = null;
+  document.getElementById('appt-form-title').textContent = 'New Appointment';
+  document.getElementById('appt-save-btn').textContent = '📅 Save Appointment';
+  document.getElementById('appt-cancelled-banner').style.display = 'none';
+  document.getElementById('appt-cancel-appt-wrap').style.display = 'none';
+  document.getElementById('appt-view-customer-btn').style.display = 'none';
   document.getElementById('appt-customer-name').textContent = state.customer.name;
   document.getElementById('appt-customer-farm').textContent = state.customer.farmName || '';
   document.getElementById('appt-date').value = new Date().toISOString().split('T')[0];
@@ -1881,38 +1930,105 @@ function startNewAppointment() {
   if (prefillAddr) setTimeout(() => seedApptAddressWidget(prefillAddr), 400);
 }
 
+function startEditAppointment(appt) {
+  if (!appt) return;
+  state.editingApptId = appt.id;
+  // Make sure state.customer points at this appointment's customer, so "Discard,
+  // Go Back" and the customer card above the form show the right person even
+  // when this appointment was opened from Find Appointment, not a customer profile.
+  const knownCustomer = state.customers.find(c => c.id === appt.customerId || c.name === appt.customerName);
+  state.customer = knownCustomer || { id: appt.customerId || '', name: appt.customerName || '', farmName: appt.farmName || '', email: appt.email || '', phone: appt.phone || '' };
+
+  document.getElementById('appt-form-title').textContent = 'Edit Appointment';
+  document.getElementById('appt-save-btn').textContent = 'Save Changes';
+  const isCancelled = appt.status === 'cancelled';
+  document.getElementById('appt-cancelled-banner').style.display = isCancelled ? 'block' : 'none';
+  document.getElementById('appt-cancel-appt-wrap').style.display = isCancelled ? 'none' : 'block';
+  document.getElementById('appt-view-customer-btn').style.display = 'inline-block';
+  document.getElementById('appt-customer-name').textContent = state.customer.name;
+  document.getElementById('appt-customer-farm').textContent = state.customer.farmName || '';
+  document.getElementById('appt-date').value = appt.requestedDate || '';
+  document.getElementById('appt-time').value = appt.requestedTime || '';
+  document.getElementById('appt-horses').value = appt.numberOfHorses || 1;
+  document.getElementById('appt-notes').value = appt.comments || '';
+  renderServiceGrid('appt-service-grid');
+  (appt.services || []).forEach(name => {
+    const i = state.services.findIndex(s => s.name === name);
+    if (i >= 0) document.getElementById(`appt-service-grid-chip-${i}`)?.classList.add('selected');
+  });
+  goTo('screen-new-appt');
+  _apptPac = null;
+  _apptPacTries = 0;
+  const pac_c = document.getElementById('appt-address-pac-container');
+  if (pac_c) pac_c.innerHTML = '';
+  initApptAddressPAC();
+  if (appt.address) setTimeout(() => seedApptAddressWidget(appt.address), 400);
+}
+
 async function saveNewAppointment() {
   const date = document.getElementById('appt-date').value;
   const time = document.getElementById('appt-time').value;
   if (!date) { showToast('Date is required', 'error'); return; }
   const btn = document.getElementById('appt-save-btn');
+  const editingId = state.editingApptId;
   btn.disabled = true; btn.textContent = 'Saving…';
 
   const selectedSvcs = state.services
     .filter((s, i) => document.getElementById(`appt-service-grid-chip-${i}`)?.classList.contains('selected'))
     .map(s => s.name);
 
+  const fields = {
+    address: document.getElementById('appt-address').value,
+    services: selectedSvcs,
+    numberOfHorses: parseInt(document.getElementById('appt-horses').value) || 1,
+    comments: document.getElementById('appt-notes').value,
+    requestedDate: date,
+    requestedTime: time,
+  };
+
   try {
-    await db.collection('appointments').add({
-      farrierId: state.user.uid,
-      customerName: state.customer.name,
-      customerId: state.customer.id || '',
-      farmName: state.customer.farmName || '',
-      email: state.customer.email || '',
-      phone: state.customer.phone || '',
-      address: document.getElementById('appt-address').value,
-      services: selectedSvcs,
-      numberOfHorses: parseInt(document.getElementById('appt-horses').value) || 1,
-      comments: document.getElementById('appt-notes').value,
-      requestedDate: date,
-      requestedTime: time,
-      status: 'confirmed',
-      source: 'mobile_app',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    showSuccess('Appointment Saved!', `${state.customer.name} on ${date}${time ? ' at ' + fmtTime(time) : ''}`);
+    if (editingId) {
+      await db.collection('appointments').doc(editingId).update({
+        ...fields,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      showSuccess('Appointment Updated!', `${state.customer.name} on ${date}${time ? ' at ' + fmtTime(time) : ''}`);
+    } else {
+      await db.collection('appointments').add({
+        farrierId: state.user.uid,
+        customerName: state.customer.name,
+        customerId: state.customer.id || '',
+        farmName: state.customer.farmName || '',
+        email: state.customer.email || '',
+        phone: state.customer.phone || '',
+        ...fields,
+        status: 'confirmed',
+        source: 'mobile_app',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      showSuccess('Appointment Saved!', `${state.customer.name} on ${date}${time ? ' at ' + fmtTime(time) : ''}`);
+    }
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
-  btn.disabled = false; btn.textContent = '📅 Save Appointment';
+  btn.disabled = false; btn.textContent = editingId ? 'Save Changes' : '📅 Save Appointment';
+}
+
+async function cancelAppointment() {
+  const id = state.editingApptId;
+  if (!id) return;
+  if (!confirm('Cancel this appointment? The customer will need to be notified separately.')) return;
+  const btn = document.querySelector('#appt-cancel-appt-wrap button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Cancelling…'; }
+  try {
+    await db.collection('appointments').doc(id).update({
+      status: 'cancelled',
+      cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showSuccess('Appointment Cancelled', `${state.customer.name} on ${document.getElementById('appt-date').value}`, '🚫');
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🚫 Cancel This Appointment'; }
+  }
 }
 
 // ── SUCCESS ──
