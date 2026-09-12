@@ -124,6 +124,8 @@
   .date-chip-num { font-size: 1.1rem; font-weight: 800; color: var(--text); margin-top: 2px; }
   .date-chip.selected { border-color: var(--blue); background: #EBF4FF; }
   .date-chip.selected .date-chip-dow, .date-chip.selected .date-chip-num { color: var(--blue); }
+  .route-move-btn { width: 36px; flex: 1; border: 2px solid var(--border); background: var(--surface); border-radius: 8px; color: var(--blue); font-size: 0.9rem; font-weight: 700; cursor: pointer; }
+  .route-move-btn:disabled { opacity: 0.3; cursor: not-allowed; }
   .service-chip-price { font-size: 0.78rem; font-weight: 500; margin-top: 3px; color: inherit; opacity: 0.8; }
 
   /* ── TOTAL BAR ── */
@@ -1532,16 +1534,36 @@ function renderRouteList() {
   const listEl = document.getElementById('route-list');
   if (!routeAppts.length) {
     listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:0.9rem;">No appointments this day.</div>';
+    document.getElementById('route-maps-btn').style.display = 'none';
     return;
   }
   listEl.innerHTML = routeAppts.map((a, i) => `
-    <div class="appt-row">
-      <div class="appt-row-top">${i + 1}. ${a.customerName || 'Unknown'}${a.farmName ? ' — ' + a.farmName : ''}
-        <span style="float:right; color:var(--text-muted); font-weight:600;">${fmtTime(a.requestedTime)}</span>
+    <div style="display:flex; gap:8px; align-items:stretch; margin-bottom:8px;">
+      <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">
+        <button class="route-move-btn" onclick="moveRouteAppt(${i}, -1)" ${i === 0 ? 'disabled' : ''} aria-label="Move up">▲</button>
+        <button class="route-move-btn" onclick="moveRouteAppt(${i}, 1)" ${i === routeAppts.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button>
       </div>
-      <div class="appt-row-bottom">${a.address || '⚠️ No address on file'}</div>
+      <div class="appt-row" style="flex:1; margin-bottom:0;">
+        <div class="appt-row-top">${i + 1}. ${a.customerName || 'Unknown'}${a.farmName ? ' — ' + a.farmName : ''}
+          <span style="float:right; color:var(--text-muted); font-weight:600;">${fmtTime(a.requestedTime)}</span>
+        </div>
+        <div class="appt-row-bottom">${a.address || '⚠️ No address on file'}</div>
+      </div>
     </div>
   `).join('');
+  // "Open in Google Maps" doesn't require Smart Route first — a farrier can
+  // just reorder stops by hand with the arrows above and send that as-is.
+  const hasAddress = routeAppts.some(a => a.address);
+  document.getElementById('route-maps-btn').style.display = hasAddress ? 'block' : 'none';
+}
+
+// Swap a stop with its neighbor above (dir:-1) or below (dir:1) — the manual
+// alternative to Smart Route for a farrier who wants to build their own order.
+function moveRouteAppt(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= routeAppts.length) return;
+  [routeAppts[i], routeAppts[j]] = [routeAppts[j], routeAppts[i]];
+  renderRouteList();
 }
 
 async function runSmartRoute() {
@@ -1568,7 +1590,6 @@ async function runSmartRoute() {
 
     document.getElementById('route-summary').textContent =
       `📍 ${data.distanceMiles} mi total · ⏱️ ~${data.durationMinutes} min drive time`;
-    document.getElementById('route-maps-btn').style.display = 'block';
   } catch(e) {
     showToast('Error: ' + e.message, 'error');
   }
