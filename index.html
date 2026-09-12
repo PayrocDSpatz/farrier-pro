@@ -2093,6 +2093,194 @@ async function ensureFarriTechfile_(uid, profile) {
     const GOOGLE_CLIENT_ID = "458461432563-pkncm66du9pipuihdrbrhfrsuggo7loh.apps.googleusercontent.com";
     const CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar";
 
+    // ── FIRST-TIME SETUP WIZARD ──
+    // Shown right after signup (and to any pre-existing account that has never
+    // been marked setupCompleted) so a farrier can't land on their QR code /
+    // dashboard without at least one priced service and a confirmed schedule.
+    function SetupWizardView({ userId, userProfile, onComplete }) {
+      const [step, setStep] = useState(1);
+
+      // ── Step 1: Services ──
+      const [services, setServices] = useState([]);
+      const [loadingServices, setLoadingServices] = useState(true);
+      const [svcName, setSvcName] = useState('');
+      const [svcPrice, setSvcPrice] = useState('');
+      const [savingSvc, setSavingSvc] = useState(false);
+
+      useEffect(() => {
+        (async () => {
+          try {
+            const snap = await db.collection('services').where('farrierId', '==', userId).get();
+            setServices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          } catch (e) { console.error('Load services error:', e); }
+          setLoadingServices(false);
+        })();
+      }, [userId]);
+
+      const addService = async () => {
+        const name = svcName.trim();
+        const price = Number(svcPrice);
+        if (!name) return alert('Enter a service name.');
+        if (!isFinite(price) || price < 0) return alert('Enter a valid price.');
+        setSavingSvc(true);
+        try {
+          const ref = await db.collection('services').add({
+            farrierId: userId,
+            name,
+            price,
+            category: '',
+            isActive: true,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          setServices(prev => [...prev, { id: ref.id, name, price, isActive: true }]);
+          setSvcName(''); setSvcPrice('');
+        } catch (e) { alert('Could not save service: ' + e.message); }
+        setSavingSvc(false);
+      };
+
+      const removeService = async (id) => {
+        try {
+          await db.collection('services').doc(id).delete();
+          setServices(prev => prev.filter(s => s.id !== id));
+        } catch (e) { alert('Could not remove service: ' + e.message); }
+      };
+
+      // ── Step 2: Availability ──
+      const defaultAvailability = {
+        monday: { enabled: true, start: '09:00', end: '17:00' },
+        tuesday: { enabled: true, start: '09:00', end: '17:00' },
+        wednesday: { enabled: true, start: '09:00', end: '17:00' },
+        thursday: { enabled: true, start: '09:00', end: '17:00' },
+        friday: { enabled: true, start: '09:00', end: '17:00' },
+        saturday: { enabled: false, start: '09:00', end: '17:00' },
+        sunday: { enabled: false, start: '09:00', end: '17:00' },
+      };
+      const [availability, setAvailability] = useState(userProfile?.availability || defaultAvailability);
+      const [finishing, setFinishing] = useState(false);
+
+      const updateDayAvailability = (day, field, value) => {
+        setAvailability(prev => ({ ...prev, [day]: { ...prev[day], [field]: value } }));
+      };
+
+      const finishSetup = async () => {
+        setFinishing(true);
+        try {
+          await ensureFarriTechfile_(userId, { availability, setupCompleted: true });
+          onComplete();
+        } catch (e) {
+          alert('Could not save your setup: ' + e.message);
+          setFinishing(false);
+        }
+      };
+
+      return (
+        <div className="page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+          <div className="card" style={{ maxWidth: '640px', width: '100%' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem' }}>
+              <div style={{ flex: 1, height: '6px', borderRadius: '3px', background: 'var(--primary)' }} />
+              <div style={{ flex: 1, height: '6px', borderRadius: '3px', background: step === 2 ? 'var(--primary)' : 'var(--border)' }} />
+            </div>
+
+            {step === 1 && (
+              <>
+                <h2>🛠️ Add Your Services</h2>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+                  These show up whenever you build an invoice or take a booking. Add at least
+                  one to continue — you can add more or change prices anytime later in Settings.
+                </p>
+
+                {loadingServices ? (
+                  <div className="spinner"></div>
+                ) : (
+                  <>
+                    {services.length > 0 && (
+                      <div style={{ marginBottom: '1.25rem' }}>
+                        {services.map(s => (
+                          <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.8rem', background: 'var(--surface, rgba(255,255,255,0.05))', border: '2px solid var(--border)', borderRadius: '8px', marginBottom: '0.5rem' }}>
+                            <span style={{ fontWeight: 600 }}>{s.name}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <span>${Number(s.price || 0).toFixed(2)}</span>
+                              <button type="button" className="btn btn-sm btn-outline" onClick={() => removeService(s.id)}>✕</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', alignItems: 'flex-end' }}>
+                      <div className="form-group" style={{ flex: 2, margin: 0 }}>
+                        <label>Service Name</label>
+                        <input type="text" value={svcName} onChange={e => setSvcName(e.target.value)} placeholder="Trim All Four" />
+                      </div>
+                      <div className="form-group" style={{ flex: 1, margin: 0 }}>
+                        <label>Price</label>
+                        <input type="number" min="0" step="0.01" value={svcPrice} onChange={e => setSvcPrice(e.target.value)} placeholder="45" />
+                      </div>
+                      <button type="button" className="btn btn-secondary" onClick={addService} disabled={savingSvc}>
+                        {savingSvc ? '…' : '+ Add'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                <button
+                  className="btn btn-primary"
+                  disabled={services.length === 0}
+                  onClick={() => setStep(2)}
+                  style={{ width: '100%' }}
+                >
+                  Continue →
+                </button>
+              </>
+            )}
+
+            {step === 2 && (
+              <>
+                <h2>📅 Confirm Your Availability</h2>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+                  This decides which days/times show up when scheduling appointments and when
+                  clients book you online. Defaults to Mon–Fri, 9am–5pm — adjust anything that's
+                  not right, or just continue.
+                </p>
+
+                {['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => (
+                  <div key={day} style={{
+                    display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '0.75rem', alignItems: 'center',
+                    marginBottom: '0.75rem', padding: '0.75rem',
+                    background: availability[day].enabled ? 'var(--surface, rgba(255,255,255,0.05))' : 'transparent',
+                    borderRadius: '8px', border: '2px solid var(--border)',
+                  }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, fontWeight: 600 }}>
+                      <input type="checkbox" checked={availability[day].enabled}
+                        onChange={e => updateDayAvailability(day, 'enabled', e.target.checked)}
+                        style={{ width: '18px', height: '18px' }} />
+                      <span style={{ textTransform: 'capitalize' }}>{day}</span>
+                    </label>
+                    {availability[day].enabled ? (
+                      <>
+                        <input type="time" value={availability[day].start} onChange={e => updateDayAvailability(day, 'start', e.target.value)} />
+                        <input type="time" value={availability[day].end} onChange={e => updateDayAvailability(day, 'end', e.target.value)} />
+                      </>
+                    ) : (
+                      <div style={{ gridColumn: '2 / 4', color: '#94a3b8', fontStyle: 'italic' }}>Not available</div>
+                    )}
+                  </div>
+                ))}
+
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+                  <button className="btn btn-outline" onClick={() => setStep(1)} style={{ flex: 1 }}>← Back</button>
+                  <button className="btn btn-primary" onClick={finishSetup} disabled={finishing} style={{ flex: 2 }}>
+                    {finishing ? <span className="spinner"></span> : 'Finish Setup →'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2105,6 +2293,31 @@ async function ensureFarriTechfile_(uid, profile) {
   const [supportSession, setSupportSession] = useState(null);
   const [effectiveFarrierId, setEffectiveFarrierId] = useState(null);
   const [isSupportMode, setIsSupportMode] = useState(false);
+
+  // First-time setup wizard gate: null = still checking, true = show wizard,
+  // false = setup already complete (or was just grandfathered in below).
+  const [needsSetupWizard, setNeedsSetupWizard] = useState(null);
+  useEffect(() => {
+    if (!user || !userProfile) { setNeedsSetupWizard(null); return; }
+    if (userProfile.setupCompleted) { setNeedsSetupWizard(false); return; }
+    (async () => {
+      try {
+        // Grandfather in any account that already has services configured —
+        // this gate is meant to catch never-set-up accounts, not interrupt
+        // farriers who were already using the app before it existed.
+        const snap = await db.collection('services').where('farrierId', '==', user.uid).limit(1).get();
+        if (!snap.empty) {
+          db.collection('farriers').doc(user.uid).update({ setupCompleted: true }).catch(() => {});
+          setNeedsSetupWizard(false);
+        } else {
+          setNeedsSetupWizard(true);
+        }
+      } catch (e) {
+        console.error('Setup check failed:', e);
+        setNeedsSetupWizard(false); // fail open — never lock someone out over a query error
+      }
+    })();
+  }, [user?.uid, userProfile?.setupCompleted]);
 
   // URL params (must be defined outside hooks)
   const urlParams = new URLSearchParams(window.location.search);
@@ -2370,6 +2583,27 @@ if (support) {
   // Authentication view
   if (!user) {
     return <AuthView />;
+  }
+
+  // First-time setup gate — before the dashboard/QR code, not after
+  if (needsSetupWizard === null) {
+    return (
+      <div style={{display: "flex", justifyContent: "center", alignItems: "center", height: "100vh"}}>
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+  if (needsSetupWizard) {
+    return (
+      <SetupWizardView
+        userId={user.uid}
+        userProfile={userProfile}
+        onComplete={() => {
+          setUserProfile(prev => ({ ...(prev || {}), setupCompleted: true }));
+          setNeedsSetupWizard(false);
+        }}
+      />
+    );
   }
 
   // Farrier dashboard (+ support banner)
