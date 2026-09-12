@@ -117,6 +117,7 @@
   .service-chip { padding: 14px 12px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); background: var(--surface); transition: all 0.15s; user-select: none; }
   .service-chip:active { transform: scale(0.97); }
   .service-chip.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
+  .service-chip.disabled { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; background: var(--bg); }
   .service-chip-price { font-size: 0.78rem; font-weight: 500; margin-top: 3px; color: inherit; opacity: 0.8; }
 
   /* ── TOTAL BAR ── */
@@ -615,8 +616,12 @@
     <div id="appt-cancelled-banner" style="display:none; background:var(--danger-bg); border:2px solid #fca5a5; color:var(--danger); border-radius:10px; padding:10px 14px; margin-bottom:12px; font-weight:700; font-size:0.85rem;">
       ⚠️ This appointment is cancelled
     </div>
-    <div class="field"><label>Date *</label><input type="date" id="appt-date"></div>
-    <div class="field"><label>Time *</label><input type="time" id="appt-time"></div>
+    <div class="field"><label>Date *</label><input type="date" id="appt-date" onchange="onApptDateChange()"></div>
+    <div class="field">
+      <label>Time *</label>
+      <div id="appt-time-slots" class="service-grid"></div>
+      <input type="hidden" id="appt-time">
+    </div>
     <div class="field"><label>Number of Horses</label><input type="number" id="appt-horses" value="1" min="1"></div>
     <div class="section-label" style="margin-top:4px;">Services</div>
     <div class="service-grid" id="appt-service-grid" style="margin-bottom:16px;"></div>
@@ -2018,6 +2023,99 @@ async function saveNewCustomer() {
   btn.disabled = false; btn.textContent = editingId ? 'Save Changes' : 'Save Customer';
 }
 
+// ── APPOINTMENT AVAILABILITY / TIME SLOTS ──
+// Mirrors the slot logic on the public customer booking page, so the farrier
+// can't accidentally book themselves outside their own working hours.
+const DEFAULT_AVAILABILITY = {
+  monday:    { enabled: true,  start: '09:00', end: '17:00' },
+  tuesday:   { enabled: true,  start: '09:00', end: '17:00' },
+  wednesday: { enabled: true,  start: '09:00', end: '17:00' },
+  thursday:  { enabled: true,  start: '09:00', end: '17:00' },
+  friday:    { enabled: true,  start: '09:00', end: '17:00' },
+  saturday:  { enabled: false, start: '09:00', end: '17:00' },
+  sunday:    { enabled: false, start: '09:00', end: '17:00' },
+};
+
+function getAvailableApptSlots(dateStr) {
+  if (!dateStr) return [];
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dayName = new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  const availability = state.userProfile?.availability || DEFAULT_AVAILABILITY;
+  const day = availability[dayName];
+  if (!day || !day.enabled) return [];
+  const slots = [];
+  const [startHour, startMin] = (day.start || '09:00').split(':').map(Number);
+  const [endHour, endMin] = (day.end || '17:00').split(':').map(Number);
+  let h = startHour, mi = startMin;
+  while (h < endHour || (h === endHour && mi < endMin)) {
+    slots.push(`${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`);
+    mi += 120; // 2-hour slots, matching the customer booking page
+    h += Math.floor(mi / 60);
+    mi = mi % 60;
+  }
+  return slots;
+}
+
+let _apptSlotsCache = [];
+let _apptBookedCache = [];
+
+function renderApptTimeSlots(selectedTime) {
+  const container = document.getElementById('appt-time-slots');
+  if (!_apptSlotsCache.length) {
+    container.innerHTML = `<div style="grid-column:1/-1;color:var(--text-muted);font-size:0.85rem;padding:12px 0;text-align:center;">
+      You're not set up to work this day. Change your Availability in Settings on the main app, or pick a different date.
+    </div>`;
+    return;
+  }
+  container.innerHTML = _apptSlotsCache.map(t => {
+    const booked = _apptBookedCache.includes(t);
+    const selected = t === selectedTime;
+    return `<div class="service-chip${selected ? ' selected' : ''}${booked ? ' disabled' : ''}"
+      ${booked ? '' : `onclick="selectApptTimeSlot('${t}')"`}>
+      <div>${fmtTime(t)}</div>
+      ${booked ? '<div class="service-chip-price">Booked</div>' : ''}
+    </div>`;
+  }).join('');
+}
+
+function selectApptTimeSlot(time) {
+  document.getElementById('appt-time').value = time;
+  renderApptTimeSlots(time);
+}
+
+async function onApptDateChange(preselectTime = null) {
+  const dateStr = document.getElementById('appt-date').value;
+  document.getElementById('appt-time').value = preselectTime || '';
+  _apptSlotsCache = [];
+  _apptBookedCache = [];
+  const container = document.getElementById('appt-time-slots');
+  if (!dateStr) { container.innerHTML = ''; return; }
+
+  container.innerHTML = '<div style="grid-column:1/-1;color:var(--text-muted);font-size:0.85rem;padding:8px 0;">Loading times…</div>';
+
+  let slots = getAvailableApptSlots(dateStr);
+  // If editing an appointment whose saved time doesn't line up with a generated
+  // slot (e.g. set from the desktop app, or from before this feature existed),
+  // still offer it so editing never silently discards the original time.
+  if (preselectTime && !slots.includes(preselectTime)) slots = [...slots, preselectTime].sort();
+
+  let bookedTimes = [];
+  try {
+    const snap = await db.collection('appointments')
+      .where('farrierId', '==', state.user.uid)
+      .where('requestedDate', '==', dateStr)
+      .get();
+    bookedTimes = snap.docs
+      .filter(d => d.id !== state.editingApptId && d.data().status !== 'cancelled')
+      .map(d => d.data().requestedTime)
+      .filter(Boolean);
+  } catch(e) { console.warn('Could not check existing bookings:', e); }
+
+  _apptSlotsCache = slots;
+  _apptBookedCache = bookedTimes;
+  renderApptTimeSlots(preselectTime);
+}
+
 // ── NEW / EDIT APPOINTMENT ──
 function startNewAppointment() {
   state.editingApptId = null;
@@ -2029,11 +2127,11 @@ function startNewAppointment() {
   document.getElementById('appt-customer-name').textContent = state.customer.name;
   document.getElementById('appt-customer-farm').textContent = state.customer.farmName || '';
   document.getElementById('appt-date').value = new Date().toISOString().split('T')[0];
-  document.getElementById('appt-time').value = '';
   document.getElementById('appt-horses').value = '1';
   const prefillAddr = [state.customer.address, state.customer.city, state.customer.state].filter(Boolean).join(', ');
   document.getElementById('appt-notes').value = '';
   renderServiceGrid('appt-service-grid');
+  onApptDateChange();
   goTo('screen-new-appt');
   // Initialize PAC widget (safe to call multiple times — it guards internally)
   _apptPac = null; // reset so it re-mounts fresh each time
@@ -2064,7 +2162,6 @@ function startEditAppointment(appt) {
   document.getElementById('appt-customer-name').textContent = state.customer.name;
   document.getElementById('appt-customer-farm').textContent = state.customer.farmName || '';
   document.getElementById('appt-date').value = appt.requestedDate || '';
-  document.getElementById('appt-time').value = appt.requestedTime || '';
   document.getElementById('appt-horses').value = appt.numberOfHorses || 1;
   document.getElementById('appt-notes').value = appt.comments || '';
   renderServiceGrid('appt-service-grid');
@@ -2072,6 +2169,7 @@ function startEditAppointment(appt) {
     const i = state.services.findIndex(s => s.name === name);
     if (i >= 0) document.getElementById(`appt-service-grid-chip-${i}`)?.classList.add('selected');
   });
+  onApptDateChange(appt.requestedTime || null);
   goTo('screen-new-appt');
   _apptPac = null;
   _apptPacTries = 0;
