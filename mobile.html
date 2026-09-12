@@ -209,13 +209,13 @@
   .tour-dots { display: flex; justify-content: center; gap: 7px; margin: 4px 0 20px; }
   .tour-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: background 0.2s, transform 0.2s; }
   .tour-dot.active { background: var(--blue); transform: scale(1.3); }
-  .tour-video-card { display: flex; gap: 12px; align-items: center; background: var(--surface); border-radius: var(--radius-sm); padding: 10px; box-shadow: var(--shadow); margin-bottom: 10px; text-decoration: none; color: inherit; }
-  .tour-video-thumb { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: #000; }
-  .tour-video-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.85; }
-  .tour-video-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: white; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
-  .tour-video-step { font-size: 0.7rem; font-weight: 800; color: var(--blue); text-transform: uppercase; letter-spacing: 0.4px; }
-  .tour-video-title { font-weight: 700; font-size: 0.9rem; margin: 2px 0 3px; }
-  .tour-video-desc { font-size: 0.78rem; color: var(--text-muted); line-height: 1.35; }
+  .tour-video-wrap { position: relative; width: 100%; aspect-ratio: 16/9; border-radius: var(--radius-sm); overflow: hidden; background: #000; box-shadow: var(--shadow); margin-bottom: 14px; }
+  .tour-video-wrap iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .tour-chapters { display: flex; flex-direction: column; gap: 8px; }
+  .tour-chapter-btn { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; text-align: left; cursor: pointer; font-family: 'Outfit', sans-serif; width: 100%; }
+  .tour-chapter-btn.active { border-color: var(--blue); background: #EBF4FF; }
+  .tour-chapter-time { font-size: 0.75rem; font-weight: 800; color: var(--blue); background: white; border-radius: 6px; padding: 3px 7px; flex-shrink: 0; }
+  .tour-chapter-label { font-weight: 700; font-size: 0.88rem; color: var(--text); }
 </style>
 </head>
 <body>
@@ -724,7 +724,8 @@
 
     <div style="height:28px;"></div>
     <div class="section-label">📺 Watch the Full Walkthrough</div>
-    <div id="tour-videos"></div>
+    <div class="tour-video-wrap" id="tour-video-wrap"></div>
+    <div class="tour-chapters" id="tour-chapters"></div>
   </div>
 </div>
 
@@ -847,12 +848,26 @@ const tourSteps = [
   { icon: '📄', title: 'Create an Invoice', desc: 'After the visit, tap "New Invoice" from the customer\'s profile — pick services and it totals everything for you.' },
   { icon: '💳', title: 'Get Paid', desc: 'Collect payment on the spot — cash, check, or card — right from your phone. You\'re done!' },
 ];
-const tourVideos = [
-  { id: 'KI7nklQMod8', step: 'Step 1', title: 'Create a New Customer', desc: 'Quickly add a new client right from the field.' },
-  { id: 'AxxoaIzcAec', step: 'Step 2', title: 'Add an Appointment', desc: 'Select the customer, pick a date and time, and you\'re booked.' },
-  { id: 'vHfO9bycFAU', step: 'Step 3', title: 'Create an Invoice', desc: 'Add services, set the total, and deliver it instantly.' },
-  { id: 'tRRiRYB-MZM', step: 'Step 4', title: 'Pay an Invoice', desc: 'Accept cash, check, or charge a card directly from your phone.' },
+const TOUR_VIDEO_ID = 'LSOIA3beYqg';
+const tourChapters = [
+  { time: 0,   label: 'New Customer' },
+  { time: 59,  label: 'New Invoice' },
+  { time: 97,  label: 'Pay Invoice' },
+  { time: 147, label: 'New Appointment' },
 ];
+
+function fmtChapterTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function playTourChapter(i, autoplay = true) {
+  const t = tourChapters[i].time;
+  document.getElementById('tour-video-wrap').innerHTML =
+    `<iframe src="https://www.youtube.com/embed/${TOUR_VIDEO_ID}?start=${t}${autoplay ? '&autoplay=1' : ''}&rel=0" title="How to Use FarriTech" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+  document.querySelectorAll('.tour-chapter-btn').forEach((btn, idx) => btn.classList.toggle('active', idx === i));
+}
 
 function startTour() {
   tourStepIndex = 0;
@@ -866,19 +881,13 @@ function startTour() {
   document.getElementById('tour-dots').innerHTML = tourSteps.map((s, i) =>
     `<div class="tour-dot${i === 0 ? ' active' : ''}" id="tour-dot-${i}"></div>`
   ).join('');
-  document.getElementById('tour-videos').innerHTML = tourVideos.map(v => `
-    <a class="tour-video-card" href="https://www.youtube.com/watch?v=${v.id}" target="_blank" rel="noopener">
-      <div class="tour-video-thumb">
-        <img src="https://img.youtube.com/vi/${v.id}/hqdefault.jpg" alt="${v.title}" loading="lazy">
-        <div class="tour-video-play">▶️</div>
-      </div>
-      <div>
-        <div class="tour-video-step">${v.step}</div>
-        <div class="tour-video-title">${v.title}</div>
-        <div class="tour-video-desc">${v.desc}</div>
-      </div>
-    </a>
+  document.getElementById('tour-chapters').innerHTML = tourChapters.map((c, i) => `
+    <button class="tour-chapter-btn${i === 0 ? ' active' : ''}" onclick="playTourChapter(${i})">
+      <span class="tour-chapter-time">${fmtChapterTime(c.time)}</span>
+      <span class="tour-chapter-label">${c.label}</span>
+    </button>
   `).join('');
+  playTourChapter(0, false);
   renderTourStep();
   goTo('screen-tour');
 }
