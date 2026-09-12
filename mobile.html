@@ -325,6 +325,14 @@
       </div>
       <div class="big-btn-arrow">›</div>
     </button>
+    <button class="big-btn" onclick="openDayRoute()">
+      <div class="big-btn-icon" style="background:#EA580C;">🗺️</div>
+      <div>
+        <div class="big-btn-label">Day Route</div>
+        <div class="big-btn-sub">Smart-route today's stops to Google Maps</div>
+      </div>
+      <div class="big-btn-arrow">›</div>
+    </button>
     <button class="big-btn" onclick="goTo('screen-mileage'); loadMileageLog()">
       <div class="big-btn-icon" style="background:#0F766E;">🚗</div>
       <div>
@@ -674,6 +682,27 @@
   </div>
   <div class="scroll-body" id="appt-search-results" style="padding:0 16px 16px;">
     <div style="text-align:center; color:var(--text-muted); padding:40px 0; font-size:0.9rem;">Loading…</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: DAY ROUTE                         -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-route">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Day Route</div>
+  </div>
+  <div style="padding:12px 16px 0; flex-shrink:0; background:var(--bg);">
+    <input type="date" id="route-date" onchange="loadRouteForDate()" style="width:100%; padding:13px 14px; border:2px solid var(--border); border-radius:10px; font-family:'Outfit',sans-serif; font-size:1rem; color:var(--text); background:var(--surface);">
+  </div>
+  <div class="scroll-body" id="route-list" style="padding:12px 16px 16px;">
+    <div style="text-align:center;color:var(--text-muted);padding:40px 0;">Loading…</div>
+  </div>
+  <div style="position:sticky;bottom:0;background:var(--bg);padding:12px 16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">
+    <div id="route-summary" style="font-size:0.85rem;color:var(--text-muted);text-align:center;"></div>
+    <button class="btn-primary" id="route-smart-btn" onclick="runSmartRoute()" style="background:#7C3AED;">🧭 Smart Route</button>
+    <button class="btn-secondary" id="route-maps-btn" onclick="openRouteInMaps()" style="display:none; background:#EA580C; color:white; border:none;">🗺️ Open in Google Maps</button>
   </div>
 </div>
 
@@ -1465,6 +1494,98 @@ function filterApptResults() {
         </div>
       </div>`;
   }).join('');
+}
+
+// ── DAY ROUTE / SMART ROUTE ──
+let routeAppts = [];
+
+function openDayRoute() {
+  document.getElementById('route-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('route-maps-btn').style.display = 'none';
+  document.getElementById('route-summary').textContent = '';
+  goTo('screen-route');
+  loadRouteForDate();
+}
+
+async function loadRouteForDate() {
+  const dateStr = document.getElementById('route-date').value;
+  const listEl = document.getElementById('route-list');
+  listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Loading…</div>';
+  document.getElementById('route-maps-btn').style.display = 'none';
+  document.getElementById('route-summary').textContent = '';
+  try {
+    const snap = await db.collection('appointments')
+      .where('farrierId', '==', state.user.uid)
+      .where('requestedDate', '==', dateStr)
+      .get();
+    routeAppts = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(a => a.status !== 'cancelled')
+      .sort((a, b) => (a.requestedTime || '').localeCompare(b.requestedTime || ''));
+    renderRouteList();
+  } catch(e) {
+    listEl.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Error: ${e.message}</div>`;
+  }
+}
+
+function renderRouteList() {
+  const listEl = document.getElementById('route-list');
+  if (!routeAppts.length) {
+    listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:0.9rem;">No appointments this day.</div>';
+    return;
+  }
+  listEl.innerHTML = routeAppts.map((a, i) => `
+    <div class="appt-row">
+      <div class="appt-row-top">${i + 1}. ${a.customerName || 'Unknown'}${a.farmName ? ' — ' + a.farmName : ''}
+        <span style="float:right; color:var(--text-muted); font-weight:600;">${fmtTime(a.requestedTime)}</span>
+      </div>
+      <div class="appt-row-bottom">${a.address || '⚠️ No address on file'}</div>
+    </div>
+  `).join('');
+}
+
+async function runSmartRoute() {
+  const stopsWithAddr = routeAppts.filter(a => a.address);
+  if (stopsWithAddr.length < 2) { showToast('Need at least 2 stops with an address to optimize', 'error'); return; }
+
+  const origin = [state.userProfile?.address, state.userProfile?.city, state.userProfile?.state].filter(Boolean).join(', ');
+  if (!origin) { showToast('Add your business address in Settings on the main app first', 'error'); return; }
+
+  const btn = document.getElementById('route-smart-btn');
+  btn.disabled = true; btn.textContent = 'Optimizing…';
+  try {
+    const res = await fetch('/api/smart-route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin, stops: stopsWithAddr.map(a => a.address) }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Could not optimize route');
+
+    const noAddr = routeAppts.filter(a => !a.address);
+    routeAppts = [...data.order.map(i => stopsWithAddr[i]), ...noAddr];
+    renderRouteList();
+
+    document.getElementById('route-summary').textContent =
+      `📍 ${data.distanceMiles} mi total · ⏱️ ~${data.durationMinutes} min drive time`;
+    document.getElementById('route-maps-btn').style.display = 'block';
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = '🧭 Smart Route';
+}
+
+function openRouteInMaps() {
+  const stops = routeAppts.filter(a => a.address).map(a => a.address);
+  if (!stops.length) { showToast('No addresses to route', 'error'); return; }
+  // No origin here on purpose — Google Maps uses the phone's current location
+  // as the starting point, which matters more than the fixed business address
+  // used just to compute the optimized stop order above.
+  const destination = stops[stops.length - 1];
+  const waypoints = stops.slice(0, -1);
+  const params = new URLSearchParams({ api: '1', destination, travelmode: 'driving' });
+  if (waypoints.length) params.set('waypoints', waypoints.join('|'));
+  window.open(`https://www.google.com/maps/dir/?${params.toString()}`, '_blank');
 }
 
 // ── MILEAGE LOG ──
