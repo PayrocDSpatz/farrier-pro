@@ -118,6 +118,12 @@
   .service-chip:active { transform: scale(0.97); }
   .service-chip.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
   .service-chip.disabled { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; background: var(--bg); }
+  .date-chip-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .date-chip { padding: 10px 4px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-family: 'Outfit', sans-serif; background: var(--surface); transition: all 0.15s; user-select: none; }
+  .date-chip-dow { font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+  .date-chip-num { font-size: 1.1rem; font-weight: 800; color: var(--text); margin-top: 2px; }
+  .date-chip.selected { border-color: var(--blue); background: #EBF4FF; }
+  .date-chip.selected .date-chip-dow, .date-chip.selected .date-chip-num { color: var(--blue); }
   .service-chip-price { font-size: 0.78rem; font-weight: 500; margin-top: 3px; color: inherit; opacity: 0.8; }
 
   /* ── TOTAL BAR ── */
@@ -608,7 +614,12 @@
     <div id="appt-cancelled-banner" style="display:none; background:var(--danger-bg); border:2px solid #fca5a5; color:var(--danger); border-radius:10px; padding:10px 14px; margin-bottom:12px; font-weight:700; font-size:0.85rem;">
       ⚠️ This appointment is cancelled
     </div>
-    <div class="field"><label>Date *</label><input type="date" id="appt-date" onchange="onApptDateChange()"></div>
+    <div class="field">
+      <label>Date *</label>
+      <div id="appt-date-chips" class="date-chip-row"></div>
+      <button class="btn-secondary" id="appt-more-dates-btn" onclick="showMoreApptDates()" style="margin-top:8px;">Show Next 5 Days</button>
+      <input type="hidden" id="appt-date">
+    </div>
     <div class="field">
       <label>Time *</label>
       <div id="appt-time-slots" class="service-grid"></div>
@@ -2014,6 +2025,91 @@ const DEFAULT_AVAILABILITY = {
   sunday:    { enabled: false, start: '09:00', end: '17:00' },
 };
 
+// ── APPOINTMENT DATE PICKER ──
+// Only offers days the farrier is actually set up to work, 5 at a time,
+// instead of a native date picker that happily lets them pick a weekend
+// (or any day off) they never work.
+let apptDateWindowOffset = 0;
+let apptDateChips = [];
+
+function isDayAvailable(date) {
+  const dayName = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  const availability = state.userProfile?.availability || DEFAULT_AVAILABILITY;
+  const day = availability[dayName];
+  return !!(day && day.enabled);
+}
+
+function computeNextAvailableDates(startOffset, count) {
+  const dates = [];
+  let offset = startOffset;
+  let guard = 0;
+  while (dates.length < count && guard < 400) {
+    const d = new Date();
+    d.setHours(0,0,0,0);
+    d.setDate(d.getDate() + offset);
+    if (isDayAvailable(d)) {
+      dates.push({
+        dateStr: d.toISOString().split('T')[0],
+        dow: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        num: d.getDate(),
+      });
+    }
+    offset++;
+    guard++;
+  }
+  return { dates, nextOffset: offset };
+}
+
+function renderApptDateChips(selectedDate) {
+  const container = document.getElementById('appt-date-chips');
+  if (!apptDateChips.length) {
+    container.innerHTML = `<div style="grid-column:1/-1;color:var(--text-muted);font-size:0.85rem;padding:8px 0;text-align:center;">
+      No working days found — check your Availability in Settings on the main app.
+    </div>`;
+    return;
+  }
+  container.innerHTML = apptDateChips.map(d => `
+    <div class="date-chip${d.dateStr === selectedDate ? ' selected' : ''}" onclick="selectApptDateChip('${d.dateStr}')">
+      <div class="date-chip-dow">${d.dow}</div>
+      <div class="date-chip-num">${d.num}</div>
+    </div>
+  `).join('');
+}
+
+function selectApptDateChip(dateStr) {
+  document.getElementById('appt-date').value = dateStr;
+  renderApptDateChips(dateStr);
+  onApptDateChange();
+}
+
+function showMoreApptDates() {
+  const { dates, nextOffset } = computeNextAvailableDates(apptDateWindowOffset, 5);
+  apptDateChips = dates;
+  apptDateWindowOffset = nextOffset;
+  const sel = dates[0] ? dates[0].dateStr : '';
+  document.getElementById('appt-date').value = sel;
+  renderApptDateChips(sel);
+  onApptDateChange();
+}
+
+// preselectDate: used when editing an appointment, so its saved date is shown
+// even if it falls outside the freshly-computed window (e.g. it's on a day
+// normally marked off, or further out than the first 5 available days).
+function initApptDatePicker(preselectDate) {
+  apptDateWindowOffset = 0;
+  const { dates, nextOffset } = computeNextAvailableDates(0, 5);
+  if (preselectDate && !dates.some(d => d.dateStr === preselectDate)) {
+    const [y, m, dd] = preselectDate.split('-').map(Number);
+    const pd = new Date(y, m - 1, dd);
+    dates.unshift({ dateStr: preselectDate, dow: pd.toLocaleDateString('en-US', { weekday: 'short' }), num: pd.getDate() });
+  }
+  apptDateChips = dates;
+  apptDateWindowOffset = nextOffset;
+  const initialSelection = preselectDate || (dates[0] ? dates[0].dateStr : '');
+  document.getElementById('appt-date').value = initialSelection;
+  renderApptDateChips(initialSelection);
+}
+
 function getAvailableApptSlots(dateStr) {
   if (!dateStr) return [];
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -2104,11 +2200,11 @@ function startNewAppointment() {
   document.getElementById('appt-view-customer-btn').style.display = 'none';
   document.getElementById('appt-customer-name').textContent = state.customer.name;
   document.getElementById('appt-customer-farm').textContent = state.customer.farmName || '';
-  document.getElementById('appt-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('appt-horses').value = '1';
   const prefillAddr = [state.customer.address, state.customer.city, state.customer.state].filter(Boolean).join(', ');
   document.getElementById('appt-notes').value = '';
   renderServiceGrid('appt-service-grid');
+  initApptDatePicker(null);
   onApptDateChange();
   goTo('screen-new-appt');
   // Initialize PAC widget (safe to call multiple times — it guards internally)
@@ -2119,7 +2215,7 @@ function startNewAppointment() {
   if (pac_c) pac_c.innerHTML = '';
   initApptAddressPAC();
   // Pre-fill after a short delay to let PAC mount
-  if (prefillAddr) setTimeout(() => seedApptAddressWidget(prefillAddr), 400);
+  if (prefillAddr) seedApptAddressWidget(prefillAddr);
 }
 
 function startEditAppointment(appt) {
@@ -2139,7 +2235,7 @@ function startEditAppointment(appt) {
   document.getElementById('appt-view-customer-btn').style.display = 'inline-block';
   document.getElementById('appt-customer-name').textContent = state.customer.name;
   document.getElementById('appt-customer-farm').textContent = state.customer.farmName || '';
-  document.getElementById('appt-date').value = appt.requestedDate || '';
+  initApptDatePicker(appt.requestedDate || null);
   document.getElementById('appt-horses').value = appt.numberOfHorses || 1;
   document.getElementById('appt-notes').value = appt.comments || '';
   renderServiceGrid('appt-service-grid');
@@ -2154,7 +2250,7 @@ function startEditAppointment(appt) {
   const pac_c = document.getElementById('appt-address-pac-container');
   if (pac_c) pac_c.innerHTML = '';
   initApptAddressPAC();
-  if (appt.address) setTimeout(() => seedApptAddressWidget(appt.address), 400);
+  if (appt.address) seedApptAddressWidget(appt.address);
 }
 
 async function saveNewAppointment() {
@@ -2447,14 +2543,18 @@ function initApptAddressPAC() {
   }
 }
 
-// Seed the PAC widget's visible text when pre-populating from customer data
-function seedApptAddressWidget(fullAddress) {
+// Seed the PAC widget's visible text when pre-populating from customer data.
+// The widget mounts asynchronously (it may still be downloading the Maps
+// script, which is lazy-loaded), so retry until it's actually there instead
+// of assuming one fixed delay is always long enough.
+function seedApptAddressWidget(fullAddress, tries = 0) {
   document.getElementById('appt-address').value = fullAddress;
-  // Try to set the visible input inside the PAC widget
   if (_apptPac) {
     const widgetInput = _apptPac.querySelector('input');
     if (widgetInput) widgetInput.value = fullAddress;
+    return;
   }
+  if (tries < 40) setTimeout(() => seedApptAddressWidget(fullAddress, tries + 1), 250);
 }
 </script>
 <script>
