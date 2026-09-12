@@ -2473,11 +2473,23 @@ const [loading, setLoading] = useState(false);
         setLoading(false);
       };
 
+      // If signing in from a phone, send the user to the mobile app instead of
+      // the desktop dashboard (same device check used after signup below).
+      const redirectToMobileIfNeeded = () => {
+        const isMobileDevice = window.innerWidth < 768 ||
+          /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobileDevice) {
+          window.location.href = window.location.origin + '/mobile';
+          return true;
+        }
+        return false;
+      };
+
       const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
-        
+
         try {
           if (!auth) {
             setError('Firebase not configured. Please add your Firebase credentials.');
@@ -2485,6 +2497,7 @@ const [loading, setLoading] = useState(false);
             return;
           }
           await auth.signInWithEmailAndPassword(email, password);
+          if (redirectToMobileIfNeeded()) return;
         } catch (err) {
           setError(err.message);
         }
@@ -2494,7 +2507,7 @@ const [loading, setLoading] = useState(false);
       const handleGoogleSignIn = async () => {
         setError('');
         setLoading(true);
-        
+
         try {
           if (!auth) {
             setError('Firebase not configured.');
@@ -2508,7 +2521,7 @@ const [loading, setLoading] = useState(false);
 
           // Check if user profile exists
           const profileDoc = await db.collection('farriers').doc(user.uid).get();
-          
+
           if (!profileDoc.exists) {
             // First time Google sign-in - create profile
             await ensureFarriTechfile_(user.uid, {
@@ -2528,8 +2541,9 @@ const [loading, setLoading] = useState(false);
               bookingUrl: window.location.origin + '?farrier=' + user.uid
             });
 }
-          
+
           // User will be automatically logged in by Firebase
+          if (redirectToMobileIfNeeded()) return;
         } catch (err) {
           if (err.code !== 'auth/popup-closed-by-user') {
             setError(err.message);
