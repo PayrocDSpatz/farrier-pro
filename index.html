@@ -2833,8 +2833,9 @@ const [loading, setLoading] = useState(false);
       bookingUrl: window.location.origin + '?farrier=' + user.uid
     });
 
-    // 5) Seed default services (if empty)
-    try { await seedDefaultServicesIfEmpty_(user.uid); } catch (e) {}
+    // Services are no longer auto-seeded here — the first-time setup wizard
+    // (SetupWizardView) is now how a new farrier adds their own real services
+    // right after signup, instead of silently getting generic placeholders.
 
     alert('Welcome! Please check your email to verify your account.');
   } catch (err) {
@@ -3253,8 +3254,9 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
         }
       }
 
-      // Seed default services
-      try { await seedDefaultServicesIfEmpty_(uid); } catch (e) {}
+      // Services are no longer auto-seeded here — the first-time setup wizard
+      // (SetupWizardView) is now how a new farrier adds their own real services
+      // right after signup, instead of silently getting generic placeholders.
 
       setSuccessMessage("Account created! Redirecting to your dashboard…");
       cleanupUrl();
