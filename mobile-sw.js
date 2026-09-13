@@ -1,5 +1,5 @@
 // FarriTech Mobile Service Worker
-const CACHE_NAME = 'farritech-mobile-v2';
+const CACHE_NAME = 'farritech-mobile-v3';
 
 // The app shell: small set of files needed to boot the UI instantly on repeat opens.
 const APP_SHELL = [
@@ -34,6 +34,7 @@ const CACHE_FIRST_ORIGINS = new Set([
   'https://maps.googleapis.com',
   'https://js.stripe.com',
   'https://www.gstatic.com', // Firebase SDK scripts
+  'https://firebasestorage.googleapis.com', // horse photos — viewable offline once loaded once
 ]);
 
 self.addEventListener('fetch', event => {

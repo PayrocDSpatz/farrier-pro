@@ -138,6 +138,7 @@
   .pay-chip { padding: 16px 12px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); background: var(--surface); transition: all 0.15s; }
   .pay-chip:active { transform: scale(0.97); }
   .pay-chip.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
+  .pay-chip.chip-offline-disabled { opacity: 0.4; pointer-events: none; }
   .pay-chip-icon { font-size: 1.5rem; display: block; margin-bottom: 6px; }
 
   /* ── INVOICE ROW ── */
@@ -175,6 +176,23 @@
   .toast.show { transform: translateY(0); opacity: 1; }
   .toast.success { background: #15803d; }
   .toast.error { background: #dc2626; }
+
+  /* ── STATUS BANNER (offline / syncing / boot loading) ── */
+  .status-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 10000; color: white; font-weight: 700; font-size: 0.78rem; text-align: center; padding: 6px 10px; padding-top: max(6px, env(safe-area-inset-top)); transform: translateY(-100%); transition: transform 0.25s; }
+  .status-banner.show { transform: translateY(0); }
+  .status-banner.offline { background: #92400e; }
+  .status-banner.syncing { background: #1d4ed8; }
+  .status-banner.boot { background: #334155; }
+  body.status-banner-visible .screen .header { margin-top: 28px; }
+
+  /* ── HORSE PHOTOS ── */
+  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .photo-tile { position: relative; aspect-ratio: 1; border-radius: var(--radius-sm); overflow: hidden; background: var(--border); }
+  .photo-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo-tile.pending::after { content: '⏳ Pending'; position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 0.65rem; font-weight: 700; text-align: center; padding: 3px 0; }
+  .add-photo-tile { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; aspect-ratio: 1; border-radius: var(--radius-sm); border: 2px dashed var(--border); color: var(--text-muted); font-size: 0.75rem; font-weight: 700; cursor: pointer; background: var(--surface); }
+  .horse-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; box-shadow: var(--shadow); }
+  .horse-row-avatar { width: 40px; height: 40px; border-radius: 10px; background: #7C3AED; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
   .section-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 10px; margin-top: 20px; }
   .section-label:first-child { margin-top: 0; }
   .row-btns { display: flex; gap: 8px; }
@@ -222,6 +240,9 @@
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+
+<!-- STATUS BANNER: offline / syncing / boot loading -->
+<div class="status-banner" id="status-banner"></div>
 
 <!-- ══════════════════════════════════════════ -->
 <!-- SCREEN 0: LOGIN                           -->
@@ -414,6 +435,15 @@
     <div id="cust-open-inv-section" style="display:none;">
       <div class="section-label">💰 Outstanding Invoices</div>
       <div id="cust-open-inv-list"></div>
+    </div>
+
+    <!-- Horses -->
+    <div id="cust-horses-section">
+      <div class="section-label" style="display:flex; align-items:center; justify-content:space-between;">
+        <span>🐴 Horses</span>
+        <button onclick="startNewHorse(state.customer)" style="background:var(--blue); color:white; border:none; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:700; cursor:pointer;">+ Add Horse</button>
+      </div>
+      <div id="cust-horses-list"></div>
     </div>
 
     <!-- Recent appointments -->
@@ -614,6 +644,68 @@
 </div>
 
 <!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: NEW / EDIT HORSE                  -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-horse-form">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title" id="horse-form-title">New Horse</div>
+  </div>
+  <div class="scroll-body">
+    <div class="field"><label>Name *</label><input type="text" id="hf-name" placeholder="Biscuit"></div>
+    <div class="field"><label>Breed</label><input type="text" id="hf-breed" placeholder="Quarter Horse"></div>
+    <div class="row-btns">
+      <div class="field" style="flex:1;"><label>Date of Birth</label><input type="date" id="hf-dob"></div>
+      <div class="field" style="flex:1;"><label>Sex</label>
+        <select id="hf-sex">
+          <option value="">—</option>
+          <option value="Mare">Mare</option>
+          <option value="Gelding">Gelding</option>
+          <option value="Stallion">Stallion</option>
+          <option value="Colt">Colt</option>
+          <option value="Filly">Filly</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Color / Markings</label><input type="text" id="hf-color" placeholder="Bay, white blaze…"></div>
+    <div class="section-label">Farrier Details</div>
+    <div class="row-btns">
+      <div class="field" style="flex:1;"><label>Shoeing Cycle (weeks)</label><input type="number" id="hf-cycle" min="1" placeholder="6"></div>
+      <div class="field" style="flex:1;"><label>Shoe Size</label><input type="text" id="hf-shoe-size" placeholder="00"></div>
+    </div>
+    <div class="field"><label>Shoe Type</label><input type="text" id="hf-shoe-type" placeholder="Steel, aluminum, barefoot…"></div>
+    <div class="field"><label>Gait Notes</label><textarea id="hf-gait" placeholder="Interfering, forging, stance…" rows="2"></textarea></div>
+    <div class="field"><label>Hoof Notes</label><textarea id="hf-hoof" placeholder="Sole thickness, wall quality…" rows="2"></textarea></div>
+    <div class="field"><label>Known Issues</label><textarea id="hf-issues" placeholder="Laminitis, thin soles, navicular…" rows="2"></textarea></div>
+    <button class="btn-primary" id="hf-save-btn" onclick="saveHorse()">Save Horse</button>
+    <div style="margin-top:8px;"></div>
+    <button class="btn-secondary" onclick="goBack()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: HORSE DETAIL                      -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-horse-detail">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title" id="horse-detail-name">Horse</div>
+    <button onclick="startEditHorse(state.currentHorse)" style="background:rgba(255,255,255,0.18);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">✏️ Edit</button>
+  </div>
+  <div class="scroll-body">
+    <div class="card">
+      <div class="card-title">Profile</div>
+      <div id="horse-detail-profile"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Photos</div>
+      <div class="photo-grid" id="horse-photo-grid"></div>
+      <input type="file" id="horse-photo-input" accept="image/*" capture="environment" style="display:none;" onchange="onHorsePhotoPicked(event)">
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
 <!-- SCREEN 8: NEW APPOINTMENT                 -->
 <!-- ══════════════════════════════════════════ -->
 <div class="screen hidden" id="screen-new-appt">
@@ -780,6 +872,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
 <script>
 // ── FIREBASE INIT ──
@@ -794,6 +887,27 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const storage = firebase.storage();
+
+// ── OFFLINE PERSISTENCE ──
+// Lets the farrier view cached data and queue writes with no signal (common in barns/
+// farms). Must run before any other Firestore call. Uses the multi-tab manager since a
+// farrier may have two tabs/windows open — that avoids a failed-precondition rejection
+// entirely rather than just handling it.
+try {
+  if (firebase.firestore.persistentLocalCache) {
+    db.settings({
+      cache: firebase.firestore.persistentLocalCache({
+        cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+        tabManager: firebase.firestore.persistentMultipleTabManager(),
+      }),
+    });
+  } else {
+    db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+      console.warn('Offline persistence unavailable:', err.code);
+    });
+  }
+} catch (e) { console.warn('Could not enable Firestore offline persistence:', e); }
 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
 // ── LAZY-LOAD MAPS & STRIPE ──
@@ -834,7 +948,103 @@ const state = {
   lastService: null,
   editingCustomerId: null,
   editingApptId: null,
+  editingHorseId: null,
+  currentHorse: null,
 };
+
+// ── NETWORK STATUS + WRITE QUEUE ──
+// Farriers work in barns/farms with no signal. This tracks connectivity and in-flight
+// writes so the UI can show a persistent "offline / syncing" indicator instead of just
+// hanging — Firestore write promises don't resolve until the server acks them, so
+// without this, any write attempted offline would leave a button stuck on "Saving…"
+// for however long the farrier is offline.
+const netState = { online: navigator.onLine, pendingWrites: 0 };
+let bootLoading = false;
+
+function renderStatusBanner() {
+  const el = document.getElementById('status-banner');
+  if (!el) return;
+  if (bootLoading) {
+    el.textContent = 'Loading your data…';
+    el.className = 'status-banner show boot';
+  } else if (!netState.online) {
+    el.textContent = netState.pendingWrites > 0
+      ? `Offline — ${netState.pendingWrites} change${netState.pendingWrites > 1 ? 's' : ''} will sync`
+      : 'Offline — changes will sync when back online';
+    el.className = 'status-banner show offline';
+  } else if (netState.pendingWrites > 0) {
+    el.textContent = `Syncing ${netState.pendingWrites} change${netState.pendingWrites > 1 ? 's' : ''}…`;
+    el.className = 'status-banner show syncing';
+  } else {
+    el.className = 'status-banner';
+  }
+  document.body.classList.toggle('status-banner-visible', el.classList.contains('show'));
+}
+
+function trackWrite(delta) {
+  netState.pendingWrites = Math.max(0, netState.pendingWrites + delta);
+  renderStatusBanner();
+}
+
+window.addEventListener('online', () => { netState.online = true; renderStatusBanner(); });
+window.addEventListener('offline', () => { netState.online = false; renderStatusBanner(); });
+
+// navigator.onLine only means "has a network interface" — use Firestore's own cache
+// metadata on one lightweight always-open listener as a real reachability signal.
+function initConnectivityWatcher() {
+  if (!state.user) return;
+  db.collection('farriers').doc(state.user.uid).onSnapshot({ includeMetadataChanges: true }, snap => {
+    const reachable = !snap.metadata.fromCache;
+    if (reachable !== netState.online) {
+      netState.online = reachable;
+      renderStatusBanner();
+      if (reachable) {
+        showToast('Back online');
+        flushPhotoOutbox();
+        reconcilePendingCardPayments();
+      }
+    }
+  }, () => {});
+}
+
+// Wraps a Firestore write so the UI never sits frozen while offline: if the write
+// hasn't settled within ~2.5s, it's already been durably queued locally by Firestore's
+// offline persistence, so we proceed optimistically instead of waiting for the eventual
+// server ack. `onFastSuccess` fires if the write settles quickly (normal online path);
+// `onOptimisticQueued` fires once, only if it doesn't.
+function performWrite(promiseFactory, { onFastSuccess, onOptimisticQueued } = {}) {
+  // Call promiseFactory() synchronously (not deferred via .then) — Firestore applies a
+  // local write to its client-side cache synchronously when .set()/.update()/.add() is
+  // called, before any network I/O. That's what makes a query run immediately afterward
+  // (e.g. re-loading a list right after saving) see the new data instantly. Deferring
+  // this call by even one microtask breaks that guarantee and was causing new records
+  // to briefly go missing from lists refreshed right after saving.
+  let p;
+  try { p = promiseFactory(); } catch (err) { p = Promise.reject(err); }
+  trackWrite(+1);
+  let settled = false;
+  let queuedFired = false;
+  p.then(v => {
+    settled = true;
+    trackWrite(-1);
+    if (!queuedFired) onFastSuccess?.(v);
+  }).catch(err => {
+    settled = true;
+    trackWrite(-1);
+    if (isRealFailure(err)) showToast('Error: ' + err.message, 'error');
+  });
+  setTimeout(() => {
+    if (!settled && !queuedFired) { queuedFired = true; onOptimisticQueued?.(); }
+  }, 2500);
+  return p;
+}
+
+function isRealFailure(err) {
+  // 'unavailable'/'deadline-exceeded' just mean offline-and-queued, not actually wrong.
+  return !['unavailable', 'deadline-exceeded'].includes(err?.code);
+}
+
+renderStatusBanner(); // reflect connectivity immediately, even before login
 
 // ── SCREEN NAVIGATION ──
 function goTo(screenId, pushHistory = true) {
@@ -955,10 +1165,19 @@ auth.onAuthStateChanged(async (user) => {
   if (user) {
     loginInProgress = false;
     state.user = user;
-    await loadUserProfile();
-    await loadServices();
-    await loadCustomers();
+    // Navigate immediately and paint from cache as it resolves, instead of blocking
+    // on three sequential network reads — a returning offline user would otherwise
+    // sit on a blank login screen for however long each read takes to fail over to
+    // its local cache.
     goTo('screen-dashboard', false);
+    bootLoading = true;
+    renderStatusBanner();
+    await Promise.allSettled([loadUserProfile(), loadServices(), loadCustomers()]);
+    bootLoading = false;
+    renderStatusBanner();
+    initConnectivityWatcher();
+    reconcilePendingCardPayments();
+    flushPhotoOutbox();
     loadDashboard();
   } else {
     state.user = null;
@@ -1071,7 +1290,9 @@ async function loadCustomers() {
     console.log('✅ Loaded', state.customers.length, 'customers for', state.user.uid);
   } catch(e) {
     console.error('Customers load error:', e);
-    showToast('Error loading customers: ' + e.message, 'error');
+    // Offline with no cached copy yet looks identical to a real error here — the
+    // status banner already explains "offline", so don't pile on a scary red toast.
+    if (netState.online) showToast('Error loading customers: ' + e.message, 'error');
   }
 }
 
@@ -1223,6 +1444,7 @@ async function loadCustomerDetail(c) {
   document.getElementById('cust-appts-section').style.display = 'none';
   document.getElementById('cust-inv-section').style.display = 'none';
   document.getElementById('repeat-section').style.display = 'none';
+  document.getElementById('cust-horses-list').innerHTML = '';
 
   // Hero
   document.getElementById('customer-hero').innerHTML = `
@@ -1239,6 +1461,27 @@ async function loadCustomerDetail(c) {
       ${c.notes ? `<div style="margin-top:4px; font-style:italic; opacity:0.8;">📝 ${c.notes}</div>` : ''}
     </div>
   `;
+
+  try {
+    // Horses
+    const hSnap = await db.collection('horses')
+      .where('farrierId', '==', state.user.uid)
+      .where('customerId', '==', c.id)
+      .get();
+    const horses = hSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById('cust-horses-list').innerHTML = horses.length
+      ? horses.map(h => `
+          <div class="horse-row" onclick="openHorseDetail(${JSON.stringify(h).replace(/"/g,'&quot;')})">
+            <div class="horse-row-avatar">🐴</div>
+            <div>
+              <div class="customer-row-name">${h.name || 'Unnamed'}</div>
+              <div class="customer-row-sub">${[h.breed, h.color].filter(Boolean).join(' · ') || 'No details yet'}</div>
+            </div>
+            <div class="customer-row-arrow">›</div>
+          </div>
+        `).join('')
+      : `<div style="color:var(--text-muted); font-size:0.85rem; padding:8px 0 4px;">No horses added yet</div>`;
+  } catch(e) { console.error(e); }
 
   try {
     // Appointments
@@ -1762,17 +2005,16 @@ function repeatLastService() {
 }
 
 // ── SAVE INVOICE ──
-async function getNextInvoiceNumber() {
-  const snap = await db.collection('invoices').where('farrierId', '==', state.user.uid).get();
-  let highest = 9999;
-  snap.docs.forEach(doc => {
-    const d = doc.data();
-    if (d.invoiceNumber?.startsWith('INV-')) {
-      const n = parseInt(d.invoiceNumber.replace('INV-', ''));
-      if (!isNaN(n) && n >= 10000 && n <= 99999 && n > highest) highest = n;
-    }
-  });
-  return `INV-${highest + 1}`;
+// Invoice numbers are generated locally (date + short unique code) instead of scanning
+// the invoices collection for the current highest number. That old scheme needed a
+// network round-trip before an invoice could even be created — impossible offline —
+// and already raced online (two invoices created in quick succession could compute the
+// same "next" number). This is instant, offline-safe, and collision-proof by construction.
+function generateInvoiceNumber() {
+  const d = new Date();
+  const datePart = d.toISOString().slice(0, 10).replace(/-/g, '');
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `INV-${datePart}-${rand}`;
 }
 
 async function createInvoice() {
@@ -1782,9 +2024,15 @@ async function createInvoice() {
     ...state.customItems.map(ci => ({ name: ci.name, amount: ci.price }))
   ];
   const total = allItems.reduce((s,i) => s + i.amount, 0);
-  const invoiceNumber = await getNextInvoiceNumber();
+  const invoiceNumber = generateInvoiceNumber();
 
-  const docRef = await db.collection('invoices').add({
+  // db.collection(...).doc() generates the document ID client-side, synchronously —
+  // no network round trip needed just to know the invoice's id/number. The actual
+  // .set() is handed to performWrite so this function doesn't block (and doesn't
+  // hang the UI) waiting for the server to ack it; it queues and syncs like any
+  // other offline write.
+  const docRef = db.collection('invoices').doc();
+  performWrite(() => docRef.set({
     farrierId: state.user.uid,
     customerName: c.name,
     customerFarmName: c.farmName || '',
@@ -1797,38 +2045,37 @@ async function createInvoice() {
     milesDriven: parseInt(document.getElementById('svc-miles')?.value) || 0,
     notes: document.getElementById('svc-notes')?.value.trim() || '',
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-  });
+  }));
 
   // ── Write mileage log entry if miles were entered ──
   const miles = parseInt(document.getElementById('svc-miles')?.value) || 0;
   const serviceDate = document.getElementById('review-date')?.value || new Date().toISOString().split('T')[0];
   if (miles > 0) {
-    try {
-      await db.collection('mileage_logs').add({
-        farrierId:      state.user.uid,
-        date:           serviceDate,
-        customerName:   c.name,
-        farmName:       c.farmName || '',
-        address:        c.address || '',
-        services:       allItems.map(i => i.name),
-        invoiceNumber,
-        invoiceId:      docRef.id,
-        invoiceTotal:   total,
-        miles,
-        notes:          document.getElementById('svc-notes')?.value.trim() || '',
-        createdAt:      firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      console.log('✅ Mileage log saved:', miles, 'miles');
-    } catch(e) {
-      console.warn('⚠️ Mileage log failed (non-fatal):', e.message);
-    }
+    performWrite(() => db.collection('mileage_logs').add({
+      farrierId:      state.user.uid,
+      date:           serviceDate,
+      customerName:   c.name,
+      farmName:       c.farmName || '',
+      address:        c.address || '',
+      services:       allItems.map(i => i.name),
+      invoiceNumber,
+      invoiceId:      docRef.id,
+      invoiceTotal:   total,
+      miles,
+      notes:          document.getElementById('svc-notes')?.value.trim() || '',
+      createdAt:      firebase.firestore.FieldValue.serverTimestamp(),
+    }));
   }
 
-  // Try to generate payment link
+  // Payment link / SMS both require network (Stripe API, Twilio) — skip them
+  // entirely while offline instead of letting them fail with a confusing error.
+  // The invoice itself still saves and syncs; the link can be generated later
+  // from the main app once back online.
   let paymentUrl = '';
   const stripeKey = state.userProfile?.stripeSecretKey || '';
-  console.log('💳 Stripe key present:', !!stripeKey, '| key prefix:', stripeKey.substring(0,10));
-  if (stripeKey && total > 0) {
+  if (!netState.online) {
+    console.warn('⚠️ Offline — skipping payment link/SMS; invoice will sync once back online.');
+  } else if (stripeKey && total > 0) {
     try {
       const plRes = await fetch('/api/stripe-payment', {
         method: 'POST',
@@ -1839,7 +2086,7 @@ async function createInvoice() {
       console.log('💳 Stripe response:', JSON.stringify(plData));
       if (plData.success && plData.paymentUrl) {
         paymentUrl = plData.paymentUrl;
-        await db.collection('invoices').doc(docRef.id).update({ paymentUrl, paymentLinkId: plData.paymentLinkId || '' });
+        performWrite(() => docRef.update({ paymentUrl, paymentLinkId: plData.paymentLinkId || '' }));
         console.log('✅ Payment link:', paymentUrl);
       } else {
         console.error('❌ Payment link failed:', plData.error);
@@ -1856,8 +2103,7 @@ async function createInvoice() {
 
   // Send SMS with payment link
   const smsEnabled = state.userProfile?.smsEnabled;
-  console.log('📱 SMS check — smsEnabled:', smsEnabled, '| phone:', c.phone, '| paymentUrl:', paymentUrl, '| stripeKey present:', !!state.userProfile?.stripeSecretKey);
-  if (smsEnabled && c.phone) {
+  if (netState.online && smsEnabled && c.phone) {
     try {
       const bizName = state.userProfile?.businessName || 'Your Farrier';
       const msg = paymentUrl
@@ -1873,7 +2119,7 @@ async function createInvoice() {
     } catch(e) { console.warn('SMS error:', e); }
   } else if (!smsEnabled) {
     console.warn('⚠️ SMS not sent — smsEnabled is false. Enable SMS in Settings on the main app.');
-  } else if (!c.phone) {
+  } else if (netState.online && !c.phone) {
     console.warn('⚠️ SMS not sent — customer has no phone number.');
   }
 
@@ -1886,7 +2132,7 @@ async function saveInvoiceOnly() {
   try {
     const inv = await createInvoice();
     state.currentInvoice = inv;
-    showSuccess('Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} created`);
+    showSuccess('Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} created` + (netState.online ? '' : ' (will sync when back online)'));
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
   setBtnsDisabled(false);
   document.getElementById('review-saving').style.display = 'none';
@@ -1924,7 +2170,7 @@ async function saveAndSendLink() {
     } else if (inv.paymentUrl) {
       showSuccess('Invoice Created!', 'Payment link ready — copy from the main app to share');
     } else {
-      showSuccess('Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} created`);
+      showSuccess('Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} created` + (netState.online ? ' — no payment link' : ' (will sync when back online)'));
     }
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
   setBtnsDisabled(false);
@@ -1986,10 +2232,27 @@ function openInvoicePayment(inv) {
   document.getElementById('confirm-pay-btn').disabled = true;
   document.querySelectorAll('.pay-chip').forEach(c => c.classList.remove('selected'));
   document.getElementById('confirm-pay-btn').textContent = 'Confirm Payment';
+  updatePayMethodAvailability();
   goTo('screen-payment');
 }
 
+// Card and Pay Link both require network (a live Stripe charge, an emailed/texted
+// link) — grey them out while offline instead of letting the farrier tap one and
+// hit a confusing failure. Cash/Check stay available and queue like any other write.
+function updatePayMethodAvailability() {
+  document.querySelectorAll('#pay-method-grid .pay-chip').forEach(chip => {
+    const needsNetwork = /'card'|'link'/.test(chip.getAttribute('onclick') || '');
+    chip.classList.toggle('chip-offline-disabled', needsNetwork && !netState.online);
+  });
+}
+window.addEventListener('online', updatePayMethodAvailability);
+window.addEventListener('offline', updatePayMethodAvailability);
+
 function selectPayMethod(method, el) {
+  if ((method === 'card' || method === 'link') && !netState.online) {
+    showToast('Card payments require an internet connection', 'error');
+    return;
+  }
   state.selectedPayMethod = method;
   document.querySelectorAll('.pay-chip').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
@@ -2031,7 +2294,7 @@ async function confirmPayment() {
 
       // Must have a payment URL
       if (!payUrl) {
-        showToast('No payment link available — check Stripe is connected in Settings', 'error');
+        showToast(netState.online ? 'No payment link available — check Stripe is connected in Settings' : 'No payment link — this invoice was created offline', 'error');
         document.getElementById('confirm-pay-btn').disabled = false;
         document.getElementById('pay-saving').style.display = 'none';
         return;
@@ -2081,7 +2344,8 @@ async function confirmPayment() {
       }
       showSuccess('Payment Charged!', `$${(inv.total||0).toFixed(2)} collected via card`);
     } else {
-      // Cash or check — mark as paid
+      // Cash or check — mark as paid. These don't need the network (unlike Card/Pay
+      // Link), so they queue via performWrite instead of blocking on server ack.
       const updateData = {
         status: 'paid',
         paidAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2090,8 +2354,8 @@ async function confirmPayment() {
       if (method === 'check') {
         updateData.checkNumber = document.getElementById('check-number')?.value.trim() || '';
       }
-      await db.collection('invoices').doc(inv.id).update(updateData);
-      showSuccess('Payment Recorded!', `$${(inv.total||0).toFixed(2)} collected via ${method}`);
+      performWrite(() => db.collection('invoices').doc(inv.id).update(updateData));
+      showSuccess('Payment Recorded!', `$${(inv.total||0).toFixed(2)} collected via ${method}` + (netState.online ? '' : ' (will sync when back online)'));
     }
   } catch(e) {
     showToast('Error: ' + e.message, 'error');
@@ -2156,30 +2420,264 @@ async function saveNewCustomer() {
     state: document.getElementById('nc-state').value.trim(),
     zip: document.getElementById('nc-zip').value.trim(),
   };
-  try {
-    if (editingId) {
-      await db.collection('customers').doc(editingId).update(fields);
-      const updated = { id: editingId, ...fields };
-      const idx = state.customers.findIndex(c => c.id === editingId);
-      if (idx >= 0) state.customers[idx] = { ...state.customers[idx], ...updated };
-      state.customer = updated;
-      showToast('Customer updated!', 'success');
-      goBack();
-      loadCustomerDetail(updated);
-    } else {
-      const docRef = await db.collection('customers').add({
-        farrierId: state.user.uid,
-        ...fields,
-        source: 'mobile_app',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      const newCustomer = { id: docRef.id, ...fields };
-      state.customers.unshift(newCustomer);
-      showToast('Customer added!', 'success');
-      selectCustomer(newCustomer);
-    }
-  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  // Doc IDs are generated client-side (synchronously) so we can update local state and
+  // navigate right away — performWrite queues the actual write and syncs in the
+  // background instead of leaving this screen stuck on "Saving…" while offline.
+  if (editingId) {
+    performWrite(() => db.collection('customers').doc(editingId).update(fields));
+    const updated = { id: editingId, ...fields };
+    const idx = state.customers.findIndex(c => c.id === editingId);
+    if (idx >= 0) state.customers[idx] = { ...state.customers[idx], ...updated };
+    state.customer = updated;
+    showToast(netState.online ? 'Customer updated!' : 'Customer updated! (will sync when back online)', 'success');
+    goBack();
+    loadCustomerDetail(updated);
+  } else {
+    const docRef = db.collection('customers').doc();
+    performWrite(() => docRef.set({
+      farrierId: state.user.uid,
+      ...fields,
+      source: 'mobile_app',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }));
+    const newCustomer = { id: docRef.id, ...fields };
+    state.customers.unshift(newCustomer);
+    showToast(netState.online ? 'Customer added!' : 'Customer added! (will sync when back online)', 'success');
+    selectCustomer(newCustomer);
+  }
   btn.disabled = false; btn.textContent = editingId ? 'Save Changes' : 'Save Customer';
+}
+
+// ── HORSES ──
+function startNewHorse(customer) {
+  if (!customer) return;
+  state.editingHorseId = null;
+  document.getElementById('horse-form-title').textContent = 'New Horse';
+  document.getElementById('hf-save-btn').textContent = 'Save Horse';
+  ['hf-name','hf-breed','hf-dob','hf-color','hf-cycle','hf-shoe-size','hf-shoe-type','hf-gait','hf-hoof','hf-issues'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('hf-sex').value = '';
+  goTo('screen-horse-form');
+}
+
+function startEditHorse(h) {
+  if (!h) return;
+  state.editingHorseId = h.id;
+  document.getElementById('horse-form-title').textContent = 'Edit Horse';
+  document.getElementById('hf-save-btn').textContent = 'Save Changes';
+  document.getElementById('hf-name').value = h.name || '';
+  document.getElementById('hf-breed').value = h.breed || '';
+  document.getElementById('hf-dob').value = h.dob || '';
+  document.getElementById('hf-sex').value = h.sex || '';
+  document.getElementById('hf-color').value = h.color || '';
+  document.getElementById('hf-cycle').value = h.shoeingCycleWeeks || '';
+  document.getElementById('hf-shoe-size').value = h.shoeSize || '';
+  document.getElementById('hf-shoe-type').value = h.shoeType || '';
+  document.getElementById('hf-gait').value = h.gaitNotes || '';
+  document.getElementById('hf-hoof').value = h.hoofNotes || '';
+  document.getElementById('hf-issues').value = h.knownIssues || '';
+  goTo('screen-horse-form');
+}
+
+async function saveHorse() {
+  const name = document.getElementById('hf-name').value.trim();
+  if (!name) { showToast('Horse name is required', 'error'); return; }
+  const btn = document.getElementById('hf-save-btn');
+  const editingId = state.editingHorseId;
+  const c = state.customer;
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const fields = {
+    name,
+    breed: document.getElementById('hf-breed').value.trim(),
+    dob: document.getElementById('hf-dob').value,
+    sex: document.getElementById('hf-sex').value,
+    color: document.getElementById('hf-color').value.trim(),
+    shoeingCycleWeeks: parseInt(document.getElementById('hf-cycle').value) || null,
+    shoeSize: document.getElementById('hf-shoe-size').value.trim(),
+    shoeType: document.getElementById('hf-shoe-type').value.trim(),
+    gaitNotes: document.getElementById('hf-gait').value.trim(),
+    hoofNotes: document.getElementById('hf-hoof').value.trim(),
+    knownIssues: document.getElementById('hf-issues').value.trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  if (editingId) {
+    performWrite(() => db.collection('horses').doc(editingId).update(fields));
+    const merged = { ...(state.currentHorse || {}), id: editingId, ...fields };
+    state.currentHorse = merged;
+    showToast('Horse updated!' + suffix, 'success');
+    goBack();
+    renderHorseProfileCard(merged); // harmless if horse-detail isn't the visible screen
+    loadCustomerDetail(c);
+  } else {
+    const docRef = db.collection('horses').doc();
+    performWrite(() => docRef.set({
+      farrierId: state.user.uid,
+      customerId: c.id,
+      customerName: c.name,
+      photos: [],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      ...fields,
+    }));
+    showToast('Horse added!' + suffix, 'success');
+    goBack();
+    loadCustomerDetail(c);
+  }
+  btn.disabled = false; btn.textContent = editingId ? 'Save Changes' : 'Save Horse';
+}
+
+function renderHorseProfileCard(h) {
+  document.getElementById('horse-detail-name').textContent = h.name || 'Horse';
+  const rows = [
+    ['Breed', h.breed], ['Date of Birth', h.dob], ['Sex', h.sex], ['Color / Markings', h.color],
+    ['Shoeing Cycle', h.shoeingCycleWeeks ? `${h.shoeingCycleWeeks} weeks` : ''],
+    ['Shoe Size', h.shoeSize], ['Shoe Type', h.shoeType],
+    ['Gait Notes', h.gaitNotes], ['Hoof Notes', h.hoofNotes], ['Known Issues', h.knownIssues],
+  ].filter(([,v]) => v);
+  document.getElementById('horse-detail-profile').innerHTML = rows.length
+    ? rows.map(([label, v]) => `<div class="info-row"><div class="info-row-label">${label}</div><div class="info-row-value">${v}</div></div>`).join('')
+    : `<div style="color:var(--text-muted); font-size:0.85rem;">No details added yet</div>`;
+}
+
+function openHorseDetail(h) {
+  state.currentHorse = h;
+  renderHorseProfileCard(h);
+  renderHorsePhotoGrid();
+  goTo('screen-horse-detail');
+}
+
+function renderHorsePhotoGrid() {
+  const h = state.currentHorse;
+  const grid = document.getElementById('horse-photo-grid');
+  if (!grid || !h) return;
+  const synced = (h.photos || []).map(p => `<div class="photo-tile"><img src="${p.url}" alt="${h.name||'horse'} photo"></div>`).join('');
+  const pending = _pendingPhotoPreviews[h.id] || [];
+  const pendingTiles = pending.map(p => `<div class="photo-tile pending"><img src="${p.previewUrl}" alt="pending upload"></div>`).join('');
+  grid.innerHTML = synced + pendingTiles + `<div class="add-photo-tile" onclick="document.getElementById('horse-photo-input').click()"><span style="font-size:1.4rem;">📷</span>Add Photo</div>`;
+}
+
+// ── HORSE PHOTOS: offline-capable upload outbox ──
+// Firebase Storage has no built-in offline queue the way Firestore does, so a photo
+// picked while offline is compressed and stashed in IndexedDB with an instant local
+// preview; flushPhotoOutbox() uploads everything queued once back online.
+const PHOTO_DB_NAME = 'farritech-photo-outbox';
+const PHOTO_STORE = 'pending_photos';
+let _photoDbPromise = null;
+const _pendingPhotoPreviews = {}; // horseId -> [{ id, previewUrl }]
+
+function openPhotoDb() {
+  if (_photoDbPromise) return _photoDbPromise;
+  _photoDbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(PHOTO_DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(PHOTO_STORE, { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return _photoDbPromise;
+}
+
+async function photoDbAll() {
+  const conn = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = conn.transaction(PHOTO_STORE, 'readonly');
+    const req = tx.objectStore(PHOTO_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function photoDbPut(record) {
+  const conn = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = conn.transaction(PHOTO_STORE, 'readwrite');
+    tx.objectStore(PHOTO_STORE).put(record);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function photoDbDelete(id) {
+  const conn = await openPhotoDb();
+  return new Promise((resolve, reject) => {
+    const tx = conn.transaction(PHOTO_STORE, 'readwrite');
+    tx.objectStore(PHOTO_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Resize/compress before storing — keeps cellular uploads small.
+function compressImage(file, maxDim = 1600, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => { URL.revokeObjectURL(url); blob ? resolve(blob) : reject(new Error('Compression failed')); }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+
+async function onHorsePhotoPicked(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  const horse = state.currentHorse;
+  if (!horse) return;
+
+  let blob;
+  try { blob = await compressImage(file); } catch (e) { showToast('Could not process photo', 'error'); return; }
+
+  const id = `${horse.id}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  await photoDbPut({ id, horseId: horse.id, blob, caption: '', createdAt: Date.now() });
+
+  if (!_pendingPhotoPreviews[horse.id]) _pendingPhotoPreviews[horse.id] = [];
+  _pendingPhotoPreviews[horse.id].push({ id, previewUrl: URL.createObjectURL(blob) });
+  renderHorsePhotoGrid();
+  showToast(netState.online ? 'Uploading photo…' : 'Photo saved — will upload when back online');
+
+  if (netState.online) flushPhotoOutbox();
+}
+
+async function flushPhotoOutbox() {
+  if (!netState.online || !state.user) return;
+  let records;
+  try { records = await photoDbAll(); } catch (e) { return; }
+  for (const rec of records) {
+    try {
+      const path = `horse-photos/${state.user.uid}/${rec.horseId}/${rec.id}.jpg`;
+      const ref = storage.ref(path);
+      await ref.put(rec.blob);
+      const url = await ref.getDownloadURL();
+      await db.collection('horses').doc(rec.horseId).update({
+        photos: firebase.firestore.FieldValue.arrayUnion({ url, storagePath: path, uploadedAt: Date.now(), caption: rec.caption || '' }),
+      });
+      await photoDbDelete(rec.id);
+      const list = _pendingPhotoPreviews[rec.horseId];
+      if (list) {
+        const idx = list.findIndex(p => p.id === rec.id);
+        if (idx >= 0) { URL.revokeObjectURL(list[idx].previewUrl); list.splice(idx, 1); }
+      }
+      if (state.currentHorse?.id === rec.horseId) {
+        const fresh = await db.collection('horses').doc(rec.horseId).get();
+        if (fresh.exists) { state.currentHorse = { id: fresh.id, ...fresh.data() }; renderHorsePhotoGrid(); }
+      }
+    } catch (e) {
+      console.warn('Photo upload failed, will retry later:', e);
+      // Left in the outbox — the next boot/online event retries it. No backoff in v1.
+    }
+  }
 }
 
 // ── APPOINTMENT AVAILABILITY / TIME SLOTS ──
@@ -2444,29 +2942,29 @@ async function saveNewAppointment() {
     requestedTime: time,
   };
 
-  try {
-    if (editingId) {
-      await db.collection('appointments').doc(editingId).update({
-        ...fields,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      showSuccess('Appointment Updated!', `${state.customer.name} on ${date}${time ? ' at ' + fmtTime(time) : ''}`);
-    } else {
-      await db.collection('appointments').add({
-        farrierId: state.user.uid,
-        customerName: state.customer.name,
-        customerId: state.customer.id || '',
-        farmName: state.customer.farmName || '',
-        email: state.customer.email || '',
-        phone: state.customer.phone || '',
-        ...fields,
-        status: 'confirmed',
-        source: 'mobile_app',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      showSuccess('Appointment Saved!', `${state.customer.name} on ${date}${time ? ' at ' + fmtTime(time) : ''}`);
-    }
-  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  if (editingId) {
+    performWrite(() => db.collection('appointments').doc(editingId).update({
+      ...fields,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }));
+    showSuccess('Appointment Updated!', `${state.customer.name} on ${date}${time ? ' at ' + fmtTime(time) : ''}${suffix}`);
+  } else {
+    const docRef = db.collection('appointments').doc();
+    performWrite(() => docRef.set({
+      farrierId: state.user.uid,
+      customerName: state.customer.name,
+      customerId: state.customer.id || '',
+      farmName: state.customer.farmName || '',
+      email: state.customer.email || '',
+      phone: state.customer.phone || '',
+      ...fields,
+      status: 'confirmed',
+      source: 'mobile_app',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }));
+    showSuccess('Appointment Saved!', `${state.customer.name} on ${date}${time ? ' at ' + fmtTime(time) : ''}${suffix}`);
+  }
   btn.disabled = false; btn.textContent = editingId ? 'Save Changes' : '📅 Save Appointment';
 }
 
@@ -2476,17 +2974,12 @@ async function cancelAppointment() {
   if (!confirm('Cancel this appointment? The customer will need to be notified separately.')) return;
   const btn = document.querySelector('#appt-cancel-appt-wrap button');
   if (btn) { btn.disabled = true; btn.textContent = 'Cancelling…'; }
-  try {
-    await db.collection('appointments').doc(id).update({
-      status: 'cancelled',
-      cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    showSuccess('Appointment Cancelled', `${state.customer.name} on ${document.getElementById('appt-date').value}`, '🚫');
-  } catch(e) {
-    showToast('Error: ' + e.message, 'error');
-    if (btn) { btn.disabled = false; btn.textContent = '🚫 Cancel This Appointment'; }
-  }
+  performWrite(() => db.collection('appointments').doc(id).update({
+    status: 'cancelled',
+    cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }));
+  showSuccess('Appointment Cancelled', `${state.customer.name} on ${document.getElementById('appt-date').value}${netState.online ? '' : ' (will sync when back online)'}`, '🚫');
 }
 
 // ── SUCCESS ──
@@ -2529,6 +3022,12 @@ function initStripeElements() {
 }
 
 async function chargeCardViaStripe(inv) {
+  // Defensive re-check — connectivity may have dropped between rendering the payment
+  // grid and tapping Confirm. A card charge can never work offline (it's a live Stripe
+  // API call), unlike Cash/Check.
+  if (!netState.online) {
+    showToast('Card payments require an internet connection', 'error'); return false;
+  }
   if (!_stripe || !_stripeCard) {
     showToast('Stripe not initialized', 'error'); return false;
   }
@@ -2557,32 +3056,98 @@ async function chargeCardViaStripe(inv) {
   if (!result.success) {
     showToast(result.error || 'Card declined', 'error'); return false;
   }
-  // Update Firestore — same pattern as desktop
-  const freshDoc = await db.collection('invoices').doc(inv.id).get();
-  const freshData = freshDoc.exists ? freshDoc.data() : {};
-  const existing = freshData.payments || [];
-  const newPayment = {
-    amount: inv.total,
-    method: 'credit_card',
-    memo: result.last4 ? `${result.brand || 'Card'} ending ${result.last4}` : 'Credit card',
-    date: new Date().toISOString(),
-    transactionId: result.transactionId
-  };
-  const allPayments = [...existing, newPayment];
-  const totalPaid = allPayments.reduce((s, p) => s + (p.amount || 0), 0);
-  const newStatus = totalPaid >= inv.total ? 'paid' : 'partial';
-  await db.collection('invoices').doc(inv.id).update({
-    status: newStatus,
-    payments: allPayments,
-    paidAmount: totalPaid,
-    balanceDue: Math.max(0, inv.total - totalPaid),
-    paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null),
-    transactionId: result.transactionId,
-    paymentMethod: 'card',
-    cardLast4: result.last4 || '',
-    cardBrand: result.brand || ''
+
+  // The card is now charged — record that fact locally *before* touching Firestore.
+  // If the app dies or the connection drops between here and the write below, the
+  // customer would otherwise be charged with no record of it; reconcilePendingCardPayments()
+  // replays this list on next boot/reconnect and is safe to run twice (keyed by transactionId).
+  addPendingCardReconciliation({
+    invoiceId: inv.id, transactionId: result.transactionId,
+    amount: inv.total, last4: result.last4 || '', brand: result.brand || '',
   });
+
+  // Update Firestore — same pattern as desktop
+  try {
+    const freshDoc = await db.collection('invoices').doc(inv.id).get();
+    const freshData = freshDoc.exists ? freshDoc.data() : {};
+    const existing = freshData.payments || [];
+    const newPayment = {
+      amount: inv.total,
+      method: 'credit_card',
+      memo: result.last4 ? `${result.brand || 'Card'} ending ${result.last4}` : 'Credit card',
+      date: new Date().toISOString(),
+      transactionId: result.transactionId
+    };
+    const allPayments = [...existing, newPayment];
+    const totalPaid = allPayments.reduce((s, p) => s + (p.amount || 0), 0);
+    const newStatus = totalPaid >= inv.total ? 'paid' : 'partial';
+    await db.collection('invoices').doc(inv.id).update({
+      status: newStatus,
+      payments: allPayments,
+      paidAmount: totalPaid,
+      balanceDue: Math.max(0, inv.total - totalPaid),
+      paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null),
+      transactionId: result.transactionId,
+      paymentMethod: 'card',
+      cardLast4: result.last4 || '',
+      cardBrand: result.brand || ''
+    });
+    removePendingCardReconciliation(result.transactionId);
+  } catch (e) {
+    console.warn('Card charged but Firestore write failed — will reconcile on next sync:', e);
+  }
   return true;
+}
+
+// ── CARD PAYMENT RECONCILIATION ──
+// A charged-but-unrecorded invoice (app killed between the Stripe charge and the
+// Firestore write) is worse than a merely-late write, so it gets its own small
+// localStorage-backed safety net, independent of the generic offline write queue.
+const PENDING_CARD_KEY = 'farritech_pendingCardReconciliations';
+
+function addPendingCardReconciliation(entry) {
+  const list = JSON.parse(localStorage.getItem(PENDING_CARD_KEY) || '[]');
+  list.push(entry);
+  localStorage.setItem(PENDING_CARD_KEY, JSON.stringify(list));
+}
+
+function removePendingCardReconciliation(transactionId) {
+  const list = JSON.parse(localStorage.getItem(PENDING_CARD_KEY) || '[]');
+  const filtered = list.filter(e => e.transactionId !== transactionId);
+  localStorage.setItem(PENDING_CARD_KEY, JSON.stringify(filtered));
+}
+
+async function reconcilePendingCardPayments() {
+  if (!netState.online || !state.user) return;
+  const list = JSON.parse(localStorage.getItem(PENDING_CARD_KEY) || '[]');
+  if (!list.length) return;
+  for (const entry of list) {
+    try {
+      const freshDoc = await db.collection('invoices').doc(entry.invoiceId).get();
+      if (!freshDoc.exists) { removePendingCardReconciliation(entry.transactionId); continue; }
+      const freshData = freshDoc.data();
+      const alreadyRecorded = (freshData.payments || []).some(p => p.transactionId === entry.transactionId);
+      if (alreadyRecorded) { removePendingCardReconciliation(entry.transactionId); continue; }
+      const allPayments = [...(freshData.payments || []), {
+        amount: entry.amount, method: 'credit_card',
+        memo: entry.last4 ? `${entry.brand || 'Card'} ending ${entry.last4}` : 'Credit card',
+        date: new Date().toISOString(), transactionId: entry.transactionId,
+      }];
+      const totalPaid = allPayments.reduce((s, p) => s + (p.amount || 0), 0);
+      const newStatus = totalPaid >= (freshData.total || entry.amount) ? 'paid' : 'partial';
+      await db.collection('invoices').doc(entry.invoiceId).update({
+        status: newStatus, payments: allPayments, paidAmount: totalPaid,
+        balanceDue: Math.max(0, (freshData.total || entry.amount) - totalPaid),
+        paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null),
+        transactionId: entry.transactionId, paymentMethod: 'card',
+        cardLast4: entry.last4 || '', cardBrand: entry.brand || '',
+      });
+      removePendingCardReconciliation(entry.transactionId);
+      console.log('✅ Reconciled a pending card payment for invoice', entry.invoiceId);
+    } catch (e) {
+      console.warn('Reconciliation retry failed, will try again later:', e);
+    }
+  }
 }
 
 // ── SEARCH SCREEN INIT ──
