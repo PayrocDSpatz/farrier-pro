@@ -204,6 +204,12 @@
   .horse-svc-price-wrap input { flex: 1; padding: 13px 14px; border: 2px solid var(--border); border-radius: var(--radius-sm); font-family: 'Outfit', sans-serif; font-size: 1rem; color: var(--text); background: var(--surface); outline: none; }
   .horse-pick-chip { padding: 12px 10px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); background: var(--surface); }
   .horse-pick-chip.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
+
+  /* ── HORSE COMBOBOX (type-to-filter, invoice line items) ── */
+  .horse-combo { position: relative; }
+  .horse-combo-suggestions { position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-sm); max-height: 200px; overflow-y: auto; z-index: 30; box-shadow: var(--shadow-lg); }
+  .horse-combo-suggestion { padding: 12px 14px; cursor: pointer; font-size: 0.95rem; font-weight: 600; }
+  .horse-combo-suggestion:active { background: #EBF4FF; }
   .section-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 10px; margin-top: 20px; }
   .section-label:first-child { margin-top: 0; }
   .row-btns { display: flex; gap: 8px; }
@@ -499,9 +505,10 @@
       <div style="font-size:0.85rem; color:var(--text-muted); margin-top:3px;" id="svc-customer-farm"></div>
     </div>
 
-    <div class="section-label">Horses Serviced</div>
-    <div id="invoice-horse-rows"></div>
-    <button class="btn-secondary" onclick="addHorseFromInvoice()" style="margin-bottom:16px;">+ Add Horse for This Customer</button>
+    <div class="section-label">Invoice Items</div>
+    <div id="invoice-lines"></div>
+    <button class="btn-secondary" onclick="addInvoiceLine()" style="margin-bottom:8px;">+ Add Line</button>
+    <button class="btn-secondary" onclick="addHorseFromInvoice()" style="margin-bottom:16px;">+ Add New Horse</button>
 
     <div class="field" style="margin-top:12px;">
       <label>Custom Item (optional)</label>
@@ -979,7 +986,7 @@ const state = {
   editingHorseId: null,
   currentHorse: null,
   customerHorses: [],   // horses for state.customer, populated by loadCustomerDetail()
-  invoiceHorseServices: [], // [{horseId, horseName, serviceName, price}] built while on screen-services
+  invoiceLines: [], // [{horseId, horseName, serviceId, serviceName, price}] — one per "+ Add Line" on screen-services
 };
 
 // ── NETWORK STATUS + WRITE QUEUE ──
@@ -1616,9 +1623,19 @@ async function loadCustomerDetail(c) {
 }
 
 // ── NEW INVOICE FLOW ──
+// One line at a time: pick a horse (or "General / Other"), pick its service, an
+// editable price appears (pre-filled from the catalog — useful since the default
+// services start at $0). "+ Add Line" repeats for the next horse/service; "+ Add New
+// Horse" jumps out to create a horse record that isn't on file yet, then comes right
+// back with a fresh line pre-selecting it.
+function emptyInvoiceLine() {
+  return { horseId: '', horseName: '', serviceId: '', serviceName: '', price: 0 };
+}
+
 function startNewInvoice() {
   state.customItems = [];
-  renderInvoiceHorseRows();
+  state.invoiceLines = [emptyInvoiceLine()];
+  renderInvoiceLines();
   document.getElementById('svc-customer-name').textContent = state.customer.name;
   document.getElementById('svc-customer-farm').textContent = state.customer.farmName || '';
   document.getElementById('svc-notes').value = '';
@@ -1630,49 +1647,36 @@ function startNewInvoice() {
   goTo('screen-services');
 }
 
-// One row per horse on file for this customer, plus an always-present "General / Other"
-// row for anything not tied to a specific horse. Each row is independent: leaving a
-// horse's dropdown on "No service today" simply excludes it from the invoice.
-//
-// Re-render-safe: if called again after a horse's already been picked for this invoice
-// (e.g. after using "+ Add Horse" mid-invoice), existing selections are preserved by
-// horseId instead of being reset to blank — otherwise adding one more horse would wipe
-// out services already chosen for the others.
-function renderInvoiceHorseRows() {
-  const horses = state.customerHorses || [];
-  const rows = [...horses.map(h => ({ id: h.id, name: h.name || 'Unnamed' })), { id: '', name: 'General / Other' }];
-  const prevByHorseId = new Map((state.invoiceHorseServices || []).map(r => [r.horseId, r]));
-  state.invoiceHorseServices = rows.map(r =>
-    prevByHorseId.get(r.id) || { horseId: r.id, horseName: r.id ? r.name : '', serviceId: '', serviceName: '', price: 0 }
-  );
-
+function renderInvoiceLines() {
   const svcOptions = state.services.map((s, i) => `<option value="${i}">${escapeHtml(s.name)}</option>`).join('');
-  const svcIndexByName = new Map(state.services.map((s, i) => [s.name, i]));
 
-  document.getElementById('invoice-horse-rows').innerHTML = rows.map((r, idx) => {
-    const row = state.invoiceHorseServices[idx];
-    const selectedSvcIdx = row.serviceName != null && svcIndexByName.has(row.serviceName) ? svcIndexByName.get(row.serviceName) : '';
-    return `
+  document.getElementById('invoice-lines').innerHTML = state.invoiceLines.map((line, idx) => `
     <div class="horse-svc-card">
-      <div class="horse-svc-title"><span>${r.id ? '🐴' : '📋'}</span> ${escapeHtml(r.name)}</div>
-      <select class="horse-svc-select" id="horse-svc-select-${idx}" onchange="onHorseServiceChange(${idx})">
-        <option value="">— No service today —</option>
+      <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <div class="horse-combo" data-line-idx="${idx}" style="flex:1;">
+          <input type="text" class="horse-svc-select" id="line-horse-input-${idx}" placeholder="📋 General / Other" autocomplete="off"
+            oninput="onLineHorseInput(${idx})" onfocus="onLineHorseInput(${idx})">
+          <div class="horse-combo-suggestions" id="line-horse-suggestions-${idx}" style="display:none;"></div>
+        </div>
+        ${state.invoiceLines.length > 1 ? `<button onclick="removeInvoiceLine(${idx})" style="background:#fee2e2; color:#dc2626; border:none; border-radius:8px; padding:0 14px; font-weight:700; cursor:pointer; flex-shrink:0;">✕</button>` : ''}
+      </div>
+      <select class="horse-svc-select" id="line-service-${idx}" onchange="onLineServiceChange(${idx})">
+        <option value="">— Select service —</option>
         ${svcOptions}
       </select>
-      <div class="horse-svc-price-wrap${row.serviceName ? ' show' : ''}" id="horse-svc-price-wrap-${idx}">
+      <div class="horse-svc-price-wrap${line.serviceName ? ' show' : ''}" id="line-price-wrap-${idx}">
         <span style="font-weight:700; color:var(--text-muted);">$</span>
-        <input type="number" id="horse-svc-price-${idx}" min="0" step="0.01" value="${row.serviceName ? row.price.toFixed(2) : ''}" oninput="onHorsePriceInput(${idx})">
+        <input type="number" id="line-price-${idx}" min="0" step="0.01" value="${line.serviceName ? line.price.toFixed(2) : ''}" oninput="onLinePriceInput(${idx})">
       </div>
     </div>
-  `;
-  }).join('');
+  `).join('');
 
-  // Re-apply the select's chosen option after innerHTML rebuild (can't set `selected`
-  // via a template string once options are dynamic without re-walking them).
-  rows.forEach((r, idx) => {
-    const row = state.invoiceHorseServices[idx];
-    if (row.serviceName && svcIndexByName.has(row.serviceName)) {
-      document.getElementById(`horse-svc-select-${idx}`).value = svcIndexByName.get(row.serviceName);
+  // Re-apply each field's current value after the innerHTML rebuild.
+  state.invoiceLines.forEach((line, idx) => {
+    document.getElementById(`line-horse-input-${idx}`).value = line.horseName || '';
+    if (line.serviceName) {
+      const i = state.services.findIndex(s => s.name === line.serviceName);
+      if (i >= 0) document.getElementById(`line-service-${idx}`).value = i;
     }
   });
 }
@@ -1681,32 +1685,113 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-function onHorseServiceChange(idx) {
-  const row = state.invoiceHorseServices[idx];
-  const svcIdx = document.getElementById(`horse-svc-select-${idx}`).value;
-  const priceWrap = document.getElementById(`horse-svc-price-wrap-${idx}`);
-  const priceInput = document.getElementById(`horse-svc-price-${idx}`);
+// Type-to-filter horse picker for an invoice line. Typing filters the customer's
+// horses by name (substring match); "General / Other" is always offered first so a
+// line not tied to a horse is one tap away too.
+function onLineHorseInput(idx) {
+  const input = document.getElementById(`line-horse-input-${idx}`);
+  const q = input.value.trim().toLowerCase();
+  const matches = (state.customerHorses || []).filter(h => !q || (h.name || '').toLowerCase().includes(q));
+  const list = document.getElementById(`line-horse-suggestions-${idx}`);
+  // Plain onclick — hiding the list is handled by the document-level click-outside
+  // listener below, not by input blur (blur-vs-click ordering isn't reliable across
+  // every input method, so selection could silently fail to register).
+  const generalRow = `<div class="horse-combo-suggestion" onclick="selectLineHorse(${idx}, '', '')">📋 General / Other</div>`;
+  // escapeHtml around the JSON.stringify'd name is essential — JSON.stringify uses
+  // double quotes, which would otherwise terminate this double-quoted onclick attribute
+  // early (silently truncating the handler) for any horse name once the browser parses it.
+  const horseRows = matches.map(h => `<div class="horse-combo-suggestion" onclick="selectLineHorse(${idx}, '${h.id}', ${escapeHtml(JSON.stringify(h.name || 'Unnamed'))})">🐴 ${escapeHtml(h.name || 'Unnamed')}</div>`).join('');
+  list.innerHTML = generalRow + horseRows;
+  list.style.display = 'block';
+}
+
+function selectLineHorse(idx, id, name) {
+  const line = state.invoiceLines[idx];
+  line.horseId = id;
+  line.horseName = name;
+  document.getElementById(`line-horse-input-${idx}`).value = name;
+  document.getElementById(`line-horse-suggestions-${idx}`).style.display = 'none';
+
+  // Default to this horse's last service (from its most recent invoice) so the farrier
+  // just confirms/adjusts instead of picking from scratch every time — a real time
+  // saver for routine repeat visits. Still just a suggestion: picking a different
+  // service from the dropdown overrides it as normal.
+  const h = (state.customerHorses || []).find(x => x.id === id);
+  const svcIdx = h?.lastServiceId
+    ? state.services.findIndex(s => s.id === h.lastServiceId)
+    : (h?.lastServiceName ? state.services.findIndex(s => s.name === h.lastServiceName) : -1);
+  const serviceSelect = document.getElementById(`line-service-${idx}`);
+  if (h && svcIdx >= 0) {
+    const svc = state.services[svcIdx];
+    line.serviceId = svc.id || '';
+    line.serviceName = svc.name;
+    line.price = h.lastServicePrice ?? (svc.price || 0);
+    serviceSelect.value = svcIdx;
+    document.getElementById(`line-price-${idx}`).value = line.price ? line.price.toFixed(2) : '';
+    document.getElementById(`line-price-wrap-${idx}`).classList.add('show');
+  } else if (!id) {
+    // Switched to "General / Other" — no history to suggest from.
+    line.serviceId = ''; line.serviceName = ''; line.price = 0;
+    serviceSelect.value = '';
+    document.getElementById(`line-price-wrap-${idx}`).classList.remove('show');
+  }
+  updateServiceTotal();
+}
+
+// Closes any open horse-combo suggestion list when the user taps/clicks elsewhere, and
+// snaps that combo's input back to its line's last valid value (discarding unselected
+// typed text). Registered once at page load — a suggestion's own onclick (a descendant
+// of .horse-combo) always runs first during event bubbling, so a real selection is
+// never clobbered by this.
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.horse-combo').forEach(combo => {
+    if (combo.contains(e.target)) return;
+    const list = combo.querySelector('.horse-combo-suggestions');
+    if (list) list.style.display = 'none';
+    const idx = combo.dataset.lineIdx;
+    const input = combo.querySelector('input');
+    if (input && idx != null && state.invoiceLines[idx]) input.value = state.invoiceLines[idx].horseName || '';
+  });
+});
+
+function onLineServiceChange(idx) {
+  const line = state.invoiceLines[idx];
+  const svcIdx = document.getElementById(`line-service-${idx}`).value;
+  const priceWrap = document.getElementById(`line-price-wrap-${idx}`);
+  const priceInput = document.getElementById(`line-price-${idx}`);
   if (svcIdx === '') {
-    row.serviceId = ''; row.serviceName = ''; row.price = 0;
+    line.serviceId = ''; line.serviceName = ''; line.price = 0;
     priceWrap.classList.remove('show');
   } else {
     const svc = state.services[parseInt(svcIdx)];
-    row.serviceId = svc.id || '';
-    row.serviceName = svc.name;
-    row.price = svc.price || 0;
-    priceInput.value = row.price ? row.price.toFixed(2) : '';
+    line.serviceId = svc.id || '';
+    line.serviceName = svc.name;
+    line.price = svc.price || 0;
+    priceInput.value = line.price ? line.price.toFixed(2) : '';
     priceWrap.classList.add('show');
   }
   updateServiceTotal();
 }
 
-function onHorsePriceInput(idx) {
-  state.invoiceHorseServices[idx].price = parseFloat(document.getElementById(`horse-svc-price-${idx}`).value) || 0;
+function onLinePriceInput(idx) {
+  state.invoiceLines[idx].price = parseFloat(document.getElementById(`line-price-${idx}`).value) || 0;
+  updateServiceTotal();
+}
+
+function addInvoiceLine() {
+  state.invoiceLines.push(emptyInvoiceLine());
+  renderInvoiceLines();
+}
+
+function removeInvoiceLine(idx) {
+  state.invoiceLines.splice(idx, 1);
+  renderInvoiceLines();
   updateServiceTotal();
 }
 
 // Lets the farrier invoice a customer's new horse without leaving the invoice flow —
-// jumps to the existing add-horse form and returns here with the row list refreshed.
+// jumps to the existing add-horse form and comes back with a fresh line pre-selecting
+// the horse that was just added, ready for its service to be picked.
 function addHorseFromInvoice() {
   startNewHorse(state.customer, 'invoice');
 }
@@ -1760,12 +1845,12 @@ function addHorseFromAppointment() {
 }
 
 function updateServiceTotal() {
-  const horseTotal = (state.invoiceHorseServices || []).filter(r => r.serviceName).reduce((s, r) => s + (r.price || 0), 0);
+  const lineTotal = (state.invoiceLines || []).filter(l => l.serviceName).reduce((s, l) => s + (l.price || 0), 0);
   const customTotal = state.customItems.reduce((s,ci) => s + ci.price, 0);
-  const total = horseTotal + customTotal;
+  const total = lineTotal + customTotal;
   document.getElementById('svc-total').textContent = '$' + total.toFixed(2);
   const btn = document.getElementById('svc-continue-btn');
-  const selectedCount = (state.invoiceHorseServices || []).filter(r => r.serviceName).length + state.customItems.length;
+  const selectedCount = (state.invoiceLines || []).filter(l => l.serviceName).length + state.customItems.length;
   btn.disabled = selectedCount === 0;
 }
 
@@ -1802,14 +1887,14 @@ function renderCustomItems() {
 // item shape ({description, amount, horseName, serviceId, ...}) so an invoice created
 // on either app displays correctly on the other.
 function buildInvoiceItems() {
-  const horseItems = (state.invoiceHorseServices || [])
-    .filter(r => r.serviceName)
-    .map(r => ({
-      description: r.serviceName,
-      amount: r.price || 0,
-      horseId: r.horseId || '',
-      horseName: r.horseName || '',
-      serviceId: r.serviceId || '',
+  const horseItems = (state.invoiceLines || [])
+    .filter(l => l.serviceName)
+    .map(l => ({
+      description: l.serviceName,
+      amount: l.price || 0,
+      horseId: l.horseId || '',
+      horseName: l.horseName || '',
+      serviceId: l.serviceId || '',
     }));
   const customLineItems = state.customItems.map(ci => ({
     description: ci.name,
@@ -2190,7 +2275,7 @@ function repeatLastService() {
   // got which service. Replaying as custom line items (not tied to any horse) is the
   // honest option rather than guessing a pairing.
   const svcs = state.lastService.services || [];
-  state.invoiceHorseServices = [];
+  state.invoiceLines = [];
   state.customItems = svcs.map(name => {
     const found = state.services.find(s => s.name === name);
     return { name, price: found ? (found.price || 0) : 0 };
@@ -2237,6 +2322,21 @@ async function createInvoice() {
     notes: document.getElementById('svc-notes')?.value.trim() || '',
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   }));
+
+  // ── Record each horse's last service so the invoice screen can default to it next
+  // time (see selectLineHorse) ──
+  allItems.filter(i => i.horseId).forEach(i => {
+    performWrite(() => db.collection('horses').doc(i.horseId).update({
+      lastServiceId: i.serviceId || '',
+      lastServiceName: i.description,
+      lastServicePrice: i.amount,
+      lastServiceDate: firebase.firestore.FieldValue.serverTimestamp(),
+    }));
+    // Keep the in-memory copy in sync too, so picking the same horse again on this
+    // same invoice (another line, or after "+ Add Line") already reflects it.
+    const h = state.customerHorses.find(x => x.id === i.horseId);
+    if (h) { h.lastServiceId = i.serviceId || ''; h.lastServiceName = i.description; h.lastServicePrice = i.amount; }
+  });
 
   // ── Write mileage log entry if miles were entered ──
   const miles = parseInt(document.getElementById('svc-miles')?.value) || 0;
@@ -2726,7 +2826,14 @@ async function saveHorse() {
     _horseFormReturnTo = '';
     loadCustomerDetail(c).then(() => {
       if (returnTo === 'invoice') {
-        renderInvoiceHorseRows(); // preserves any services already picked for other horses
+        // Existing lines are untouched (they're independent of the horses list) — just
+        // append a fresh line for the new horse, ready for its service to be picked.
+        const h = state.customerHorses.find(x => x.id === newHorseId);
+        const newLine = emptyInvoiceLine();
+        newLine.horseId = newHorseId;
+        newLine.horseName = h ? (h.name || 'Unnamed') : '';
+        state.invoiceLines.push(newLine);
+        renderInvoiceLines();
         updateServiceTotal();
       } else if (returnTo === 'appointment') {
         renderApptHorsePicker([..._pendingApptHorseSelection, newHorseId]);
@@ -2740,6 +2847,7 @@ async function saveHorse() {
 function renderHorseProfileCard(h) {
   document.getElementById('horse-detail-name').textContent = h.name || 'Horse';
   const rows = [
+    ['Last Service', h.lastServiceName ? `${h.lastServiceName} · ${fmtDate(h.lastServiceDate)}` : ''],
     ['Breed', h.breed], ['Date of Birth', h.dob], ['Sex', h.sex], ['Color / Markings', h.color],
     ['Shoeing Cycle', h.shoeingCycleWeeks ? `${h.shoeingCycleWeeks} weeks` : ''],
     ['Shoe Size', h.shoeSize], ['Shoe Type', h.shoeType],
