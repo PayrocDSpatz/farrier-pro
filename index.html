@@ -4523,6 +4523,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 openDetail(selectedCustomer); // refresh to show new invoice
               }}
               prefillData={{
+                customerId: selectedCustomer.id || '',
                 customerName: invoiceApt.customerName || selectedCustomer.name || '',
                 customerFarmName: invoiceApt.farmName || selectedCustomer.farmName || '',
                 customerEmail: invoiceApt.email || selectedCustomer.email || '',
@@ -11053,11 +11054,12 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
     }
 
     function InvoiceCreateModal({ userId, userProfile, onClose, onCreated, prefillData }) {
+      const [customerId, setCustomerId] = useState(prefillData?.customerId || '');
       const [customerName, setCustomerName] = useState(prefillData?.customerName || '');
       const [customerFarmName, setCustomerFarmName] = useState(prefillData?.customerFarmName || '');
       const [customerEmail, setCustomerEmail] = useState(prefillData?.customerEmail || '');
       const [customerPhone, setCustomerPhone] = useState(prefillData?.customerPhone || '');
-      const [items, setItems] = useState([{ description: '', amount: 0, horseName: '' }]);
+      const [items, setItems] = useState([{ description: '', amount: 0, horseId: '', horseName: '' }]);
       const [milesDriven, setMilesDriven] = useState(0);
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
@@ -11070,6 +11072,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       useEffect(() => {
         if (prefillData) {
           console.log('📝 Prefilling invoice with data:', prefillData);
+          if (prefillData.customerId) setCustomerId(prefillData.customerId);
           if (prefillData.customerName) setCustomerName(prefillData.customerName);
           if (prefillData.customerFarmName) setCustomerFarmName(prefillData.customerFarmName);
           if (prefillData.customerEmail) setCustomerEmail(prefillData.customerEmail);
@@ -11162,11 +11165,16 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
       const selectCustomer = async (customerData) => {
         if (customerData) {
+          // customerData.id may be missing here (the customers list dedupes real
+          // customer docs against appointment-derived stubs by email, and the latter
+          // carry no id) — the horse loader below falls back to matching on
+          // customerName in that case, same as the AppointmentsView entry point.
+          setCustomerId(customerData.id || '');
           setCustomerName(customerData.name || '');
           setCustomerFarmName(customerData.farmName || '');
           setCustomerEmail(customerData.email || '');
           setCustomerPhone(customerData.phone || '');
-          
+
           // Load invoice info for this customer
           await loadCustomerInvoiceInfo(customerData.email);
         } else {
@@ -11251,8 +11259,35 @@ useEffect(() => {
   loadServices();
 }, [userId]);
 
+     // Horses loaded from Firestore for whichever customer is currently selected —
+     // same shape/idiom as serviceOptions above. Prefers a real customerId when one's
+     // in scope; falls back to matching on customerName (the convention this app
+     // already uses elsewhere for linking records without a real doc id in hand).
+     const [horseOptions, setHorseOptions] = useState([
+       { id: "", name: "-- Select Horse --" },
+       { id: "__new__", name: "+ Add New Horse..." }
+     ]);
+
+     useEffect(() => {
+       const loadHorses = async () => {
+         if (!db || !userId || (!customerId && !customerName)) return;
+         let q = db.collection("horses").where("farrierId", "==", userId);
+         q = customerId ? q.where("customerId", "==", customerId)
+                        : q.where("customerName", "==", customerName);
+         const snap = await q.get();
+         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+           .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+         setHorseOptions([
+           { id: "", name: "-- Select Horse --" },
+           ...list,
+           { id: "__new__", name: "+ Add New Horse..." }
+         ]);
+       };
+       loadHorses();
+     }, [userId, customerId, customerName]);
+
       const addItem = () => {
-        setItems([...items, { description: '', amount: 0, horseName: '' }]);
+        setItems([...items, { description: '', amount: 0, horseId: '', horseName: '' }]);
       };
 
       const updateItem = (index, field, value) => {
@@ -11286,6 +11321,33 @@ useEffect(() => {
   setItems(newItems);
 };
 
+     const selectHorse = (index, horseId) => {
+       const newItems = [...items];
+       if (horseId === '__new__') {
+         newItems[index].horseId = '__new__';
+         newItems[index].horseName = '';
+       } else if (!horseId) {
+         newItems[index].horseId = '';
+         newItems[index].horseName = '';
+       } else {
+         const h = horseOptions.find(x => x.id === horseId);
+         newItems[index].horseId = horseId;
+         newItems[index].horseName = h?.name || '';
+         // Default to this horse's last service (set by whichever app — mobile or,
+         // after this change, desktop — last invoiced it), same convenience mobile has.
+         if (h?.lastServiceId) {
+           const svc = serviceOptions.find(s => s.id === h.lastServiceId);
+           if (svc) {
+             newItems[index].description = svc.name;
+             newItems[index].amount = Number(svc.price || 0);
+             newItems[index].serviceId = svc.id;
+             newItems[index].serviceNameSnapshot = svc.name;
+             newItems[index].unitPriceSnapshot = Number(svc.price || 0);
+           }
+         }
+       }
+       setItems(newItems);
+     };
 
       const removeItem = (index) => {
         setItems(items.filter((_, i) => i !== index));
@@ -11310,6 +11372,7 @@ useEffect(() => {
   .map(i => ({
     // display fields
     description: String(i.description || "").trim(),
+    horseId: (i.horseId && i.horseId !== '__new__') ? i.horseId : "",
     horseName: String(i.horseName || "").trim(),
     qty: Number(i.qty || 1),
     amount: Number(i.amount || 0),
@@ -11318,6 +11381,9 @@ useEffect(() => {
     serviceId: i.serviceId || "",
     serviceNameSnapshot: i.serviceNameSnapshot || String(i.description || "").trim(),
     unitPriceSnapshot: Number(i.unitPriceSnapshot ?? i.amount ?? 0),
+
+    // carried through only to resolve a brand-new horse below — stripped before save
+    _newHorse: i.horseId === '__new__' ? String(i.horseName || "").trim() : "",
   }));
 
 
@@ -11362,9 +11428,33 @@ useEffect(() => {
               total,
               invoiceNumber
             });
-            
+
+            // Create a real horse record for any "+ Add New Horse..." line now — at
+            // save time rather than the moment it's picked, so an abandoned invoice
+            // never leaves an orphaned horse behind. Same field shape as a horse
+            // created from the mobile app.
+            for (const item of cleanedItems) {
+              if (item._newHorse) {
+                const horseRef = await db.collection('horses').add({
+                  farrierId: userId,
+                  customerId: customerId || '',
+                  customerName,
+                  name: item._newHorse,
+                  breed: '', dob: '', sex: '', color: '',
+                  shoeingCycleWeeks: null, shoeSize: '', shoeType: '',
+                  gaitNotes: '', hoofNotes: '', knownIssues: '',
+                  photos: [],
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+                item.horseId = horseRef.id;
+              }
+              delete item._newHorse; // transient marker only, not part of the saved shape
+            }
+
             const docRef = await db.collection('invoices').add({
               farrierId: userId,
+              customerId: customerId || '',
               customerName: customerName,
               customerFarmName: customerFarmName,
               customerEmail: customerEmail,
@@ -11378,6 +11468,20 @@ useEffect(() => {
             });
 
             console.log('✅ Invoice created with ID:', docRef.id);
+
+            // Record each invoiced horse's latest service — mirrors what the mobile
+            // app writes, so "defaults to last service" stays accurate regardless of
+            // which app was used most recently. Best-effort: never blocks the invoice.
+            cleanedItems.forEach(item => {
+              if (item.horseId) {
+                db.collection('horses').doc(item.horseId).update({
+                  lastServiceId: item.serviceId || '',
+                  lastServiceName: item.description,
+                  lastServicePrice: item.amount,
+                  lastServiceDate: firebase.firestore.FieldValue.serverTimestamp(),
+                }).catch(() => {});
+              }
+            });
 
             // Write mileage log if miles entered
             if (milesDriven > 0) {
@@ -11765,20 +11869,40 @@ useEffect(() => {
                     />
                   ) : null}
 
-                  <input
-                    type="text"
-                    placeholder="Horse name or comment"
-                    value={item.horseName || ''}
-                    onChange={(e) => updateItem(idx, 'horseName', e.target.value)}
+                  <select
+                    value={item.horseId || ''}
+                    onChange={(e) => selectHorse(idx, e.target.value)}
                     style={{
                       width: '100%',
                       padding: '0.75rem',
                       border: '2px solid var(--border)',
                       borderRadius: '8px',
                       fontSize: '1rem',
+                      fontFamily: 'inherit',
                       marginBottom: '0.5rem'
                     }}
-                  />
+                  >
+                    {horseOptions.map((h, i) => (
+                      <option key={i} value={h.id}>{h.name}</option>
+                    ))}
+                  </select>
+
+                  {item.horseId === '__new__' ? (
+                    <input
+                      type="text"
+                      placeholder="New horse's name"
+                      value={item.horseName || ''}
+                      onChange={(e) => updateItem(idx, 'horseName', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '2px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        marginBottom: '0.5rem'
+                      }}
+                    />
+                  ) : null}
 
                   <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
                     <label style={{marginBottom: 0, fontSize: '0.9rem', fontWeight: '500'}}>Price:</label>
