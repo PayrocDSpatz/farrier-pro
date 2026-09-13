@@ -7350,8 +7350,6 @@ function ServicesView({ userId }) {
         farmName: '',
         phone: '',
         email: '',
-        services: [], // Multiple services
-        numberOfHorses: '',
         address: '',
         city: '',
         state: '',
@@ -7361,6 +7359,42 @@ function ServicesView({ userId }) {
         time: '',
         smsConsent: false
       });
+
+      // Per-horse service selection — freeform horse name (this page has no login, so
+      // it can't safely look up or create real horse records; the farrier reconciles
+      // each name to a real horse later from the desktop app) + real services pulled
+      // from the farrier's actual catalog instead of a hardcoded list.
+      const [horseRows, setHorseRows] = useState([{ horseName: '', services: [] }]);
+      const [serviceOptions, setServiceOptions] = useState([]);
+      useEffect(() => {
+        const loadServices = async () => {
+          if (!db || !farrierId) return;
+          const snap = await db.collection('services')
+            .where('farrierId', '==', farrierId)
+            .where('isActive', '==', true)
+            .get();
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) =>
+              String(a.category || '').localeCompare(String(b.category || '')) ||
+              String(a.name || '').localeCompare(String(b.name || ''))
+            );
+          setServiceOptions(list);
+        };
+        loadServices();
+      }, [farrierId]);
+
+      const updateHorseName = (idx, name) => {
+        setHorseRows(rows => rows.map((r, i) => i === idx ? { ...r, horseName: name } : r));
+      };
+      const toggleHorseService = (idx, serviceName) => {
+        setHorseRows(rows => rows.map((r, i) => {
+          if (i !== idx) return r;
+          const has = r.services.includes(serviceName);
+          return { ...r, services: has ? r.services.filter(s => s !== serviceName) : [...r.services, serviceName] };
+        }));
+      };
+      const addHorseRow = () => setHorseRows(rows => [...rows, { horseName: '', services: [] }]);
+      const removeHorseRow = (idx) => setHorseRows(rows => rows.filter((_, i) => i !== idx));
 
 
       // ---- Address Autocomplete (Google Places) ----
@@ -7553,6 +7587,11 @@ function ServicesView({ userId }) {
 
         try {
           if (db) {
+            const horseRequests = horseRows
+              .filter(r => r.horseName.trim() || r.services.length > 0)
+              .map(r => ({ horseId: '', horseName: r.horseName.trim(), services: r.services }));
+            const flatServices = [...new Set(horseRequests.flatMap(r => r.services))];
+
             // Save appointment request to Firestore
             await db.collection('appointments').add({
               farrierId: farrierId,
@@ -7560,8 +7599,9 @@ function ServicesView({ userId }) {
               farmName: formData.farmName || '',
               phone: formData.phone || '',
               email: formData.email || '',
-              services: formData.services || [],
-              numberOfHorses: formData.numberOfHorses || '',
+              horseRequests,
+              services: flatServices,
+              numberOfHorses: horseRequests.length || '',
               address: formData.address || '',
               city: formData.city || '',
               state: formData.state || '',
@@ -7675,8 +7715,8 @@ function ServicesView({ userId }) {
                   farmName: formData.farmName,
                   customerEmail: formData.email,
                   customerPhone: formData.phone,
-                  services: formData.services,
-                  numberOfHorses: formData.numberOfHorses,
+                  services: flatServices,
+                  numberOfHorses: horseRequests.length || '',
                   address: formData.address,
                   city: formData.city,
                   state: formData.state,
@@ -7705,14 +7745,6 @@ function ServicesView({ userId }) {
           alert('Error submitting booking. Please try again.');
         }
       };
-
-      const services = [
-        'Routine Trim',
-        'Shoeing (All 4)',
-        'Shoeing (Front Only)',
-        'Corrective Shoeing',
-        'Hoof Care Consultation'
-      ];
 
       // Convert 24-hour time to 12-hour AM/PM format
       const formatTime = (time24) => {
@@ -7870,7 +7902,10 @@ function ServicesView({ userId }) {
                     {formData.farmName && <div><strong>Farm:</strong> {formData.farmName}</div>}
                     <div><strong>Phone:</strong> {formData.phone}</div>
                     {formData.email && <div><strong>Email:</strong> {formData.email}</div>}
-                    <div><strong>Services:</strong> {formData.services.join(', ') || 'Not specified'}</div>
+                    <div><strong>Horses/Services:</strong> {horseRows.filter(r => r.horseName.trim() || r.services.length > 0).length
+                      ? horseRows.filter(r => r.horseName.trim() || r.services.length > 0)
+                          .map(r => `${r.horseName.trim() || 'Horse'}: ${r.services.join(', ') || 'Not specified'}`).join(' · ')
+                      : 'Not specified'}</div>
                     <div><strong>Date:</strong> {formData.date} at {formData.time}</div>
                     {formData.address && <div><strong>Address:</strong> {formData.address}, {formData.city}, {formData.state} {formData.zip}</div>}
                   </div>
@@ -8020,61 +8055,59 @@ function ServicesView({ userId }) {
                     </div>
 
                     <div className="form-group">
-                      <label>Services Needed</label>
-                      {isMobile ? (
-                        <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem'}}>
-                          {services.map(service => (
-                            <label key={service} style={{
-                              display: 'flex', alignItems: 'center', gap: '0.5rem',
-                              cursor: 'pointer', padding: '0.6rem 0.75rem',
-                              background: formData.services.includes(service) ? 'rgba(38,131,251,0.2)' : 'rgba(255,255,255,0.05)',
-                              border: formData.services.includes(service) ? '1.5px solid #2683FB' : '1.5px solid rgba(255,255,255,0.1)',
-                              borderRadius: '8px', minHeight: '44px', transition: 'all 0.15s'
-                            }}>
-                              <input type="checkbox"
-                                checked={formData.services.includes(service)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setFormData({...formData, services: [...formData.services, service]});
-                                  } else {
-                                    setFormData({...formData, services: formData.services.filter(s => s !== service)});
-                                  }
-                                }}
-                                style={{width:'18px', height:'18px', margin:0, flexShrink:0}}
-                              />
-                              <span style={{fontSize:'0.82rem', fontWeight:'500'}}>{service}</span>
-                            </label>
-                          ))}
+                      <label>Your Horse(s) &amp; Services Needed</label>
+                      {horseRows.map((row, idx) => (
+                        <div key={idx} style={{
+                          border: '1.5px solid rgba(255,255,255,0.15)', borderRadius: '10px',
+                          padding: '0.75rem', marginBottom: '0.6rem', background: 'rgba(255,255,255,0.03)'
+                        }}>
+                          <div style={{display: 'flex', gap: '0.5rem', marginBottom: '0.5rem'}}>
+                            <input type="text" placeholder="Horse's name" value={row.horseName}
+                              onChange={(e) => updateHorseName(idx, e.target.value)}
+                              style={{flex: 1, ...(isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {})}}
+                            />
+                            {horseRows.length > 1 && (
+                              <button type="button" onClick={() => removeHorseRow(idx)}
+                                style={{background:'rgba(220,38,38,0.15)', color:'#fca5a5', border:'1.5px solid rgba(220,38,38,0.4)', borderRadius:'8px', padding:'0 0.9rem', cursor:'pointer', fontWeight:700}}>✕</button>
+                            )}
+                          </div>
+                          {isMobile ? (
+                            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem'}}>
+                              {serviceOptions.map(s => (
+                                <label key={s.id} style={{
+                                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                  cursor: 'pointer', padding: '0.6rem 0.75rem',
+                                  background: row.services.includes(s.name) ? 'rgba(38,131,251,0.2)' : 'rgba(255,255,255,0.05)',
+                                  border: row.services.includes(s.name) ? '1.5px solid #2683FB' : '1.5px solid rgba(255,255,255,0.1)',
+                                  borderRadius: '8px', minHeight: '44px', transition: 'all 0.15s'
+                                }}>
+                                  <input type="checkbox" checked={row.services.includes(s.name)}
+                                    onChange={() => toggleHorseService(idx, s.name)}
+                                    style={{width:'18px', height:'18px', margin:0, flexShrink:0}}
+                                  />
+                                  <span style={{fontSize:'0.82rem', fontWeight:'500'}}>{s.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+                              {serviceOptions.map(s => (
+                                <label key={s.id} style={{display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer'}}>
+                                  <input type="checkbox" checked={row.services.includes(s.name)}
+                                    onChange={() => toggleHorseService(idx, s.name)}
+                                    style={{width: 'auto', margin: 0}}
+                                  />
+                                  <span style={{fontWeight: 'normal'}}>{s.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
-                          {services.map(service => (
-                            <label key={service} style={{display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer'}}>
-                              <input type="checkbox"
-                                checked={formData.services.includes(service)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setFormData({...formData, services: [...formData.services, service]});
-                                  } else {
-                                    setFormData({...formData, services: formData.services.filter(s => s !== service)});
-                                  }
-                                }}
-                                style={{width: 'auto', margin: 0}}
-                              />
-                              <span style={{fontWeight: 'normal'}}>{service}</span>
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="form-group">
-                      <label>Number of Horses</label>
-                      <input type="number" min="1" value={formData.numberOfHorses}
-                        onChange={(e) => setFormData({...formData, numberOfHorses: e.target.value})}
-                        placeholder="e.g. 2"
-                        style={isMobile ? {fontSize:'1rem', padding:'0.75rem', minHeight:'48px'} : {}}
-                      />
+                      ))}
+                      <button type="button" onClick={addHorseRow}
+                        style={{width:'100%', padding:'0.6rem', background:'rgba(38,131,251,0.15)', color:'#2683FB', border:'1.5px solid #2683FB', borderRadius:'8px', cursor:'pointer', fontWeight:600}}>
+                        + Add Another Horse
+                      </button>
                     </div>
 
                     <div className="form-group">
@@ -9430,8 +9463,6 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [date, setDate] = useState('');
       const [time, setTime] = useState('');
       const [farmName, setFarmName] = useState(customer.farmName || '');
-      const [numberOfHorses, setNumberOfHorses] = useState('1');
-      const [services, setServices] = useState([]);
       const [address, setAddress] = useState(customer.address || '');
       const [city, setCity] = useState(customer.city || '');
       const [state, setState] = useState(customer.state || '');
@@ -9441,11 +9472,74 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
       const smsAvailable = userProfile?.smsEnabled && customer.phone && !customer.smsOptOut;
 
-      const availableServices = [
-        'Trim All Four', 'Reset All Four', 'Hot Shoeing All Four',
-        'Dressage Shoes', 'Corrective Shoeing', 'Studs Installation',
-        'Show Prep', 'Emergency Call'
-      ];
+      // Per-horse service rows, replacing the old flat hardcoded service checklist —
+      // same idiom as InvoiceCreateModal's horse/service pickers, except an
+      // appointment's services aren't priced line items, just planned-work names, so
+      // each row just tracks a horse + a list of selected service name strings.
+      const emptyHorseRow = () => ({ horseId: '', horseName: '', services: [] });
+      const [horseRows, setHorseRows] = useState([emptyHorseRow()]);
+
+      const [horseOptions, setHorseOptions] = useState([
+        { id: '', name: '-- Select Horse --' },
+        { id: '__new__', name: '+ Add New Horse...' },
+      ]);
+      useEffect(() => {
+        const loadHorses = async () => {
+          if (!db || !userId || !customer?.id) return;
+          const snap = await db.collection('horses')
+            .where('farrierId', '==', userId)
+            .where('customerId', '==', customer.id)
+            .get();
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+          setHorseOptions([
+            { id: '', name: '-- Select Horse --' },
+            ...list,
+            { id: '__new__', name: '+ Add New Horse...' },
+          ]);
+        };
+        loadHorses();
+      }, [userId, customer?.id]);
+
+      const [serviceOptions, setServiceOptions] = useState([]);
+      useEffect(() => {
+        const loadServices = async () => {
+          if (!db || !userId) return;
+          const snap = await db.collection('services')
+            .where('farrierId', '==', userId)
+            .where('isActive', '==', true)
+            .get();
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) =>
+              String(a.category || '').localeCompare(String(b.category || '')) ||
+              String(a.name || '').localeCompare(String(b.name || ''))
+            );
+          setServiceOptions(list);
+        };
+        loadServices();
+      }, [userId]);
+
+      const updateRowHorse = (idx, horseId) => {
+        setHorseRows(rows => rows.map((r, i) => {
+          if (i !== idx) return r;
+          if (horseId === '__new__') return { ...r, horseId: '__new__', horseName: '' };
+          if (!horseId) return { ...r, horseId: '', horseName: '' };
+          const h = horseOptions.find(x => x.id === horseId);
+          return { ...r, horseId, horseName: h?.name || '' };
+        }));
+      };
+      const updateRowNewHorseName = (idx, name) => {
+        setHorseRows(rows => rows.map((r, i) => i === idx ? { ...r, horseName: name } : r));
+      };
+      const toggleRowService = (idx, serviceName) => {
+        setHorseRows(rows => rows.map((r, i) => {
+          if (i !== idx) return r;
+          const has = r.services.includes(serviceName);
+          return { ...r, services: has ? r.services.filter(s => s !== serviceName) : [...r.services, serviceName] };
+        }));
+      };
+      const addHorseRow = () => setHorseRows(rows => [...rows, emptyHorseRow()]);
+      const removeHorseRow = (idx) => setHorseRows(rows => rows.filter((_, i) => i !== idx));
 
       const fmtTime = (t) => {
         if (!t) return '';
@@ -9458,8 +9552,41 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         if (!date || !time) return alert('Date and Time are required.');
         setSaving(true);
         try {
+          // Create a real horse record for any "+ Add New Horse..." row now — at save
+          // time rather than the moment it's picked, so an abandoned booking never
+          // leaves an orphaned horse behind. Same shape as one created from mobile or
+          // from InvoiceCreateModal's "+ Add New Horse".
+          const resolvedRows = [];
+          for (const row of horseRows) {
+            if (row.horseId === '__new__' && row.horseName.trim()) {
+              const horseRef = await db.collection('horses').add({
+                farrierId: userId,
+                customerId: customer.id || '',
+                customerName: customer.name,
+                name: row.horseName.trim(),
+                breed: '', dob: '', sex: '', color: '',
+                shoeingCycleWeeks: null, shoeSize: '', shoeType: '',
+                gaitNotes: '', hoofNotes: '', knownIssues: '',
+                photos: [],
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+              resolvedRows.push({ ...row, horseId: horseRef.id });
+            } else {
+              resolvedRows.push(row);
+            }
+          }
+
+          const horseRequests = resolvedRows
+            .filter(r => r.horseName.trim() || r.services.length > 0)
+            .map(r => ({ horseId: r.horseId === '__new__' ? '' : (r.horseId || ''), horseName: r.horseName.trim(), services: r.services }));
+          const flatServices = [...new Set(horseRequests.flatMap(r => r.services))];
+          const horseIds = horseRequests.filter(r => r.horseId).map(r => r.horseId);
+          const horseNames = horseRequests.filter(r => r.horseId).map(r => r.horseName);
+
           await db.collection('appointments').add({
             farrierId: userId,
+            customerId: customer.id || '',
             customerName: customer.name,
             farmName: farmName || customer.farmName || '',
             email: customer.email || '',
@@ -9467,8 +9594,11 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             address: address || '',
             city: city || '',
             state: state || '',
-            services,
-            numberOfHorses,
+            horseRequests,
+            services: flatServices,
+            numberOfHorses: horseRequests.length || 1,
+            horseIds,
+            horseNames,
             comments,
             requestedDate: date,
             requestedTime: time,
@@ -9480,7 +9610,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           if (sendConfirmation && smsAvailable) {
             try {
               const bizName = userProfile?.businessName || 'Your Farrier';
-              const serviceList = services.length > 0 ? services.join(', ') : 'your appointment';
+              const serviceList = flatServices.length > 0 ? flatServices.join(', ') : 'your appointment';
               const msg = `Hi ${customer.name}, your appointment with ${bizName} is confirmed for ${date} at ${fmtTime(time)} for ${serviceList}. Reply STOP to opt out.`;
               await fetch('/api/send-sms', {
                 method: 'POST',
@@ -9544,26 +9674,38 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 </div>
               </div>
 
-              {/* Horses */}
+              {/* Horses + per-horse services */}
               <div>
-                <label style={mLabel}>Number of Horses</label>
-                <input type="number" value={numberOfHorses} min="1" onChange={e => setNumberOfHorses(e.target.value)}
-                  style={mInput} />
-              </div>
-
-              {/* Services */}
-              <div>
-                <label style={mLabel}>Services</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: '0.4rem' }}>
-                  {availableServices.map(s => (
-                    <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.7rem', border: services.includes(s) ? '1.5px solid #2683FB' : '1.5px solid #cbd5e1', borderRadius: 8, cursor: 'pointer', background: services.includes(s) ? '#eff6ff' : '#f8fafc', fontSize: '0.9rem', fontWeight: services.includes(s) ? 600 : 400, color: '#0f172a' }}>
-                      <input type="checkbox" checked={services.includes(s)}
-                        onChange={() => setServices(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
-                        style={{ cursor: 'pointer' }} />
-                      {s}
-                    </label>
-                  ))}
-                </div>
+                <label style={mLabel}>Horses &amp; Services</label>
+                {horseRows.map((row, idx) => (
+                  <div key={idx} style={{ border: '1.5px solid #cbd5e1', borderRadius: 10, padding: '0.75rem', marginBottom: '0.6rem', background: '#f8fafc' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <select value={row.horseId} onChange={e => updateRowHorse(idx, e.target.value)} style={{ ...mInput, flex: 1 }}>
+                        {horseOptions.map((h, i) => <option key={i} value={h.id}>{h.name}</option>)}
+                      </select>
+                      {horseRows.length > 1 && (
+                        <button type="button" onClick={() => removeHorseRow(idx)}
+                          style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '0 0.9rem', cursor: 'pointer', fontWeight: 700 }}>✕</button>
+                      )}
+                    </div>
+                    {row.horseId === '__new__' && (
+                      <input type="text" placeholder="New horse's name" value={row.horseName}
+                        onChange={e => updateRowNewHorseName(idx, e.target.value)}
+                        style={{ ...mInput, marginBottom: '0.5rem' }} />
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+                      {serviceOptions.map(s => (
+                        <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.7rem', border: row.services.includes(s.name) ? '1.5px solid #2683FB' : '1.5px solid #cbd5e1', borderRadius: 8, cursor: 'pointer', background: row.services.includes(s.name) ? '#eff6ff' : '#fff', fontSize: '0.9rem', fontWeight: row.services.includes(s.name) ? 600 : 400, color: '#0f172a' }}>
+                          <input type="checkbox" checked={row.services.includes(s.name)}
+                            onChange={() => toggleRowService(idx, s.name)}
+                            style={{ cursor: 'pointer' }} />
+                          {s.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <button type="button" onClick={addHorseRow} className="btn btn-outline" style={{ width: '100%' }}>+ Add Horse</button>
               </div>
 
               {/* Address */}
@@ -9631,8 +9773,6 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [farmName, setFarmName] = useState(appointment.farmName || '');
       const [date, setDate] = useState(appointment.requestedDate || '');
       const [time, setTime] = useState(appointment.requestedTime || '');
-      const [numberOfHorses, setNumberOfHorses] = useState(appointment.numberOfHorses || '');
-      const [services, setServices] = useState(appointment.services || []);
       const [address, setAddress] = useState(appointment.address || '');
       const [city, setCity] = useState(appointment.city || '');
       const [state, setState] = useState(appointment.state || '');
@@ -9671,24 +9811,86 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
       };
 
-      const availableServices = [
-        'Trim All Four',
-        'Reset All Four',
-        'Hot Shoeing All Four',
-        'Dressage Shoes',
-        'Corrective Shoeing',
-        'Studs Installation',
-        'Show Prep',
-        'Emergency Call'
-      ];
+      // Per-horse service rows, replacing the old flat hardcoded service checklist —
+      // same idiom as CreateAppointmentModal/InvoiceCreateModal. A newer appointment
+      // (created after this change) carries horseRequests directly; anything older
+      // only has a flat services array, so it becomes a single fallback row rather
+      // than silently losing that data.
+      const emptyHorseRow = () => ({ horseId: '', horseName: '', services: [] });
+      const [horseRows, setHorseRows] = useState(() =>
+        appointment.horseRequests?.length
+          ? appointment.horseRequests.map(r => ({ horseId: r.horseId || '', horseName: r.horseName || '', services: r.services || [] }))
+          : [{ horseId: '', horseName: '', services: appointment.services || [] }]
+      );
 
-      const handleServiceToggle = (service) => {
-        if (services.includes(service)) {
-          setServices(services.filter(s => s !== service));
-        } else {
-          setServices([...services, service]);
-        }
+      // services/numberOfHorses stay as plain derived values (not state) so the
+      // existing Google Calendar sync, SMS, and update-email code below — all of
+      // which already read `services`/`numberOfHorses` — keep working unchanged.
+      const services = [...new Set(horseRows.flatMap(r => r.services))];
+      const numberOfHorses = horseRows.filter(r => r.horseName.trim() || r.services.length > 0).length || '';
+
+      const [horseOptions, setHorseOptions] = useState([
+        { id: '', name: '-- Select Horse --' },
+        { id: '__new__', name: '+ Add New Horse...' },
+      ]);
+      useEffect(() => {
+        const loadHorses = async () => {
+          if (!db || !userId || (!appointment.customerId && !appointment.customerName)) return;
+          let q = db.collection('horses').where('farrierId', '==', userId);
+          q = appointment.customerId
+            ? q.where('customerId', '==', appointment.customerId)
+            : q.where('customerName', '==', appointment.customerName);
+          const snap = await q.get();
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+          setHorseOptions([
+            { id: '', name: '-- Select Horse --' },
+            ...list,
+            { id: '__new__', name: '+ Add New Horse...' },
+          ]);
+        };
+        loadHorses();
+      }, [userId, appointment.customerId, appointment.customerName]);
+
+      const [serviceOptions, setServiceOptions] = useState([]);
+      useEffect(() => {
+        const loadServices = async () => {
+          if (!db || !userId) return;
+          const snap = await db.collection('services')
+            .where('farrierId', '==', userId)
+            .where('isActive', '==', true)
+            .get();
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) =>
+              String(a.category || '').localeCompare(String(b.category || '')) ||
+              String(a.name || '').localeCompare(String(b.name || ''))
+            );
+          setServiceOptions(list);
+        };
+        loadServices();
+      }, [userId]);
+
+      const updateRowHorse = (idx, horseId) => {
+        setHorseRows(rows => rows.map((r, i) => {
+          if (i !== idx) return r;
+          if (horseId === '__new__') return { ...r, horseId: '__new__', horseName: '' };
+          if (!horseId) return { ...r, horseId: '', horseName: '' };
+          const h = horseOptions.find(x => x.id === horseId);
+          return { ...r, horseId, horseName: h?.name || '' };
+        }));
       };
+      const updateRowNewHorseName = (idx, name) => {
+        setHorseRows(rows => rows.map((r, i) => i === idx ? { ...r, horseName: name } : r));
+      };
+      const toggleRowService = (idx, serviceName) => {
+        setHorseRows(rows => rows.map((r, i) => {
+          if (i !== idx) return r;
+          const has = r.services.includes(serviceName);
+          return { ...r, services: has ? r.services.filter(s => s !== serviceName) : [...r.services, serviceName] };
+        }));
+      };
+      const addHorseRow = () => setHorseRows(rows => [...rows, emptyHorseRow()]);
+      const removeHorseRow = (idx) => setHorseRows(rows => rows.filter((_, i) => i !== idx));
 
       const updateGoogleCalendarEvent = async (updatedAppointment) => {
         if (!userProfile?.googleCalendarConnected || !userProfile?.googleAccessToken) {
@@ -9755,6 +9957,35 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         setSaving(true);
 
         try {
+          // Create a real horse record for any "+ Add New Horse..." row now — at save
+          // time, same as CreateAppointmentModal/InvoiceCreateModal — so an untouched
+          // edit never leaves an orphaned horse behind.
+          const resolvedRows = [];
+          for (const row of horseRows) {
+            if (row.horseId === '__new__' && row.horseName.trim()) {
+              const horseRef = await db.collection('horses').add({
+                farrierId: userId,
+                customerId: appointment.customerId || '',
+                customerName: appointment.customerName,
+                name: row.horseName.trim(),
+                breed: '', dob: '', sex: '', color: '',
+                shoeingCycleWeeks: null, shoeSize: '', shoeType: '',
+                gaitNotes: '', hoofNotes: '', knownIssues: '',
+                photos: [],
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+              resolvedRows.push({ ...row, horseId: horseRef.id });
+            } else {
+              resolvedRows.push(row);
+            }
+          }
+          const horseRequests = resolvedRows
+            .filter(r => r.horseName.trim() || r.services.length > 0)
+            .map(r => ({ horseId: r.horseId === '__new__' ? '' : (r.horseId || ''), horseName: r.horseName.trim(), services: r.services }));
+          const horseIds = horseRequests.filter(r => r.horseId).map(r => r.horseId);
+          const horseNames = horseRequests.filter(r => r.horseId).map(r => r.horseName);
+
           const updatedData = {
             phone,
             farmName: farmName || '',
@@ -9762,6 +9993,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             requestedTime: time,
             numberOfHorses: numberOfHorses || '',
             services,
+            horseRequests,
+            horseIds,
+            horseNames,
             address: address || '',
             city: city || '',
             state: state || '',
@@ -9903,39 +10137,40 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               </div>
 
               <div className="form-group">
-                <label>Number of Horses</label>
-                <input 
-                  type="number"
-                  value={numberOfHorses}
-                  onChange={(e) => setNumberOfHorses(e.target.value)}
-                  placeholder="4"
-                  min="1"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Services</label>
-                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem'}}>
-                  {availableServices.map(service => (
-                    <label key={service} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '0.5rem',
-                      border: '1px solid var(--border)',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      background: services.includes(service) ? '#dcfce7' : 'white'
-                    }}>
-                      <input 
-                        type="checkbox"
-                        checked={services.includes(service)}
-                        onChange={() => handleServiceToggle(service)}
-                        style={{marginRight: '0.5rem'}}
-                      />
-                      {service}
-                    </label>
-                  ))}
-                </div>
+                <label>Horses &amp; Services</label>
+                {horseRows.map((row, idx) => (
+                  <div key={idx} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.6rem', background: '#f8fafc' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <select value={row.horseId} onChange={e => updateRowHorse(idx, e.target.value)} style={{ flex: 1 }}>
+                        {horseOptions.map((h, i) => <option key={i} value={h.id}>{h.name}</option>)}
+                      </select>
+                      {horseRows.length > 1 && (
+                        <button type="button" onClick={() => removeHorseRow(idx)}
+                          style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '0 0.9rem', cursor: 'pointer', fontWeight: 700 }}>✕</button>
+                      )}
+                    </div>
+                    {row.horseId === '__new__' && (
+                      <input type="text" placeholder="New horse's name" value={row.horseName}
+                        onChange={e => updateRowNewHorseName(idx, e.target.value)}
+                        style={{ width: '100%', marginBottom: '0.5rem' }} />
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                      {serviceOptions.map(s => (
+                        <label key={s.id} style={{
+                          display: 'flex', alignItems: 'center', padding: '0.5rem',
+                          border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer',
+                          background: row.services.includes(s.name) ? '#dcfce7' : 'white'
+                        }}>
+                          <input type="checkbox" checked={row.services.includes(s.name)}
+                            onChange={() => toggleRowService(idx, s.name)}
+                            style={{ marginRight: '0.5rem' }} />
+                          {s.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <button type="button" onClick={addHorseRow} className="btn btn-outline" style={{ width: '100%' }}>+ Add Horse</button>
               </div>
 
               <div className="form-group">
