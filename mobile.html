@@ -193,6 +193,17 @@
   .add-photo-tile { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; aspect-ratio: 1; border-radius: var(--radius-sm); border: 2px dashed var(--border); color: var(--text-muted); font-size: 0.75rem; font-weight: 700; cursor: pointer; background: var(--surface); }
   .horse-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; box-shadow: var(--shadow); }
   .horse-row-avatar { width: 40px; height: 40px; border-radius: 10px; background: #7C3AED; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+
+  /* ── PER-HORSE SERVICE ROWS (invoice + appointment) ── */
+  .horse-svc-card { background: var(--surface); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); margin-bottom: 10px; }
+  .horse-svc-title { font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .horse-svc-select { width: 100%; padding: 13px 14px; border: 2px solid var(--border); border-radius: var(--radius-sm); font-family: 'Outfit', sans-serif; font-size: 1rem; color: var(--text); background: var(--surface); outline: none; }
+  .horse-svc-select:focus { border-color: var(--blue); }
+  .horse-svc-price-wrap { display: none; align-items: center; gap: 8px; margin-top: 8px; }
+  .horse-svc-price-wrap.show { display: flex; }
+  .horse-svc-price-wrap input { flex: 1; padding: 13px 14px; border: 2px solid var(--border); border-radius: var(--radius-sm); font-family: 'Outfit', sans-serif; font-size: 1rem; color: var(--text); background: var(--surface); outline: none; }
+  .horse-pick-chip { padding: 12px 10px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); background: var(--surface); }
+  .horse-pick-chip.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
   .section-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 10px; margin-top: 20px; }
   .section-label:first-child { margin-top: 0; }
   .row-btns { display: flex; gap: 8px; }
@@ -488,8 +499,9 @@
       <div style="font-size:0.85rem; color:var(--text-muted); margin-top:3px;" id="svc-customer-farm"></div>
     </div>
 
-    <div class="section-label">Tap to select services</div>
-    <div class="service-grid" id="service-grid"></div>
+    <div class="section-label">Horses Serviced</div>
+    <div id="invoice-horse-rows"></div>
+    <button class="btn-secondary" onclick="addHorseFromInvoice()" style="margin-bottom:16px;">+ Add Horse for This Customer</button>
 
     <div class="field" style="margin-top:12px;">
       <label>Custom Item (optional)</label>
@@ -747,7 +759,12 @@
       <div id="appt-time-slots" class="service-grid"></div>
       <input type="hidden" id="appt-time">
     </div>
-    <div class="field"><label>Number of Horses</label><input type="number" id="appt-horses" value="1" min="1"></div>
+    <div class="field" id="appt-horses-fallback-wrap"><label>Number of Horses</label><input type="number" id="appt-horses" value="1" min="1"></div>
+    <div class="field" id="appt-horses-picker-wrap" style="display:none;">
+      <label>Horses</label>
+      <div id="appt-horses-picker" class="service-grid"></div>
+    </div>
+    <button class="btn-secondary" onclick="addHorseFromAppointment()" style="margin-bottom:14px;">+ Add Horse for This Customer</button>
     <div class="section-label" style="margin-top:4px;">Services</div>
     <div class="service-grid" id="appt-service-grid" style="margin-bottom:16px;"></div>
     <div class="field">
@@ -952,7 +969,6 @@ const state = {
   customers: [],
   services: [],
   customer: null,
-  selectedServices: [],
   customItems: [],
   currentInvoice: null,
   selectedPayMethod: null,
@@ -962,6 +978,8 @@ const state = {
   editingApptId: null,
   editingHorseId: null,
   currentHorse: null,
+  customerHorses: [],   // horses for state.customer, populated by loadCustomerDetail()
+  invoiceHorseServices: [], // [{horseId, horseName, serviceName, price}] built while on screen-services
 };
 
 // ── NETWORK STATUS + WRITE QUEUE ──
@@ -1277,16 +1295,29 @@ async function loadServices() {
     const snap = await db.collection('services').where('farrierId', '==', state.user.uid).where('isActive', '==', true).get();
     state.services = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (!state.services.length) {
-      // defaults
+      // Fallback only — matches seedDefaultServicesIfEmpty_ in index.html so a farrier
+      // sees the same catalog here even in the rare case Firestore has none yet.
       state.services = [
-        { name: 'Trim All Four', price: 45 },
-        { name: 'Front Shoes', price: 80 },
-        { name: 'Full Set', price: 140 },
-        { name: 'Reset', price: 90 },
-        { name: 'Pads', price: 30 },
-        { name: 'Hot Shoe', price: 75 },
-        { name: 'Dressage Shoes', price: 95 },
-        { name: 'Studs Installation', price: 40 },
+        { name: 'Trim', price: 0 },
+        { name: 'Trim 2 Keg Shoes in Front', price: 0 },
+        { name: 'Trim 2 Alum Shoes in Front', price: 0 },
+        { name: 'Trim 4 Keg Shoes', price: 0 },
+        { name: 'Trim 4 Handmade Shoes', price: 0 },
+        { name: 'Trim 2 Alum Shoes in Front, Keg Shoes Behind', price: 0 },
+        { name: 'Trim 2 Glue-On Shoes', price: 0 },
+        { name: 'Trim 2 Bar Shoes in Front, 2 Keg Shoes Behind', price: 0 },
+        { name: 'Set of Therapeutic Shoes', price: 0 },
+        { name: 'Replace Lost Shoe', price: 0 },
+        { name: 'Tack on Shoe', price: 0 },
+        { name: 'Extra - Pads', price: 0 },
+        { name: 'Extra - Packing', price: 0 },
+        { name: 'Extra - Stud Holes', price: 0 },
+        { name: 'Extra - Repair Moderate Hoof Crack', price: 0 },
+        { name: 'Extra - Clips', price: 0 },
+        { name: 'Extra - Trailers', price: 0 },
+        { name: 'Extra - Square Toe/Rocker Toe', price: 0 },
+        { name: 'Traction Device', price: 0 },
+        { name: 'Welding Insert', price: 0 },
       ];
     }
   } catch(e) { console.warn('Services load:', e); }
@@ -1476,6 +1507,7 @@ async function loadCustomerDetail(c) {
   document.getElementById('cust-inv-section').style.display = 'none';
   document.getElementById('repeat-section').style.display = 'none';
   document.getElementById('cust-horses-list').innerHTML = '';
+  state.customerHorses = [];
 
   // Hero
   document.getElementById('customer-hero').innerHTML = `
@@ -1500,6 +1532,7 @@ async function loadCustomerDetail(c) {
       .where('customerId', '==', c.id)
       .get();
     const horses = hSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    state.customerHorses = horses; // reused by the invoice/appointment horse pickers
     document.getElementById('cust-horses-list').innerHTML = horses.length
       ? horses.map(h => `
           <div class="horse-row" onclick="openHorseDetail(${JSON.stringify(h).replace(/"/g,'&quot;')})">
@@ -1512,7 +1545,7 @@ async function loadCustomerDetail(c) {
           </div>
         `).join('')
       : `<div style="color:var(--text-muted); font-size:0.85rem; padding:8px 0 4px;">No horses added yet</div>`;
-  } catch(e) { console.error(e); }
+  } catch(e) { console.error(e); state.customerHorses = []; }
 
   try {
     // Appointments
@@ -1584,9 +1617,8 @@ async function loadCustomerDetail(c) {
 
 // ── NEW INVOICE FLOW ──
 function startNewInvoice() {
-  state.selectedServices = [];
   state.customItems = [];
-  renderServiceGrid('service-grid');
+  renderInvoiceHorseRows();
   document.getElementById('svc-customer-name').textContent = state.customer.name;
   document.getElementById('svc-customer-farm').textContent = state.customer.farmName || '';
   document.getElementById('svc-notes').value = '';
@@ -1596,6 +1628,87 @@ function startNewInvoice() {
   document.getElementById('custom-items-list').innerHTML = '';
   updateServiceTotal();
   goTo('screen-services');
+}
+
+// One row per horse on file for this customer, plus an always-present "General / Other"
+// row for anything not tied to a specific horse. Each row is independent: leaving a
+// horse's dropdown on "No service today" simply excludes it from the invoice.
+//
+// Re-render-safe: if called again after a horse's already been picked for this invoice
+// (e.g. after using "+ Add Horse" mid-invoice), existing selections are preserved by
+// horseId instead of being reset to blank — otherwise adding one more horse would wipe
+// out services already chosen for the others.
+function renderInvoiceHorseRows() {
+  const horses = state.customerHorses || [];
+  const rows = [...horses.map(h => ({ id: h.id, name: h.name || 'Unnamed' })), { id: '', name: 'General / Other' }];
+  const prevByHorseId = new Map((state.invoiceHorseServices || []).map(r => [r.horseId, r]));
+  state.invoiceHorseServices = rows.map(r =>
+    prevByHorseId.get(r.id) || { horseId: r.id, horseName: r.id ? r.name : '', serviceId: '', serviceName: '', price: 0 }
+  );
+
+  const svcOptions = state.services.map((s, i) => `<option value="${i}">${escapeHtml(s.name)}</option>`).join('');
+  const svcIndexByName = new Map(state.services.map((s, i) => [s.name, i]));
+
+  document.getElementById('invoice-horse-rows').innerHTML = rows.map((r, idx) => {
+    const row = state.invoiceHorseServices[idx];
+    const selectedSvcIdx = row.serviceName != null && svcIndexByName.has(row.serviceName) ? svcIndexByName.get(row.serviceName) : '';
+    return `
+    <div class="horse-svc-card">
+      <div class="horse-svc-title"><span>${r.id ? '🐴' : '📋'}</span> ${escapeHtml(r.name)}</div>
+      <select class="horse-svc-select" id="horse-svc-select-${idx}" onchange="onHorseServiceChange(${idx})">
+        <option value="">— No service today —</option>
+        ${svcOptions}
+      </select>
+      <div class="horse-svc-price-wrap${row.serviceName ? ' show' : ''}" id="horse-svc-price-wrap-${idx}">
+        <span style="font-weight:700; color:var(--text-muted);">$</span>
+        <input type="number" id="horse-svc-price-${idx}" min="0" step="0.01" value="${row.serviceName ? row.price.toFixed(2) : ''}" oninput="onHorsePriceInput(${idx})">
+      </div>
+    </div>
+  `;
+  }).join('');
+
+  // Re-apply the select's chosen option after innerHTML rebuild (can't set `selected`
+  // via a template string once options are dynamic without re-walking them).
+  rows.forEach((r, idx) => {
+    const row = state.invoiceHorseServices[idx];
+    if (row.serviceName && svcIndexByName.has(row.serviceName)) {
+      document.getElementById(`horse-svc-select-${idx}`).value = svcIndexByName.get(row.serviceName);
+    }
+  });
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function onHorseServiceChange(idx) {
+  const row = state.invoiceHorseServices[idx];
+  const svcIdx = document.getElementById(`horse-svc-select-${idx}`).value;
+  const priceWrap = document.getElementById(`horse-svc-price-wrap-${idx}`);
+  const priceInput = document.getElementById(`horse-svc-price-${idx}`);
+  if (svcIdx === '') {
+    row.serviceId = ''; row.serviceName = ''; row.price = 0;
+    priceWrap.classList.remove('show');
+  } else {
+    const svc = state.services[parseInt(svcIdx)];
+    row.serviceId = svc.id || '';
+    row.serviceName = svc.name;
+    row.price = svc.price || 0;
+    priceInput.value = row.price ? row.price.toFixed(2) : '';
+    priceWrap.classList.add('show');
+  }
+  updateServiceTotal();
+}
+
+function onHorsePriceInput(idx) {
+  state.invoiceHorseServices[idx].price = parseFloat(document.getElementById(`horse-svc-price-${idx}`).value) || 0;
+  updateServiceTotal();
+}
+
+// Lets the farrier invoice a customer's new horse without leaving the invoice flow —
+// jumps to the existing add-horse form and returns here with the row list refreshed.
+function addHorseFromInvoice() {
+  startNewHorse(state.customer, 'invoice');
 }
 
 function renderServiceGrid(gridId) {
@@ -1608,27 +1721,52 @@ function renderServiceGrid(gridId) {
   `).join('');
 }
 
-function toggleService(i, gridId = 'service-grid') {
-  const svc = state.services[i];
-  const chip = document.getElementById(`${gridId}-chip-${i}`);
-  if (gridId === 'service-grid') {
-    const idx = state.selectedServices.findIndex(s => s.name === svc.name);
-    if (idx >= 0) { state.selectedServices.splice(idx, 1); chip.classList.remove('selected'); }
-    else { state.selectedServices.push(svc); chip.classList.add('selected'); }
-    updateServiceTotal();
-  } else {
-    // appointment grid — just toggle visual
-    chip.classList.toggle('selected');
-  }
+// Only used by the appointment screen's service picker now — invoices moved to the
+// per-horse dropdown rows above.
+function toggleService(i, gridId = 'appt-service-grid') {
+  document.getElementById(`${gridId}-chip-${i}`).classList.toggle('selected');
+}
+
+// Appointment horse picker — falls back to the plain "Number of Horses" count when the
+// customer has no horse records yet, so booking is never blocked on horse setup.
+function renderApptHorsePicker(selectedIds = []) {
+  const horses = state.customerHorses || [];
+  const hasHorses = horses.length > 0;
+  document.getElementById('appt-horses-fallback-wrap').style.display = hasHorses ? 'none' : 'block';
+  document.getElementById('appt-horses-picker-wrap').style.display = hasHorses ? 'block' : 'none';
+  if (!hasHorses) return;
+  document.getElementById('appt-horses-picker').innerHTML = horses.map(h => `
+    <div class="horse-pick-chip${selectedIds.includes(h.id) ? ' selected' : ''}" data-hid="${h.id}" onclick="this.classList.toggle('selected')">${escapeHtml(h.name || 'Unnamed')}</div>
+  `).join('');
+}
+
+// Returns null when in fallback (no-horses-on-file) mode, meaning the caller should
+// use the plain #appt-horses number input instead.
+function getSelectedApptHorses() {
+  if (document.getElementById('appt-horses-picker-wrap').style.display === 'none') return null;
+  return Array.from(document.querySelectorAll('#appt-horses-picker .horse-pick-chip.selected'))
+    .map(el => state.customerHorses.find(h => h.id === el.dataset.hid))
+    .filter(Boolean)
+    .map(h => ({ id: h.id, name: h.name || 'Unnamed' }));
+}
+
+// Lets the farrier add a new horse mid-booking without losing anything already filled
+// in on the appointment form — stashes the current horse selection, jumps to the
+// add-horse form, and restores the selection (plus the new horse, pre-selected) on
+// the way back.
+function addHorseFromAppointment() {
+  _pendingApptHorseSelection = (getSelectedApptHorses() || []).map(h => h.id);
+  startNewHorse(state.customer, 'appointment');
 }
 
 function updateServiceTotal() {
-  const svcTotal = state.selectedServices.reduce((s,sv) => s + (sv.price||0), 0);
+  const horseTotal = (state.invoiceHorseServices || []).filter(r => r.serviceName).reduce((s, r) => s + (r.price || 0), 0);
   const customTotal = state.customItems.reduce((s,ci) => s + ci.price, 0);
-  const total = svcTotal + customTotal;
+  const total = horseTotal + customTotal;
   document.getElementById('svc-total').textContent = '$' + total.toFixed(2);
   const btn = document.getElementById('svc-continue-btn');
-  btn.disabled = (state.selectedServices.length + state.customItems.length) === 0;
+  const selectedCount = (state.invoiceHorseServices || []).filter(r => r.serviceName).length + state.customItems.length;
+  btn.disabled = selectedCount === 0;
 }
 
 function addCustomItem() {
@@ -1660,19 +1798,39 @@ function renderCustomItems() {
   `).join('');
 }
 
+// Shared by the review screen and createInvoice() — matches the desktop app's invoice
+// item shape ({description, amount, horseName, serviceId, ...}) so an invoice created
+// on either app displays correctly on the other.
+function buildInvoiceItems() {
+  const horseItems = (state.invoiceHorseServices || [])
+    .filter(r => r.serviceName)
+    .map(r => ({
+      description: r.serviceName,
+      amount: r.price || 0,
+      horseId: r.horseId || '',
+      horseName: r.horseName || '',
+      serviceId: r.serviceId || '',
+    }));
+  const customLineItems = state.customItems.map(ci => ({
+    description: ci.name,
+    amount: ci.price,
+    horseId: '',
+    horseName: '',
+    serviceId: '',
+  }));
+  return [...horseItems, ...customLineItems];
+}
+
 function continueToInvoiceReview() {
-  const allItems = [
-    ...state.selectedServices.map(s => ({ name: s.name, price: s.price||0 })),
-    ...state.customItems
-  ];
-  const total = allItems.reduce((s,i) => s + i.price, 0);
+  const allItems = buildInvoiceItems();
+  const total = allItems.reduce((s,i) => s + i.amount, 0);
 
   document.getElementById('review-customer-name').textContent = state.customer.name;
   document.getElementById('review-customer-farm').textContent = state.customer.farmName || '';
   document.getElementById('review-services-list').innerHTML = allItems.map(i => `
     <div class="info-row">
-      <div class="info-row-label">${i.name}</div>
-      <div class="info-row-value">$${i.price.toFixed(2)}</div>
+      <div class="info-row-label">${escapeHtml(i.description)}${i.horseName ? ` <span style="color:var(--text-muted); font-weight:500;">(${escapeHtml(i.horseName)})</span>` : ''}</div>
+      <div class="info-row-value">$${i.amount.toFixed(2)}</div>
     </div>
   `).join('');
   document.getElementById('review-total').textContent = '$' + total.toFixed(2);
@@ -2026,12 +2184,17 @@ document.addEventListener('input', function(e) {
 // ── REPEAT LAST SERVICE ──
 function repeatLastService() {
   if (!state.lastService) return;
+  // Appointments track which horses were involved and which services were planned for
+  // the visit, but not a horse-to-service mapping (the appt-service-grid picker is a
+  // flat multi-select, not per-horse) — so there's no reliable way to know which horse
+  // got which service. Replaying as custom line items (not tied to any horse) is the
+  // honest option rather than guessing a pairing.
   const svcs = state.lastService.services || [];
-  state.selectedServices = svcs.map(name => {
+  state.invoiceHorseServices = [];
+  state.customItems = svcs.map(name => {
     const found = state.services.find(s => s.name === name);
-    return found || { name, price: 0 };
+    return { name, price: found ? (found.price || 0) : 0 };
   });
-  state.customItems = [];
   continueToInvoiceReview();
 }
 
@@ -2050,10 +2213,7 @@ function generateInvoiceNumber() {
 
 async function createInvoice() {
   const c = state.customer;
-  const allItems = [
-    ...state.selectedServices.map(s => ({ name: s.name, amount: s.price||0 })),
-    ...state.customItems.map(ci => ({ name: ci.name, amount: ci.price }))
-  ];
+  const allItems = buildInvoiceItems();
   const total = allItems.reduce((s,i) => s + i.amount, 0);
   const invoiceNumber = generateInvoiceNumber();
 
@@ -2088,7 +2248,7 @@ async function createInvoice() {
       customerName:   c.name,
       farmName:       c.farmName || '',
       address:        c.address || '',
-      services:       allItems.map(i => i.name),
+      services:       allItems.map(i => i.description),
       invoiceNumber,
       invoiceId:      docRef.id,
       invoiceTotal:   total,
@@ -2216,7 +2376,7 @@ function setBtnsDisabled(v) {
 function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
   const total = (inv.total || 0).toFixed(2);
   const items = (inv.items || []).map(i =>
-    `<tr><td style="padding:6px 8px;font-size:14px;color:#374151;">${i.name||i.description||''}</td><td style="padding:6px 8px;font-size:14px;color:#374151;text-align:right;">$${(i.amount||i.price||0).toFixed(2)}</td></tr>`
+    `<tr><td style="padding:6px 8px;font-size:14px;color:#374151;">${i.description||i.name||''}${i.horseName ? ` (${i.horseName})` : ''}</td><td style="padding:6px 8px;font-size:14px;color:#374151;text-align:right;">$${(i.amount||i.price||0).toFixed(2)}</td></tr>`
   ).join('');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">
@@ -2480,8 +2640,16 @@ async function saveNewCustomer() {
 }
 
 // ── HORSES ──
-function startNewHorse(customer) {
+// Set by addHorseFromInvoice()/addHorseFromAppointment() so saveHorse() knows to
+// refresh that screen's horse picker instead of just the customer screen once done.
+// _pendingApptHorseSelection stashes the appointment picker's selection so it survives
+// the round trip to the horse form and back (the new horse gets auto-selected too).
+let _horseFormReturnTo = ''; // '' | 'invoice' | 'appointment'
+let _pendingApptHorseSelection = [];
+
+function startNewHorse(customer, returnTo = '') {
   if (!customer) return;
+  _horseFormReturnTo = returnTo;
   state.editingHorseId = null;
   document.getElementById('horse-form-title').textContent = 'New Horse';
   document.getElementById('hf-save-btn').textContent = 'Save Horse';
@@ -2553,7 +2721,18 @@ async function saveHorse() {
     }));
     showToast('Horse added!' + suffix, 'success');
     goBack();
-    loadCustomerDetail(c);
+    const returnTo = _horseFormReturnTo;
+    const newHorseId = docRef.id;
+    _horseFormReturnTo = '';
+    loadCustomerDetail(c).then(() => {
+      if (returnTo === 'invoice') {
+        renderInvoiceHorseRows(); // preserves any services already picked for other horses
+        updateServiceTotal();
+      } else if (returnTo === 'appointment') {
+        renderApptHorsePicker([..._pendingApptHorseSelection, newHorseId]);
+        _pendingApptHorseSelection = [];
+      }
+    });
   }
   btn.disabled = false; btn.textContent = editingId ? 'Save Changes' : 'Save Horse';
 }
@@ -2900,6 +3079,7 @@ function startNewAppointment() {
   document.getElementById('appt-customer-name').textContent = state.customer.name;
   document.getElementById('appt-customer-farm').textContent = state.customer.farmName || '';
   document.getElementById('appt-horses').value = '1';
+  renderApptHorsePicker([]);
   const prefillAddr = [state.customer.address, state.customer.city, state.customer.state].filter(Boolean).join(', ');
   document.getElementById('appt-notes').value = '';
   renderServiceGrid('appt-service-grid');
@@ -2917,7 +3097,7 @@ function startNewAppointment() {
   if (prefillAddr) seedApptAddressWidget(prefillAddr);
 }
 
-function startEditAppointment(appt) {
+async function startEditAppointment(appt) {
   if (!appt) return;
   state.editingApptId = appt.id;
   // Make sure state.customer points at this appointment's customer, so "Discard,
@@ -2942,6 +3122,23 @@ function startEditAppointment(appt) {
     const i = state.services.findIndex(s => s.name === name);
     if (i >= 0) document.getElementById(`appt-service-grid-chip-${i}`)?.classList.add('selected');
   });
+
+  // This screen may have been opened from Find Appointment / the dashboard's today
+  // list rather than the customer's own profile, so state.customerHorses might belong
+  // to a different customer (or be empty) — fetch fresh for whoever this appt is for.
+  if (state.customer.id) {
+    try {
+      const hSnap = await db.collection('horses')
+        .where('farrierId', '==', state.user.uid)
+        .where('customerId', '==', state.customer.id)
+        .get();
+      state.customerHorses = hSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) { console.error(e); state.customerHorses = []; }
+  } else {
+    state.customerHorses = [];
+  }
+  renderApptHorsePicker(appt.horseIds || []);
+
   onApptDateChange(appt.requestedTime || null);
   goTo('screen-new-appt');
   _apptPac = null;
@@ -2964,10 +3161,21 @@ async function saveNewAppointment() {
     .filter((s, i) => document.getElementById(`appt-service-grid-chip-${i}`)?.classList.contains('selected'))
     .map(s => s.name);
 
+  // getSelectedApptHorses() returns null when this customer has no horse records yet
+  // (picker is in fallback mode) — fall back to the plain number input in that case.
+  const pickedHorses = getSelectedApptHorses();
+  const horseIds = pickedHorses ? pickedHorses.map(h => h.id) : [];
+  const horseNames = pickedHorses ? pickedHorses.map(h => h.name) : [];
+  const numberOfHorses = pickedHorses
+    ? (pickedHorses.length || 1)
+    : (parseInt(document.getElementById('appt-horses').value) || 1);
+
   const fields = {
     address: document.getElementById('appt-address').value,
     services: selectedSvcs,
-    numberOfHorses: parseInt(document.getElementById('appt-horses').value) || 1,
+    horseIds,
+    horseNames,
+    numberOfHorses,
     comments: document.getElementById('appt-notes').value,
     requestedDate: date,
     requestedTime: time,

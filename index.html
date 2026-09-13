@@ -2012,21 +2012,30 @@ async function seedDefaultServicesIfEmpty_(userId) {
     return;
   }
 
+  // Based directly on a real farrier's service menu (no generic pricing — farriers set
+  // their own prices in Settings after signup, or adjust per-invoice in the mobile app).
   const defaults = [
-    { name: "Hot Shoeing All Four", price: 170, category: "Top Services" },
-    { name: "Dressage Shoes All Four", price: 200, category: "Top Services" },
-    { name: "Hunter/Jumper Competition Shoes", price: 195, category: "Top Services" },
-    { name: "Reset All Four", price: 120, category: "Top Services" },
-    { name: "Trim All Four", price: 75, category: "Top Services" },
-    { name: "Front Shoes Only", price: 110, category: "Top Services" },
-    { name: "Show Prep Package", price: 50, category: "Top Services" },
-    { name: "Studs Installation", price: 40, category: "Top Services" },
-    { name: "Leather Pads", price: 40, category: "Top Services" },
-    { name: "Emergency Call Out", price: 100, category: "Top Services" },
-    { name: "Dressage Maintenance Package", price: 210, category: "Packages" },
-    { name: "Hunter/Jumper Show Package", price: 250, category: "Packages" },
-    { name: "Training Horse Package", price: 165, category: "Packages" },
-  ];
+    { name: "Trim", category: "Shoeing" },
+    { name: "Trim 2 Keg Shoes in Front", category: "Shoeing" },
+    { name: "Trim 2 Alum Shoes in Front", category: "Shoeing" },
+    { name: "Trim 4 Keg Shoes", category: "Shoeing" },
+    { name: "Trim 4 Handmade Shoes", category: "Shoeing" },
+    { name: "Trim 2 Alum Shoes in Front, Keg Shoes Behind", category: "Shoeing" },
+    { name: "Trim 2 Glue-On Shoes", category: "Shoeing" },
+    { name: "Trim 2 Bar Shoes in Front, 2 Keg Shoes Behind", category: "Shoeing" },
+    { name: "Set of Therapeutic Shoes", category: "Shoeing" },
+    { name: "Replace Lost Shoe", category: "Repairs" },
+    { name: "Tack on Shoe", category: "Repairs" },
+    { name: "Extra - Pads", category: "Extras" },
+    { name: "Extra - Packing", category: "Extras" },
+    { name: "Extra - Stud Holes", category: "Extras" },
+    { name: "Extra - Repair Moderate Hoof Crack", category: "Extras" },
+    { name: "Extra - Clips", category: "Extras" },
+    { name: "Extra - Trailers", category: "Extras" },
+    { name: "Extra - Square Toe/Rocker Toe", category: "Extras" },
+    { name: "Traction Device", category: "Extras" },
+    { name: "Welding Insert", category: "Extras" },
+  ].map(s => ({ ...s, price: 0 }));
 
   const batch = db.batch();
   const now = firebase.firestore.FieldValue.serverTimestamp();
