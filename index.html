@@ -3912,6 +3912,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       // Form state
       const [formName, setFormName] = useState('');
       const [formFarmName, setFormFarmName] = useState('');
+      const [formManagerContact, setFormManagerContact] = useState('');
       const [formEmail, setFormEmail] = useState('');
       const [formSource, setFormSource] = useState('referral');
       const [formPhone, setFormPhone] = useState('');
@@ -4104,7 +4105,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
       const openAdd = () => {
         setEditingCustomer(null);
-        setFormName(''); setFormFarmName(''); setFormEmail(''); setFormPhone('');
+        setFormName(''); setFormFarmName(''); setFormManagerContact(''); setFormEmail(''); setFormPhone('');
         setFormAddress(''); setFormCity(''); setFormState(''); setFormZip('');
         setFormNotes(''); setFormSource('referral');
         setShowAddEdit(true);
@@ -4114,6 +4115,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         setEditingCustomer(cust);
         setFormName(cust.name || '');
         setFormFarmName(cust.farmName || '');
+        setFormManagerContact(cust.managerContact || '');
         setFormEmail(cust.email || '');
         setFormPhone(cust.phone || '');
         setFormAddress(cust.address || '');
@@ -4133,6 +4135,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             farrierId: userId,
             name: formName.trim(),
             farmName: formFarmName.trim(),
+            managerContact: formManagerContact.trim(),
             email: formEmail.trim(),
             phone: formPhone.trim(),
             address: formAddress.trim(),
@@ -4192,6 +4195,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         const matchSearch = !q ||
           (c.name || '').toLowerCase().includes(q) ||
           (c.farmName || '').toLowerCase().includes(q) ||
+          (c.managerContact || '').toLowerCase().includes(q) ||
           (c.email || '').toLowerCase().includes(q) ||
           (c.phone || '').includes(q);
         const matchSms = smsFilter === 'all' ||
@@ -4220,6 +4224,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           {[
             { label: 'Full Name *', val: formName, set: setFormName, type: 'text', ph: 'Jane Smith' },
             { label: 'Farm / Business Name', val: formFarmName, set: setFormFarmName, type: 'text', ph: 'Sunny Acres Farm' },
+            { label: 'Manager / Contact', val: formManagerContact, set: setFormManagerContact, type: 'text', ph: 'Barn manager or on-site contact name' },
             { label: 'Email', val: formEmail, set: setFormEmail, type: 'email', ph: 'jane@example.com' },
             { label: 'Phone', val: formPhone, set: setFormPhone, type: 'tel', ph: '(555) 555-5555', isPhone: true },
           ].map(f => (
@@ -4314,6 +4319,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 {selectedCustomer.farmName && (
                   <div style={{ fontSize: '1rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.25rem' }}>
                     🏠 {selectedCustomer.farmName}
+                  </div>
+                )}
+                {selectedCustomer.managerContact && (
+                  <div style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '0.25rem' }}>
+                    👔 Manager/Contact: {selectedCustomer.managerContact}
                   </div>
                 )}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', color: '#1e293b', fontSize: '0.95rem' }}>

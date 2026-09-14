@@ -657,6 +657,7 @@
   <div class="scroll-body">
     <div class="field"><label>Owner Name *</label><input type="text" id="nc-name" placeholder="Jane Smith" autocomplete="name"></div>
     <div class="field"><label>Farm / Business Name</label><input type="text" id="nc-farm" placeholder="Sunny Acres Farm"></div>
+    <div class="field"><label>Manager / Contact</label><input type="text" id="nc-manager-contact" placeholder="Barn manager or on-site contact name"></div>
     <div class="field"><label>Phone</label><input type="tel" id="nc-phone" placeholder="(555) 555-5555" autocomplete="tel" inputmode="tel" oninput="formatPhoneInput(this)"></div>
     <div class="field"><label>Email</label><input type="email" id="nc-email" placeholder="jane@example.com" autocomplete="email"></div>
     <div class="field">
@@ -1426,6 +1427,7 @@ async function filterCustomers(q) {
     ? state.customers.filter(c =>
         (c.name||'').toLowerCase().includes(term) ||
         (c.farmName||'').toLowerCase().includes(term) ||
+        (c.managerContact||'').toLowerCase().includes(term) ||
         (c.phone||'').replace(/\D/g,'').includes(term.replace(/\D/g,'')) ||
         (c.notes||'').toLowerCase().includes(term)
       )
@@ -1526,6 +1528,7 @@ async function loadCustomerDetail(c) {
       </div>
     </div>
     <div class="customer-hero-contact">
+      ${c.managerContact ? `<div>👔 ${c.managerContact}</div>` : ''}
       ${c.phone ? `<div>📞 ${c.phone}</div>` : ''}
       ${c.email ? `<div>✉️ ${c.email}</div>` : ''}
       ${c.notes ? `<div style="margin-top:4px; font-style:italic; opacity:0.8;">📝 ${c.notes}</div>` : ''}
@@ -2660,7 +2663,7 @@ function startNewCustomer() {
   state.editingCustomerId = null;
   document.getElementById('nc-form-title').textContent = 'New Customer';
   document.getElementById('nc-save-btn').textContent = 'Save Customer';
-  ['nc-name','nc-farm','nc-phone','nc-email','nc-notes','nc-address','nc-city','nc-state','nc-zip'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  ['nc-name','nc-farm','nc-manager-contact','nc-phone','nc-email','nc-notes','nc-address','nc-city','nc-state','nc-zip'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   goTo('screen-new-customer');
   _custPac = null;
   _custPacTries = 0;
@@ -2676,6 +2679,7 @@ function startEditCustomer(c) {
   document.getElementById('nc-save-btn').textContent = 'Save Changes';
   document.getElementById('nc-name').value = c.name || '';
   document.getElementById('nc-farm').value = c.farmName || '';
+  document.getElementById('nc-manager-contact').value = c.managerContact || '';
   document.getElementById('nc-phone').value = c.phone || '';
   formatPhoneInput(document.getElementById('nc-phone'));
   document.getElementById('nc-email').value = c.email || '';
@@ -2703,6 +2707,7 @@ async function saveNewCustomer() {
   const fields = {
     name,
     farmName: document.getElementById('nc-farm').value.trim(),
+    managerContact: document.getElementById('nc-manager-contact').value.trim(),
     phone: document.getElementById('nc-phone').value.trim(),
     email: document.getElementById('nc-email').value.trim(),
     notes: document.getElementById('nc-notes').value.trim(),
