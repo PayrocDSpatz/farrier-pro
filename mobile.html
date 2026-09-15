@@ -190,6 +190,7 @@
   .photo-tile { position: relative; aspect-ratio: 1; border-radius: var(--radius-sm); overflow: hidden; background: var(--border); }
   .photo-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .photo-tile.pending::after { content: '⏳ Pending'; position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 0.65rem; font-weight: 700; text-align: center; padding: 3px 0; }
+  .photo-remove-btn { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,0.65); color: white; border: none; font-size: 0.85rem; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; padding: 0; }
   .add-photo-tile { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; aspect-ratio: 1; border-radius: var(--radius-sm); border: 2px dashed var(--border); color: var(--text-muted); font-size: 0.75rem; font-weight: 700; cursor: pointer; background: var(--surface); }
   .horse-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; box-shadow: var(--shadow); }
   .horse-row-avatar { width: 40px; height: 40px; border-radius: 10px; background: #7C3AED; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
@@ -2888,9 +2889,19 @@ function renderHorsePhotoGrid() {
   const h = state.currentHorse;
   const grid = document.getElementById('horse-photo-grid');
   if (!grid || !h) return;
-  const synced = (h.photos || []).map(p => `<div class="photo-tile"><img src="${p.url}" alt="${h.name||'horse'} photo"></div>`).join('');
+  const synced = (h.photos || []).map(p => `
+    <div class="photo-tile">
+      <img src="${p.url}" alt="${h.name||'horse'} photo">
+      <button class="photo-remove-btn" onclick="removeSyncedHorsePhoto('${(p.storagePath||'').replace(/'/g,"\\'")}')" aria-label="Remove photo">✕</button>
+    </div>
+  `).join('');
   const pending = _pendingPhotoPreviews[h.id] || [];
-  const pendingTiles = pending.map(p => `<div class="photo-tile pending"><img src="${p.previewUrl}" alt="pending upload"></div>`).join('');
+  const pendingTiles = pending.map(p => `
+    <div class="photo-tile pending">
+      <img src="${p.previewUrl}" alt="pending upload">
+      <button class="photo-remove-btn" onclick="removePendingHorsePhoto('${p.id}')" aria-label="Remove photo">✕</button>
+    </div>
+  `).join('');
   grid.innerHTML = synced + pendingTiles + `<div class="add-photo-tile" onclick="document.getElementById('horse-photo-input').click()"><span style="font-size:1.4rem;">📷</span>Add Photo</div>`;
 }
 
@@ -2985,6 +2996,46 @@ async function onHorsePhotoPicked(event) {
   showToast(netState.online ? 'Uploading photo…' : 'Photo saved — will upload when back online');
 
   if (netState.online) flushPhotoOutbox();
+}
+
+// Removes a photo that's already synced to Firestore/Storage. Looks the entry up by
+// storagePath (rather than array index) so it can't accidentally remove the wrong
+// photo if the array has shifted since the grid was last rendered.
+async function removeSyncedHorsePhoto(storagePath) {
+  const horse = state.currentHorse;
+  if (!horse) return;
+  const photo = (horse.photos || []).find(p => p.storagePath === storagePath);
+  if (!photo) return;
+  if (!confirm('Delete this photo?')) return;
+  try {
+    performWrite(() => db.collection('horses').doc(horse.id).update({
+      photos: firebase.firestore.FieldValue.arrayRemove(photo),
+    }));
+    horse.photos = (horse.photos || []).filter(p => p !== photo);
+    renderHorsePhotoGrid();
+    // Best-effort Storage cleanup — only while online, since Storage (unlike
+    // Firestore) has no offline write queue of its own. Skipping it offline just
+    // leaves an orphaned file behind; the Firestore doc no longer references it.
+    if (storagePath && netState.online) {
+      storage.ref(storagePath).delete().catch(e => console.warn('Photo storage cleanup failed (non-fatal):', e));
+    }
+  } catch (e) {
+    showToast('Error removing photo: ' + e.message, 'error');
+  }
+}
+
+// Removes a photo still sitting in the local upload outbox (never made it to
+// Firestore/Storage yet).
+async function removePendingHorsePhoto(id) {
+  if (!confirm('Remove this photo?')) return;
+  try { await photoDbDelete(id); } catch (e) { console.warn(e); }
+  const horse = state.currentHorse;
+  const list = horse && _pendingPhotoPreviews[horse.id];
+  if (list) {
+    const idx = list.findIndex(p => p.id === id);
+    if (idx >= 0) { URL.revokeObjectURL(list[idx].previewUrl); list.splice(idx, 1); }
+  }
+  renderHorsePhotoGrid();
 }
 
 async function flushPhotoOutbox() {
