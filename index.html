@@ -22,6 +22,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
   
   <!-- Google API for Calendar -->
   <script src="https://apis.google.com/js/api.js"></script>
@@ -1984,12 +1985,13 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
     };
 
     // Initialize Firebase
-    let app, auth, db;
+    let app, auth, db, storage;
     try {
       app = firebase.initializeApp(firebaseConfig);
       auth = firebase.auth();
       auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
       db = firebase.firestore();
+      storage = firebase.storage();
     } catch (error) {
       ("Firebase not configured yet - using demo mode");
     }
@@ -3908,6 +3910,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const [confirmDelete, setConfirmDelete] = useState(null);
       const [showNewAppt, setShowNewAppt] = useState(false);
       const [invoiceApt, setInvoiceApt] = useState(null);
+      const [horseModal, setHorseModal] = useState(null); // { horse } — horse is null when adding new; presence of the key just controls modal visibility
 
       // Form state
       const [formName, setFormName] = useState('');
@@ -4086,7 +4089,19 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             });
           };
 
-          const [apptSnap, invoices] = await Promise.all([apptPromise, loadInvoices()]);
+          const loadHorses = async () => {
+            if (!cust.id) return [];
+            try {
+              const snap = await db.collection('horses')
+                .where('farrierId', '==', userId)
+                .where('customerId', '==', cust.id)
+                .get();
+              return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+            } catch (e) { console.error('Error loading horses:', e); return []; }
+          };
+
+          const [apptSnap, invoices, horses] = await Promise.all([apptPromise, loadInvoices(), loadHorses()]);
 
           const appointments = apptSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           const balance = invoices
@@ -4095,12 +4110,25 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           const totalPaid = invoices
             .filter(i => i.status === 'paid')
             .reduce((s, i) => s + (i.total || 0), 0);
-          setCustomerDetail({ appointments, invoices, balance, totalPaid });
+          setCustomerDetail({ appointments, invoices, horses, balance, totalPaid });
         } catch (e) {
           console.error('Error loading customer detail:', e);
-          setCustomerDetail({ appointments: [], invoices: [], balance: 0, totalPaid: 0 });
+          setCustomerDetail({ appointments: [], invoices: [], horses: [], balance: 0, totalPaid: 0 });
         }
         setDetailLoading(false);
+      };
+
+      const refreshHorses = async () => {
+        if (!selectedCustomer?.id) return;
+        try {
+          const snap = await db.collection('horses')
+            .where('farrierId', '==', userId)
+            .where('customerId', '==', selectedCustomer.id)
+            .get();
+          const horses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+          setCustomerDetail(prev => prev ? { ...prev, horses } : prev);
+        } catch (e) { console.error('Error refreshing horses:', e); }
       };
 
       const openAdd = () => {
@@ -4414,6 +4442,37 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           )}
           {detailLoading && <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>⏳ Loading history…</div>}
 
+          {/* Horses */}
+          {!detailLoading && customerDetail && (
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>🐴 Horses</h2>
+                <button className="btn btn-sm btn-outline" onClick={() => setHorseModal({ horse: null })}>➕ Add Horse</button>
+              </div>
+              {customerDetail.horses.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem', fontSize: '0.9rem' }}>
+                  No horses on file yet for this customer.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {customerDetail.horses.map(h => (
+                    <div key={h.id} onClick={() => setHorseModal({ horse: h })}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.08)', borderRadius: 8, cursor: 'pointer', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{h.name || 'Unnamed'}</span>
+                        {h.breed && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}> — {h.breed}</span>}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                        {(h.photos || []).length > 0 && <span>📷 {h.photos.length}</span>}
+                        <span>›</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Appointment history */}
           {!detailLoading && customerDetail && customerDetail.appointments.length > 0 && (
             <div className="card" style={{ marginBottom: '1rem' }}>
@@ -4539,6 +4598,17 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 customerEmail: invoiceApt.email || selectedCustomer.email || '',
                 customerPhone: invoiceApt.phone || selectedCustomer.phone || '',
               }}
+            />
+          )}
+
+          {/* Add/Edit Horse */}
+          {horseModal && (
+            <HorseEditModal
+              horse={horseModal.horse}
+              customer={selectedCustomer}
+              userId={userId}
+              onClose={() => setHorseModal(null)}
+              onSaved={() => refreshHorses()}
             />
           )}
         </div>
@@ -9772,6 +9842,229 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 </button>
               </div>
 
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Resize/compress before uploading — keeps large desktop-camera-sized photos
+    // from bloating Storage or taking forever on a farrier's upload speed.
+    function compressImageForUpload(file, maxDim = 1600, quality = 0.75) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            const scale = maxDim / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          canvas.toBlob(blob => { URL.revokeObjectURL(url); blob ? resolve(blob) : reject(new Error('Compression failed')); }, 'image/jpeg', quality);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+        img.src = url;
+      });
+    }
+
+    function HorseEditModal({ horse, customer, userId, onClose, onSaved }) {
+      // savedHorse becomes non-null once the horse actually has a Firestore doc —
+      // for a brand-new horse that's only true after the first Save, which is what
+      // unlocks the Photos section below (a photo needs a horseId to attach to).
+      const [savedHorse, setSavedHorse] = useState(horse || null);
+      const [name, setName] = useState(horse?.name || '');
+      const [breed, setBreed] = useState(horse?.breed || '');
+      const [dob, setDob] = useState(horse?.dob || '');
+      const [sex, setSex] = useState(horse?.sex || '');
+      const [color, setColor] = useState(horse?.color || '');
+      const [shoeingCycleWeeks, setShoeingCycleWeeks] = useState(horse?.shoeingCycleWeeks || '');
+      const [shoeSize, setShoeSize] = useState(horse?.shoeSize || '');
+      const [shoeType, setShoeType] = useState(horse?.shoeType || '');
+      const [gaitNotes, setGaitNotes] = useState(horse?.gaitNotes || '');
+      const [hoofNotes, setHoofNotes] = useState(horse?.hoofNotes || '');
+      const [knownIssues, setKnownIssues] = useState(horse?.knownIssues || '');
+      const [saving, setSaving] = useState(false);
+      const [uploading, setUploading] = useState(false);
+      const fileInputRef = useRef(null);
+
+      const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' };
+
+      const handleSave = async () => {
+        if (!name.trim()) return alert('Horse name is required.');
+        setSaving(true);
+        try {
+          const payload = {
+            name: name.trim(), breed: breed.trim(), dob, sex, color: color.trim(),
+            shoeingCycleWeeks: shoeingCycleWeeks ? parseInt(shoeingCycleWeeks) : null,
+            shoeSize: shoeSize.trim(), shoeType: shoeType.trim(),
+            gaitNotes: gaitNotes.trim(), hoofNotes: hoofNotes.trim(), knownIssues: knownIssues.trim(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          };
+          if (savedHorse?.id) {
+            await db.collection('horses').doc(savedHorse.id).update(payload);
+            setSavedHorse(prev => ({ ...prev, ...payload }));
+          } else {
+            const ref = await db.collection('horses').add({
+              ...payload,
+              farrierId: userId,
+              customerId: customer.id || '',
+              customerName: customer.name,
+              photos: [],
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            setSavedHorse({ id: ref.id, ...payload, photos: [] });
+          }
+          onSaved();
+        } catch (e) {
+          alert('Error saving horse: ' + e.message);
+        }
+        setSaving(false);
+      };
+
+      const handleFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !savedHorse?.id) return;
+        setUploading(true);
+        try {
+          const blob = await compressImageForUpload(file);
+          const photoId = `${savedHorse.id}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+          const path = `horse-photos/${userId}/${savedHorse.id}/${photoId}.jpg`;
+          const ref = storage.ref(path);
+          await ref.put(blob);
+          const url = await ref.getDownloadURL();
+          const photo = { url, storagePath: path, uploadedAt: Date.now(), caption: '' };
+          await db.collection('horses').doc(savedHorse.id).update({
+            photos: firebase.firestore.FieldValue.arrayUnion(photo),
+          });
+          setSavedHorse(prev => ({ ...prev, photos: [...(prev.photos || []), photo] }));
+          onSaved();
+        } catch (e) {
+          alert('Error uploading photo: ' + e.message);
+        }
+        setUploading(false);
+      };
+
+      const removePhoto = async (photo) => {
+        if (!savedHorse?.id) return;
+        if (!confirm('Delete this photo?')) return;
+        try {
+          await db.collection('horses').doc(savedHorse.id).update({
+            photos: firebase.firestore.FieldValue.arrayRemove(photo),
+          });
+          setSavedHorse(prev => ({ ...prev, photos: (prev.photos || []).filter(p => p !== photo) }));
+          if (photo.storagePath) storage.ref(photo.storagePath).delete().catch(e => console.warn('Photo storage cleanup failed (non-fatal):', e));
+          onSaved();
+        } catch (e) {
+          alert('Error removing photo: ' + e.message);
+        }
+      };
+
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div className="card" style={{ maxWidth: 560, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0, color: 'var(--primary)' }}>{savedHorse?.id ? `✏️ Edit ${savedHorse.name || 'Horse'}` : '➕ Add Horse'}</h2>
+              <button className="btn btn-sm btn-outline" onClick={onClose}>✕ Close</button>
+            </div>
+
+            {[
+              { label: 'Name *', val: name, set: setName, ph: 'Biscuit' },
+              { label: 'Breed', val: breed, set: setBreed, ph: 'Quarter Horse' },
+              { label: 'Color', val: color, set: setColor, ph: 'Bay' },
+            ].map(f => (
+              <div className="form-group" key={f.label}>
+                <label>{f.label}</label>
+                <input type="text" value={f.val} placeholder={f.ph} onChange={e => f.set(e.target.value)} style={inputStyle} />
+              </div>
+            ))}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Date of Birth</label>
+                <input type="date" value={dob} onChange={e => setDob(e.target.value)} style={inputStyle} />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Sex</label>
+                <select value={sex} onChange={e => setSex(e.target.value)}
+                  style={{ ...inputStyle, border: '2px solid rgba(38,131,251,0.45)', background: 'rgba(22,32,50,0.95)', color: 'var(--text)', colorScheme: 'dark' }}>
+                  <option value="" style={{background:'#1e2d45', color:'#e8f0fe'}}>—</option>
+                  <option value="Mare" style={{background:'#1e2d45', color:'#e8f0fe'}}>Mare</option>
+                  <option value="Gelding" style={{background:'#1e2d45', color:'#e8f0fe'}}>Gelding</option>
+                  <option value="Stallion" style={{background:'#1e2d45', color:'#e8f0fe'}}>Stallion</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginTop: '0.75rem' }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Shoeing Cycle (wks)</label>
+                <input type="number" min="1" value={shoeingCycleWeeks} placeholder="6" onChange={e => setShoeingCycleWeeks(e.target.value)} style={inputStyle} />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Shoe Size</label>
+                <input type="text" value={shoeSize} placeholder="00" onChange={e => setShoeSize(e.target.value)} style={inputStyle} />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Shoe Type</label>
+                <input type="text" value={shoeType} placeholder="Steel" onChange={e => setShoeType(e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+
+            <div className="form-group" style={{ marginTop: '0.75rem' }}>
+              <label>Gait Notes</label>
+              <textarea value={gaitNotes} onChange={e => setGaitNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+            </div>
+            <div className="form-group">
+              <label>Hoof Notes</label>
+              <textarea value={hoofNotes} onChange={e => setHoofNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+            </div>
+            <div className="form-group">
+              <label>Known Issues</label>
+              <textarea value={knownIssues} onChange={e => setKnownIssues(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', marginBottom: '1.5rem' }}>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ flex: 1 }}>
+                {saving ? '⏳ Saving…' : (savedHorse?.id ? '💾 Save Changes' : '✅ Add Horse')}
+              </button>
+            </div>
+
+            {/* Photos — only available once the horse actually exists in Firestore */}
+            <div style={{ borderTop: '2px solid var(--border)', paddingTop: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)' }}>📷 Photos</h3>
+                {savedHorse?.id && (
+                  <button className="btn btn-sm btn-outline" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                    {uploading ? '⏳ Uploading…' : '📁 Upload Photo'}
+                  </button>
+                )}
+              </div>
+              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
+
+              {!savedHorse?.id ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '1rem' }}>
+                  Save this horse first to attach photos.
+                </div>
+              ) : (savedHorse.photos || []).length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '1rem' }}>
+                  No photos yet.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: '0.5rem' }}>
+                  {savedHorse.photos.map((p, i) => (
+                    <div key={p.storagePath || i} style={{ position: 'relative', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: 'var(--border)' }}>
+                      <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <button onClick={() => removePhoto(p)} title="Remove photo"
+                        style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', fontSize: '0.8rem', lineHeight: 1, cursor: 'pointer', padding: 0 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
