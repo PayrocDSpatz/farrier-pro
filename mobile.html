@@ -3221,7 +3221,7 @@ function startNewAppointment() {
   if (prefillAddr) seedApptAddressWidget(prefillAddr);
 }
 
-async function startEditAppointment(appt) {
+function startEditAppointment(appt) {
   if (!appt) return;
   state.editingApptId = appt.id;
   // Make sure state.customer points at this appointment's customer, so "Discard,
@@ -3249,19 +3249,25 @@ async function startEditAppointment(appt) {
 
   // This screen may have been opened from Find Appointment / the dashboard's today
   // list rather than the customer's own profile, so state.customerHorses might belong
-  // to a different customer (or be empty) — fetch fresh for whoever this appt is for.
-  if (state.customer.id) {
-    try {
-      const hSnap = await db.collection('horses')
-        .where('farrierId', '==', state.user.uid)
-        .where('customerId', '==', state.customer.id)
-        .get();
-      state.customerHorses = hSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch (e) { console.error(e); state.customerHorses = []; }
-  } else {
-    state.customerHorses = [];
-  }
+  // to a different customer — clear it up front (falls back to the plain horse-count
+  // input) and fetch the real list in the background instead. This used to be an
+  // `await` right here, which blocked opening the screen at all until the query
+  // resolved — offline, a query with nothing cached for it can hang indefinitely,
+  // leaving the farrier stuck staring at the previous screen.
+  state.customerHorses = [];
   renderApptHorsePicker(appt.horseIds || []);
+  if (state.customer.id) {
+    db.collection('horses')
+      .where('farrierId', '==', state.user.uid)
+      .where('customerId', '==', state.customer.id)
+      .get()
+      .then(hSnap => {
+        if (state.editingApptId !== appt.id) return; // navigated elsewhere meanwhile
+        state.customerHorses = hSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderApptHorsePicker(appt.horseIds || []);
+      })
+      .catch(e => console.error(e));
+  }
 
   onApptDateChange(appt.requestedTime || null);
   goTo('screen-new-appt');
