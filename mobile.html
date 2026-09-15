@@ -737,7 +737,11 @@
     <div class="card">
       <div class="card-title">Photos</div>
       <div class="photo-grid" id="horse-photo-grid"></div>
-      <input type="file" id="horse-photo-input" accept="image/*" capture="environment" style="display:none;" onchange="onHorsePhotoPicked(event)">
+      <!-- No `capture` attribute here on purpose: it hints mobile browsers to jump
+           straight to the camera, skipping the "Photo Library" option in iOS's
+           picker sheet — farriers need to attach existing photos, not just take new
+           ones on the spot. -->
+      <input type="file" id="horse-photo-input" accept="image/*" style="display:none;" onchange="onHorsePhotoPicked(event)">
     </div>
   </div>
 </div>
