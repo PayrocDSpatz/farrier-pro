@@ -1756,6 +1756,27 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         doc.text("TOTAL", pageW - 140, y, { align: "right" });
         doc.text(total, pageW - 48, y, { align: "right" });
 
+        // Clickable "Pay Now" link — the QR code above only helps if the reader can
+        // scan it with a second device; this covers the common case of someone
+        // reading the emailed/attached PDF on the same screen they'd pay from.
+        // Shown whenever there's a real Stripe payment link and money still owed
+        // (this fires for a brand-new unpaid invoice too, since the "BALANCE DUE"
+        // line further below only renders once there's payment history).
+        if (payUrl && _balDue > 0) {
+          y += 24;
+          if (y > pageH - 110) { doc.addPage(); y = 72; }
+          const linkLabel = "CLICK HERE TO PAY NOW";
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(11);
+          doc.setTextColor(37, 99, 235);
+          doc.textWithLink(linkLabel, pageW - 48, y, { url: payUrl, align: "right" });
+          const linkWidth = doc.getTextWidth(linkLabel);
+          doc.setDrawColor(37, 99, 235);
+          doc.line(pageW - 48 - linkWidth, y + 3, pageW - 48, y + 3);
+          doc.setTextColor(0);
+          doc.setFont("helvetica", "normal");
+        }
+
         // Payment History
         const payments = Array.isArray(invoice.payments) ? invoice.payments : [];
         const paidAmount = invoice.paidAmount || payments.reduce((s,p) => s + (p.amount||0), 0);
