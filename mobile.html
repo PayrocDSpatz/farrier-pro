@@ -663,10 +663,15 @@
     <div class="field">
       <label>Address <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
       <div id="cust-address-pac-container" style="width:100%;"></div>
-      <input type="hidden" id="nc-address">
-      <input type="hidden" id="nc-city">
-      <input type="hidden" id="nc-state">
-      <input type="hidden" id="nc-zip">
+      <!-- Manual fallback: visible until Google's autocomplete widget actually mounts
+           (it needs a network round-trip to load, so offline it never will) — without
+           this there was no way to type an address at all when offline. -->
+      <input type="text" id="nc-address" placeholder="Street address" style="margin-top:8px;">
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <input type="text" id="nc-city" placeholder="City" style="flex:2;">
+        <input type="text" id="nc-state" placeholder="State" maxlength="2" style="flex:1; text-transform:uppercase;">
+        <input type="text" id="nc-zip" placeholder="Zip" style="flex:1;">
+      </div>
     </div>
     <div class="field"><label>Horse Name(s) / Notes</label><textarea id="nc-notes" placeholder="Horse names, special instructions…"></textarea></div>
     <button class="btn-primary" id="nc-save-btn" onclick="saveNewCustomer()">Save Customer</button>
@@ -778,7 +783,10 @@
     <div class="field">
       <label>Address</label>
       <div id="appt-address-pac-container" style="width:100%;"></div>
-      <input type="hidden" id="appt-address">
+      <!-- Manual fallback: visible until Google's autocomplete widget actually mounts
+           (needs a network round-trip to load, so offline it never will) — without
+           this there was no way to type an address at all when offline. -->
+      <input type="text" id="appt-address" placeholder="123 Main St, City, ST" style="margin-top:8px;">
     </div>
     <div class="field"><label>Notes</label><textarea id="appt-notes" placeholder="Gate code, special instructions…" rows="2"></textarea></div>
     <button class="btn-primary" id="appt-save-btn" onclick="saveNewAppointment()">📅 Save Appointment</button>
@@ -2664,6 +2672,7 @@ function startNewCustomer() {
   document.getElementById('nc-form-title').textContent = 'New Customer';
   document.getElementById('nc-save-btn').textContent = 'Save Customer';
   ['nc-name','nc-farm','nc-manager-contact','nc-phone','nc-email','nc-notes','nc-address','nc-city','nc-state','nc-zip'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('nc-address').style.display = '';
   goTo('screen-new-customer');
   _custPac = null;
   _custPacTries = 0;
@@ -2688,6 +2697,7 @@ function startEditCustomer(c) {
   document.getElementById('nc-city').value = c.city || '';
   document.getElementById('nc-state').value = c.state || '';
   document.getElementById('nc-zip').value = c.zip || '';
+  document.getElementById('nc-address').style.display = '';
   goTo('screen-new-customer');
   _custPac = null;
   _custPacTries = 0;
@@ -3202,6 +3212,7 @@ function startNewAppointment() {
   // Initialize PAC widget (safe to call multiple times — it guards internally)
   _apptPac = null; // reset so it re-mounts fresh each time
   _apptPacTries = 0;
+  document.getElementById('appt-address').style.display = '';
   // Clear old PAC widget from container
   const pac_c = document.getElementById('appt-address-pac-container');
   if (pac_c) pac_c.innerHTML = '';
@@ -3256,6 +3267,7 @@ async function startEditAppointment(appt) {
   goTo('screen-new-appt');
   _apptPac = null;
   _apptPacTries = 0;
+  document.getElementById('appt-address').style.display = '';
   const pac_c = document.getElementById('appt-address-pac-container');
   if (pac_c) pac_c.innerHTML = '';
   initApptAddressPAC();
@@ -3583,6 +3595,16 @@ function initCustAddressPAC() {
     container.appendChild(pac);
     _custPac = pac;
 
+    // Widget mounted successfully — the manual fallback input is redundant now, so
+    // hide it (its value stays intact and is still read on save either way). Carry
+    // over anything the user already typed while offline/waiting, so it isn't lost.
+    const manualInput = document.getElementById('nc-address');
+    if (manualInput) {
+      const typed = manualInput.value;
+      manualInput.style.display = 'none';
+      if (typed) setTimeout(() => { const wi = pac.querySelector('input'); if (wi) wi.value = typed; }, 50);
+    }
+
     const handlePlaceSelect = async (e) => {
       try {
         const prediction = e.placePrediction || e.place;
@@ -3674,6 +3696,16 @@ function initApptAddressPAC() {
     ].join('');
     container.appendChild(pac);
     _apptPac = pac;
+
+    // Widget mounted successfully — the manual fallback input is redundant now, so
+    // hide it (its value stays intact and is still read on save either way). Carry
+    // over anything the user already typed while offline/waiting, so it isn't lost.
+    const manualInput = document.getElementById('appt-address');
+    if (manualInput) {
+      const typed = manualInput.value;
+      manualInput.style.display = 'none';
+      if (typed) setTimeout(() => { const wi = pac.querySelector('input'); if (wi) wi.value = typed; }, 50);
+    }
 
     const handlePlaceSelect = async (e) => {
       try {
