@@ -71,15 +71,14 @@
   .card { background: var(--surface); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 12px; }
   .card-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 10px; }
 
-  /* ── BIG BUTTONS (dashboard) ── */
-  .big-btn { display: flex; align-items: center; gap: 14px; background: var(--surface); border: none; border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); cursor: pointer; width: 100%; margin-bottom: 12px; transition: transform 0.1s, box-shadow 0.1s; text-align: left; }
+  /* ── BIG BUTTONS (dashboard) — 2-col grid of compact tiles ── */
+  .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .big-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: var(--surface); border: none; border-radius: var(--radius); padding: 16px 8px; box-shadow: var(--shadow); cursor: pointer; min-height: 96px; transition: transform 0.1s, box-shadow 0.1s; text-align: center; }
   .big-btn:active { transform: scale(0.98); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-  .big-btn-icon { width: 48px; height: 48px; border-radius: 14px; background: var(--blue); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+  .big-btn-icon { width: 46px; height: 46px; border-radius: 13px; background: var(--blue); display: flex; align-items: center; justify-content: center; font-size: 1.35rem; flex-shrink: 0; }
   .big-btn-icon.green { background: #16a34a; }
   .big-btn-icon.cyan { background: #0891b2; }
-  .big-btn-label { font-size: 1rem; font-weight: 700; color: var(--text); }
-  .big-btn-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
-  .big-btn-arrow { margin-left: auto; color: var(--text-muted); font-size: 1.1rem; }
+  .big-btn-label { font-size: 0.85rem; font-weight: 700; color: var(--text); line-height: 1.2; }
 
   /* ── PRIMARY BUTTON ── */
   .btn-primary { background: var(--blue); color: white; border: none; border-radius: var(--radius-sm); padding: 15px 20px; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; width: 100%; transition: background 0.15s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -346,62 +345,40 @@
     </div>
 
     <div class="section-label">Actions</div>
-    <button class="big-btn" onclick="goTo('screen-search')">
-      <div class="big-btn-icon">🔍</div>
-      <div>
+    <div class="action-grid">
+      <button class="big-btn" onclick="goTo('screen-search')">
+        <div class="big-btn-icon">🔍</div>
         <div class="big-btn-label">Find Customer</div>
-        <div class="big-btn-sub">Search, then create invoice or appt</div>
-      </div>
-      <div class="big-btn-arrow">›</div>
-    </button>
-    <button class="big-btn" onclick="startNewCustomer()">
-      <div class="big-btn-icon green">➕</div>
-      <div>
+      </button>
+      <button class="big-btn" onclick="goToHorseSearch()">
+        <div class="big-btn-icon" style="background:#92400E;">🐴</div>
+        <div class="big-btn-label">Find Horse</div>
+      </button>
+      <button class="big-btn" onclick="startNewCustomer()">
+        <div class="big-btn-icon green">➕</div>
         <div class="big-btn-label">New Customer</div>
-        <div class="big-btn-sub">Quick add a new client</div>
-      </div>
-      <div class="big-btn-arrow">›</div>
-    </button>
-    <button class="big-btn" onclick="goTo('screen-search'); setTimeout(()=>loadOpenInvoices(),300)">
-      <div class="big-btn-icon cyan">💰</div>
-      <div>
+      </button>
+      <button class="big-btn" onclick="goTo('screen-search'); setTimeout(()=>loadOpenInvoices(),300)">
+        <div class="big-btn-icon cyan">💰</div>
         <div class="big-btn-label">Open Invoices</div>
-        <div class="big-btn-sub">View & collect outstanding payments</div>
-      </div>
-      <div class="big-btn-arrow">›</div>
-    </button>
-    <button class="big-btn" onclick="goTo('screen-appt-search'); loadApptSearch()">
-      <div class="big-btn-icon" style="background:#7C3AED;">📅</div>
-      <div>
+      </button>
+      <button class="big-btn" onclick="goTo('screen-appt-search'); loadApptSearch()">
+        <div class="big-btn-icon" style="background:#7C3AED;">📅</div>
         <div class="big-btn-label">Find Appointment</div>
-        <div class="big-btn-sub">Search upcoming & past appointments</div>
-      </div>
-      <div class="big-btn-arrow">›</div>
-    </button>
-    <button class="big-btn" onclick="openDayRoute()">
-      <div class="big-btn-icon" style="background:#EA580C;">🗺️</div>
-      <div>
+      </button>
+      <button class="big-btn" onclick="openDayRoute()">
+        <div class="big-btn-icon" style="background:#EA580C;">🗺️</div>
         <div class="big-btn-label">Day Route</div>
-        <div class="big-btn-sub">Smart-route today's stops to Google Maps</div>
-      </div>
-      <div class="big-btn-arrow">›</div>
-    </button>
-    <button class="big-btn" onclick="goTo('screen-mileage'); loadMileageLog()">
-      <div class="big-btn-icon" style="background:#0F766E;">🚗</div>
-      <div>
+      </button>
+      <button class="big-btn" onclick="goTo('screen-mileage'); loadMileageLog()">
+        <div class="big-btn-icon" style="background:#0F766E;">🚗</div>
         <div class="big-btn-label">Mileage Log</div>
-        <div class="big-btn-sub">View & export driving records</div>
-      </div>
-      <div class="big-btn-arrow">›</div>
-    </button>
-    <button class="big-btn" onclick="startTour()">
-      <div class="big-btn-icon" style="background:#FF0000;">▶️</div>
-      <div>
-        <div class="big-btn-label">How to Use FarriTech</div>
-        <div class="big-btn-sub">Quick guide + video walkthrough</div>
-      </div>
-      <div class="big-btn-arrow">›</div>
-    </button>
+      </button>
+      <button class="big-btn" onclick="startTour()">
+        <div class="big-btn-icon" style="background:#FF0000;">▶️</div>
+        <div class="big-btn-label">How to Use</div>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -410,8 +387,8 @@
 <!-- ══════════════════════════════════════════ -->
 <div class="screen hidden" id="screen-search">
   <div class="header">
-    <button class="back-btn" onclick="goBack()">‹</button>
-    <div class="header-title">Find Customer <span id="customer-count" style="font-size:0.75rem;opacity:0.75;font-weight:500;"></span></div>
+    <button class="back-btn" onclick="cancelAddHorseFlow(); goBack();">‹</button>
+    <div class="header-title"><span id="search-header-title">Find Customer</span> <span id="customer-count" style="font-size:0.75rem;opacity:0.75;font-weight:500;"></span></div>
     <button onclick="startNewCustomer()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">+ New</button>
   </div>
   <div style="padding:12px 16px 0; flex-shrink:0; background:var(--bg);">
@@ -427,6 +404,26 @@
       <div class="section-label" style="margin-top:8px;">💰 Outstanding Invoices</div>
       <div id="open-invoices-list"></div>
     </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: HORSE SEARCH                      -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-horse-search">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Find Horse <span id="horse-count" style="font-size:0.75rem;opacity:0.75;font-weight:500;"></span></div>
+    <button onclick="startAddHorseFlow()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">+ New</button>
+  </div>
+  <div style="padding:12px 16px 0; flex-shrink:0; background:var(--bg);">
+    <div class="search-wrap" style="margin-bottom:8px;">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" id="horse-search-input" type="search" placeholder="Horse name…" oninput="filterHorses(this.value)" autocomplete="off">
+    </div>
+  </div>
+  <div class="scroll-body" style="padding-top:8px;">
+    <div id="horse-search-results"></div>
   </div>
 </div>
 
@@ -744,6 +741,7 @@
            ones on the spot. -->
       <input type="file" id="horse-photo-input" accept="image/*" style="display:none;" onchange="onHorsePhotoPicked(event)">
     </div>
+    <button class="btn-danger" id="horse-delete-btn" onclick="deleteHorse()" style="margin-top:4px;">🗑️ Delete Horse</button>
   </div>
 </div>
 
@@ -1000,6 +998,7 @@ const state = {
   editingHorseId: null,
   currentHorse: null,
   customerHorses: [],   // horses for state.customer, populated by loadCustomerDetail()
+  allHorses: [],        // every horse for this farrier, populated by loadAllHorses() — powers Find Horse
   invoiceLines: [], // [{horseId, horseName, serviceId, serviceName, price}] — one per "+ Add Line" on screen-services
 };
 
@@ -1223,7 +1222,7 @@ auth.onAuthStateChanged(async (user) => {
     goTo('screen-dashboard', false);
     bootLoading = true;
     renderStatusBanner();
-    await Promise.allSettled([loadUserProfile(), loadServices(), loadCustomers()]);
+    await Promise.allSettled([loadUserProfile(), loadServices(), loadCustomers(), loadAllHorses()]);
     bootLoading = false;
     renderStatusBanner();
     initConnectivityWatcher();
@@ -1360,6 +1359,17 @@ async function loadCustomers() {
   }
 }
 
+async function loadAllHorses() {
+  if (!state.user) return;
+  try {
+    const snap = await db.collection('horses').where('farrierId', '==', state.user.uid).get();
+    state.allHorses = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  } catch(e) {
+    console.error('Horses load error:', e);
+    if (netState.online) showToast('Error loading horses: ' + e.message, 'error');
+  }
+}
+
 // ── DASHBOARD ──
 async function loadDashboard() {
   const profile = state.userProfile;
@@ -1474,6 +1484,81 @@ async function filterCustomers(q) {
   };
 }
 
+// ── FIND HORSE ──
+// True while the user is picking a customer to attach a new horse to, via the
+// Find Horse screen's "+ New" button — reuses the Find Customer screen for the
+// picker instead of duplicating it, then hands off to the normal add-horse form.
+let _findHorseAddFlow = false;
+
+function startAddHorseFlow() {
+  _findHorseAddFlow = true;
+  const t = document.getElementById('search-header-title');
+  if (t) t.textContent = 'Choose Customer';
+  goTo('screen-search');
+}
+
+function cancelAddHorseFlow() {
+  if (!_findHorseAddFlow) return;
+  _findHorseAddFlow = false;
+  const t = document.getElementById('search-header-title');
+  if (t) t.textContent = 'Find Customer';
+}
+
+function goToHorseSearch() {
+  goTo('screen-horse-search');
+  const input = document.getElementById('horse-search-input');
+  if (input) input.value = '';
+  filterHorses('');
+}
+
+function filterHorses(q) {
+  const term = q.toLowerCase().trim();
+  const all = state.allHorses || [];
+  const filtered = term
+    ? all.filter(h => (h.name||'').toLowerCase().includes(term) || (h.customerName||'').toLowerCase().includes(term))
+    : all;
+
+  const el = document.getElementById('horse-search-results');
+  const countEl = document.getElementById('horse-count');
+  if (countEl) countEl.textContent = all.length ? `(${all.length})` : '';
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🐴</div><div class="empty-state-text">No horses found</div><div class="empty-state-sub">Try a different name, or add a new horse</div></div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(h => `
+    <div class="horse-row" data-hid="${h.id}">
+      <div class="horse-row-avatar">🐴</div>
+      <div>
+        <div class="customer-row-name">${h.name || 'Unnamed'}</div>
+        <div class="customer-row-sub">${h.customerName || 'Unknown owner'}</div>
+      </div>
+      <div class="customer-row-arrow">›</div>
+    </div>
+  `).join('');
+
+  // Event delegation — touchend for instant response on iPad, click as fallback
+  el.onclick = (e) => {
+    if (_horseTouchFired) { _horseTouchFired = false; return; }
+    const row = e.target.closest('[data-hid]');
+    if (!row) return;
+    const found = (state.allHorses||[]).find(h => h.id === row.dataset.hid);
+    if (found) openHorseFromSearch(found);
+  };
+}
+
+// Opening a horse found via global search needs state.customer set to its owner
+// first — the horse-detail screen's Edit/Save path (loadCustomerDetail, etc.)
+// assumes state.customer is already the horse's owner, same as arriving via
+// Find Customer → customer profile → horse row.
+function openHorseFromSearch(h) {
+  const owner = state.customers.find(c => c.id === h.customerId);
+  if (owner) {
+    state.customer = owner;
+    document.getElementById('customer-header-name').textContent = owner.name;
+  }
+  openHorseDetail(h);
+}
+
 async function loadOpenInvoices() {
   document.getElementById('search-input').value = '';
   document.getElementById('search-results').innerHTML = '';
@@ -1507,6 +1592,13 @@ async function loadOpenInvoices() {
 function selectCustomer(c) {
   state.customer = c;
   document.getElementById('customer-header-name').textContent = c.name;
+  if (_findHorseAddFlow) {
+    _findHorseAddFlow = false;
+    const t = document.getElementById('search-header-title');
+    if (t) t.textContent = 'Find Customer';
+    startNewHorse(c);
+    return;
+  }
   goTo('screen-customer');
   loadCustomerDetail(c);
 }
@@ -2825,20 +2917,24 @@ async function saveHorse() {
     performWrite(() => db.collection('horses').doc(editingId).update(fields));
     const merged = { ...(state.currentHorse || {}), id: editingId, ...fields };
     state.currentHorse = merged;
+    const cacheIdx = state.allHorses.findIndex(x => x.id === editingId);
+    if (cacheIdx >= 0) state.allHorses[cacheIdx] = merged;
     showToast('Horse updated!' + suffix, 'success');
     goBack();
     renderHorseProfileCard(merged); // harmless if horse-detail isn't the visible screen
     loadCustomerDetail(c);
   } else {
     const docRef = db.collection('horses').doc();
-    performWrite(() => docRef.set({
+    const newFields = {
       farrierId: state.user.uid,
       customerId: c.id,
       customerName: c.name,
       photos: [],
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       ...fields,
-    }));
+    };
+    performWrite(() => docRef.set(newFields));
+    state.allHorses.push({ id: docRef.id, ...newFields });
     showToast('Horse added!' + suffix, 'success');
     goBack();
     const returnTo = _horseFormReturnTo;
@@ -2867,6 +2963,7 @@ async function saveHorse() {
 function renderHorseProfileCard(h) {
   document.getElementById('horse-detail-name').textContent = h.name || 'Horse';
   const rows = [
+    ['Owner', h.customerName],
     ['Last Service', h.lastServiceName ? `${h.lastServiceName} · ${fmtDate(h.lastServiceDate)}` : ''],
     ['Breed', h.breed], ['Date of Birth', h.dob], ['Sex', h.sex], ['Color / Markings', h.color],
     ['Shoeing Cycle', h.shoeingCycleWeeks ? `${h.shoeingCycleWeeks} weeks` : ''],
@@ -2883,6 +2980,56 @@ function openHorseDetail(h) {
   renderHorseProfileCard(h);
   renderHorsePhotoGrid();
   goTo('screen-horse-detail');
+}
+
+// A horse that's appeared on a real invoice or appointment is service/billing
+// history — deleting it would leave that history referencing a horse that no
+// longer exists, so it's blocked. Neither invoice line items nor appointments'
+// horseIds are queryable as a top-level equality/array-contains filter alongside
+// farrierId without a composite index (this app deliberately avoids requiring
+// those — see loadCustomers()'s note), so both checks pull the farrier's docs
+// and filter client-side, same pattern the dashboard's "this month" total uses.
+async function deleteHorse() {
+  const h = state.currentHorse;
+  if (!h) return;
+  if (!netState.online) {
+    showToast("Can't check invoice/appointment history while offline — try again when you're back online.", 'error');
+    return;
+  }
+
+  const btn = document.getElementById('horse-delete-btn');
+  btn.disabled = true; btn.textContent = 'Checking history…';
+  try {
+    const [invSnap, apptSnap] = await Promise.all([
+      db.collection('invoices').where('farrierId', '==', state.user.uid).get(),
+      db.collection('appointments').where('farrierId', '==', state.user.uid).get(),
+    ]);
+    const usedOnInvoice = invSnap.docs.some(d => (d.data().items || []).some(i => i.horseId === h.id));
+    const usedOnAppt = apptSnap.docs.some(d => (d.data().horseIds || []).includes(h.id));
+    if (usedOnInvoice) {
+      showToast(`Can't delete ${h.name || 'this horse'} — it appears on an existing invoice.`, 'error');
+      return;
+    }
+    if (usedOnAppt) {
+      showToast(`Can't delete ${h.name || 'this horse'} — it's on an appointment.`, 'error');
+      return;
+    }
+  } catch (e) {
+    console.error('Invoice/appointment lookup error:', e);
+    showToast('Error checking history: ' + e.message, 'error');
+    return;
+  } finally {
+    btn.disabled = false; btn.textContent = '🗑️ Delete Horse';
+  }
+
+  if (!confirm(`Delete ${h.name || 'this horse'}? This cannot be undone.`)) return;
+
+  performWrite(() => db.collection('horses').doc(h.id).delete());
+  state.allHorses = (state.allHorses || []).filter(x => x.id !== h.id);
+  state.customerHorses = (state.customerHorses || []).filter(x => x.id !== h.id);
+  showToast(`${h.name || 'Horse'} deleted.`, 'success');
+  goBack();
+  if (state.customer) loadCustomerDetail(state.customer);
 }
 
 function renderHorsePhotoGrid() {
@@ -3594,6 +3741,24 @@ document.getElementById('screen-search').addEventListener('transitionend', funct
     document.getElementById('open-invoices-section').style.display = 'none';
     filterCustomers('');
     setTimeout(() => document.getElementById('search-input').focus(), 100);
+  }
+});
+
+// ── HORSE SEARCH SCREEN INIT ──
+let _horseTouchFired = false;
+document.getElementById('horse-search-results').addEventListener('touchend', function(e) {
+  const row = e.target.closest('[data-hid]');
+  if (!row) return;
+  e.preventDefault();
+  _horseTouchFired = true;
+  const found = (state.allHorses||[]).find(h => h.id === row.dataset.hid);
+  if (found) openHorseFromSearch(found);
+}, { passive: false });
+
+document.getElementById('screen-horse-search').addEventListener('transitionend', function(e) {
+  if (e.target !== this) return;
+  if (!this.classList.contains('hidden') && !this.classList.contains('slide-left')) {
+    setTimeout(() => document.getElementById('horse-search-input').focus(), 100);
   }
 });
 
