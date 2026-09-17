@@ -696,6 +696,20 @@
     <div class="header-title" id="horse-form-title">New Horse</div>
   </div>
   <div class="scroll-body">
+    <!-- Photo → AI auto-fill: new horses only (see onNewHorsePhotoPicked — currently a
+         MOCK suggestion, not a real vision-model call). Hidden for editing an existing
+         horse by startEditHorse()/startNewHorse(). -->
+    <div class="field" id="hf-photo-identify-section" style="text-align:center;">
+      <div id="hf-photo-preview-wrap" style="display:none; margin-bottom:10px;">
+        <img id="hf-photo-preview" src="" alt="Horse photo" style="width:100%; max-height:220px; object-fit:cover; border-radius:12px; display:block;">
+      </div>
+      <button type="button" class="btn-secondary" id="hf-photo-btn" onclick="document.getElementById('hf-photo-input').click()">📷 Take/Choose Photo to Auto-Fill</button>
+      <!-- No `capture` attribute — same reasoning as horse-photo-input on the horse detail
+           screen: farriers should be able to pick an existing library photo, not just the
+           live camera. -->
+      <input type="file" id="hf-photo-input" accept="image/*" style="display:none;" onchange="onNewHorsePhotoPicked(event)">
+      <div id="hf-ai-status" style="display:none; font-size:0.8rem; color:var(--blue); font-weight:600; margin-top:8px;"></div>
+    </div>
     <div class="field"><label>Name *</label><input type="text" id="hf-name" placeholder="Biscuit"></div>
     <div class="field"><label>Breed</label><input type="text" id="hf-breed" placeholder="Quarter Horse"></div>
     <div class="row-btns">
@@ -2899,6 +2913,8 @@ function startNewHorse(customer, returnTo = '') {
   document.getElementById('hf-save-btn').textContent = 'Save Horse';
   ['hf-name','hf-breed','hf-dob','hf-color','hf-cycle','hf-shoe-size','hf-shoe-type','hf-gait','hf-hoof','hf-issues'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('hf-sex').value = '';
+  resetNewHorsePhotoIdentify();
+  document.getElementById('hf-photo-identify-section').style.display = '';
   goTo('screen-horse-form');
 }
 
@@ -2918,6 +2934,10 @@ function startEditHorse(h) {
   document.getElementById('hf-gait').value = h.gaitNotes || '';
   document.getElementById('hf-hoof').value = h.hoofNotes || '';
   document.getElementById('hf-issues').value = h.knownIssues || '';
+  // Photo-to-autofill is a new-horse-only shortcut — editing already has real data,
+  // so re-triggering a (mock) breed/color guess here would just be confusing.
+  resetNewHorsePhotoIdentify();
+  document.getElementById('hf-photo-identify-section').style.display = 'none';
   goTo('screen-horse-form');
 }
 
@@ -2972,6 +2992,12 @@ async function saveHorse() {
     const returnTo = _horseFormReturnTo;
     const newHorseId = docRef.id;
     _horseFormReturnTo = '';
+    // The photo used for the (mock) breed/color auto-fill becomes this horse's first
+    // real photo, via the same staging path as adding one from the horse detail screen.
+    if (_pendingNewHorsePhoto) {
+      stagePhotoForHorse(newHorseId, _pendingNewHorsePhoto);
+      resetNewHorsePhotoIdentify();
+    }
     loadCustomerDetail(c).then(() => {
       if (returnTo === 'invoice') {
         // Existing lines are untouched (they're independent of the horses list) — just
@@ -3166,6 +3192,16 @@ function compressImage(file, maxDim = 1600, quality = 0.75) {
   });
 }
 
+// Shared by onHorsePhotoPicked() and the new-horse photo-identify flow below — stages a
+// blob in the local upload outbox against a horseId and kicks off a sync attempt.
+async function stagePhotoForHorse(horseId, blob) {
+  const id = `${horseId}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  await photoDbPut({ id, horseId, blob, caption: '', createdAt: Date.now() });
+  if (!_pendingPhotoPreviews[horseId]) _pendingPhotoPreviews[horseId] = [];
+  _pendingPhotoPreviews[horseId].push({ id, previewUrl: URL.createObjectURL(blob) });
+  if (netState.online) flushPhotoOutbox();
+}
+
 async function onHorsePhotoPicked(event) {
   const file = event.target.files?.[0];
   event.target.value = '';
@@ -3176,15 +3212,81 @@ async function onHorsePhotoPicked(event) {
   let blob;
   try { blob = await compressImage(file); } catch (e) { showToast('Could not process photo', 'error'); return; }
 
-  const id = `${horse.id}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-  await photoDbPut({ id, horseId: horse.id, blob, caption: '', createdAt: Date.now() });
-
-  if (!_pendingPhotoPreviews[horse.id]) _pendingPhotoPreviews[horse.id] = [];
-  _pendingPhotoPreviews[horse.id].push({ id, previewUrl: URL.createObjectURL(blob) });
+  await stagePhotoForHorse(horse.id, blob);
   renderHorsePhotoGrid();
   showToast(netState.online ? 'Uploading photo…' : 'Photo saved — will upload when back online');
+}
 
-  if (netState.online) flushPhotoOutbox();
+// ── NEW HORSE: photo → AI auto-fill (breed + color) ──
+// Lets a farrier snap/pick a photo on the New Horse form and have it suggest a breed and
+// color instead of typing them — the photo itself is carried through and attached as the
+// horse's first real photo once saveHorse() creates it (see stagePhotoForHorse() call in
+// saveHorse()'s new-horse branch).
+//
+// ⚠️ MOCK, not a real vision-model call yet — see the farrier-pro-ai-horse-id-feature-idea
+// note from the "what's available today" conversation with David. This exists to make the
+// add-horse-from-photo flow demoable end-to-end; swap runMockHorseIdentification()'s body
+// for a real POST to a new /api/identify-horse.js (following the existing /api/*.js
+// pattern, e.g. send-email.js) once that's actually built and tested for accuracy.
+let _pendingNewHorsePhoto = null;
+
+const MOCK_BREED_COLOR_GUESSES = [
+  ['Quarter Horse', 'Bay'],
+  ['Quarter Horse', 'Sorrel'],
+  ['Thoroughbred', 'Chestnut'],
+  ['Paint Horse', 'Bay and White Pinto'],
+  ['Appaloosa', 'Leopard Spotted'],
+  ['Arabian', 'Gray'],
+  ['Warmblood', 'Black'],
+  ['Draft Cross', 'Buckskin'],
+  ['Mustang', 'Dun'],
+  ['Tennessee Walking Horse', 'Palomino'],
+  ['Grade / Mixed Breed', 'Bay with White Blaze'],
+];
+
+function runMockHorseIdentification() {
+  const [breed, color] = MOCK_BREED_COLOR_GUESSES[Math.floor(Math.random() * MOCK_BREED_COLOR_GUESSES.length)];
+  const confidence = Math.floor(62 + Math.random() * 30); // 62–91%, just for demo flavor
+  return { breed, color, confidence };
+}
+
+function resetNewHorsePhotoIdentify() {
+  _pendingNewHorsePhoto = null;
+  document.getElementById('hf-photo-preview-wrap').style.display = 'none';
+  document.getElementById('hf-photo-preview').src = '';
+  document.getElementById('hf-ai-status').style.display = 'none';
+  const btn = document.getElementById('hf-photo-btn');
+  btn.disabled = false;
+  btn.textContent = '📷 Take/Choose Photo to Auto-Fill';
+}
+
+async function onNewHorsePhotoPicked(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+
+  let blob;
+  try { blob = await compressImage(file); } catch (e) { showToast('Could not process photo', 'error'); return; }
+  _pendingNewHorsePhoto = blob;
+
+  document.getElementById('hf-photo-preview').src = URL.createObjectURL(blob);
+  document.getElementById('hf-photo-preview-wrap').style.display = 'block';
+
+  const statusEl = document.getElementById('hf-ai-status');
+  const btn = document.getElementById('hf-photo-btn');
+  btn.disabled = true;
+  statusEl.style.display = 'block';
+  statusEl.textContent = '🔍 Analyzing photo…';
+
+  // Simulated processing delay so it reads as real analysis, not an instant fake.
+  await new Promise(r => setTimeout(r, 1400 + Math.random() * 700));
+
+  const { breed, color, confidence } = runMockHorseIdentification();
+  document.getElementById('hf-breed').value = breed;
+  document.getElementById('hf-color').value = color;
+  statusEl.textContent = `✨ AI suggested ${breed} · ${color} (${confidence}% confidence) — please review`;
+  btn.disabled = false;
+  btn.textContent = '📷 Retake / Choose Different Photo';
 }
 
 // Removes a photo that's already synced to Firestore/Storage. Looks the entry up by
