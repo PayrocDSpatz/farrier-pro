@@ -323,14 +323,17 @@
       <div style="margin-bottom:8px;"></div>
     </div>
 
-    <!-- Offline-readiness tip: a customer/horse is only available offline on THIS device
-         after it's been opened here at least once while online (Firestore caches locally
-         per-device, not globally) — shown once per device until dismissed. -->
+    <!-- Offline-readiness tip: login (loadCustomers()/loadAllHorses()) already bulk-syncs
+         every customer and horse to this device's Firestore cache, so no per-customer
+         visits are needed for those. Appointments-beyond-today and outstanding invoices
+         are still only bulk-synced when their own screen is opened once (loadApptSearch(),
+         loadOpenInvoices()) — that's the one real thing left to call out here. Shown once
+         per device until dismissed. -->
     <div id="offline-tip-banner" style="display:none; background:#EBF4FF; border:2px solid #bfdbfe; border-radius:12px; padding:14px 16px; margin-bottom:12px; display:flex; align-items:center; gap:12px;">
       <div style="font-size:1.4rem;">📶</div>
       <div style="flex:1;">
-        <div style="font-weight:700; color:var(--blue); font-size:0.9rem;">Get Ready for Offline Use</div>
-        <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">While you have signal, open each customer you'll need in the field — that saves their info (and horses) on this phone so it's there even with no signal later.</div>
+        <div style="font-weight:700; color:var(--blue); font-size:0.9rem;">You're Set for Offline</div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">Opening the app with signal automatically syncs your customers and horses. For your full appointment list and outstanding invoices too, open Find Appointment and Open Invoices once while you have signal.</div>
       </div>
       <button onclick="dismissOfflineTip()" style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer; padding:4px; flex-shrink:0; line-height:1;">✕</button>
     </div>
