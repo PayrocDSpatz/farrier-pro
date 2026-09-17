@@ -187,7 +187,7 @@
   /* ── HORSE PHOTOS ── */
   .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .photo-tile { position: relative; aspect-ratio: 1; border-radius: var(--radius-sm); overflow: hidden; background: var(--border); }
-  .photo-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo-tile img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
   .photo-tile.pending::after { content: '⏳ Pending'; position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); color: white; font-size: 0.65rem; font-weight: 700; text-align: center; padding: 3px 0; }
   .photo-remove-btn { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,0.65); color: white; border: none; font-size: 0.85rem; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2; padding: 0; }
   .add-photo-tile { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; aspect-ratio: 1; border-radius: var(--radius-sm); border: 2px dashed var(--border); color: var(--text-muted); font-size: 0.75rem; font-weight: 700; cursor: pointer; background: var(--surface); }
@@ -260,6 +260,12 @@
 
 <!-- STATUS BANNER: offline / syncing / boot loading -->
 <div class="status-banner" id="status-banner"></div>
+
+<!-- PHOTO VIEWER: full-screen tap-to-zoom for horse photos, opened from renderHorsePhotoGrid()'s tiles -->
+<div id="photo-viewer" onclick="closePhotoViewer()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:9500; align-items:center; justify-content:center; padding:20px; padding-top:max(20px, env(safe-area-inset-top)); padding-bottom:max(20px, env(safe-area-inset-bottom));">
+  <img id="photo-viewer-img" src="" alt="Horse photo" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:8px;">
+  <button onclick="closePhotoViewer()" style="position:absolute; top:max(16px, env(safe-area-inset-top)); right:16px; width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,0.15); border:none; color:white; font-size:1.3rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">✕</button>
+</div>
 
 <!-- ══════════════════════════════════════════ -->
 <!-- SCREEN 0: LOGIN                           -->
@@ -731,6 +737,10 @@
     <button onclick="startEditHorse(state.currentHorse)" style="background:rgba(255,255,255,0.18);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">✏️ Edit</button>
   </div>
   <div class="scroll-body">
+    <div class="row-btns" style="margin-bottom:12px;">
+      <button class="btn-primary" onclick="startInvoiceForHorse(state.currentHorse)">📄 New Invoice</button>
+      <button class="btn-secondary" onclick="startAppointmentForHorse(state.currentHorse)">📅 New Appt</button>
+    </div>
     <div class="card">
       <div class="card-title">Profile</div>
       <div id="horse-detail-profile"></div>
@@ -1549,17 +1559,36 @@ function filterHorses(q) {
   };
 }
 
-// Opening a horse found via global search needs state.customer set to its owner
-// first — the horse-detail screen's Edit/Save path (loadCustomerDetail, etc.)
-// assumes state.customer is already the horse's owner, same as arriving via
-// Find Customer → customer profile → horse row.
+// Opening a horse found via global search needs state.customer AND state.customerHorses
+// set for its owner first — the horse-detail screen's Edit/Save path (loadCustomerDetail,
+// etc.) plus its New Invoice/New Appt buttons all assume those are already populated for
+// the horse's owner, same as arriving via Find Customer → customer profile → horse row.
+// state.allHorses (loaded farrier-wide by loadAllHorses()) already has every horse, so
+// this filters locally instead of re-querying Firestore for just this customer's horses.
 function openHorseFromSearch(h) {
   const owner = state.customers.find(c => c.id === h.customerId);
   if (owner) {
     state.customer = owner;
     document.getElementById('customer-header-name').textContent = owner.name;
+    state.customerHorses = (state.allHorses || []).filter(x => x.customerId === owner.id);
   }
   openHorseDetail(h);
+}
+
+// New Invoice / New Appt, pre-filled for one specific horse — used by the horse detail
+// screen's action buttons (reached either via a customer's horse list or Find Horse).
+// Both reuse the exact same setup the customer-profile buttons use, then just apply the
+// horse selection on top, so last-service defaulting etc. keep working identically.
+function startInvoiceForHorse(h) {
+  if (!h || !state.customer) return;
+  startNewInvoice();
+  selectLineHorse(0, h.id, h.name || 'Unnamed');
+}
+
+function startAppointmentForHorse(h) {
+  if (!h || !state.customer) return;
+  startNewAppointment();
+  renderApptHorsePicker([h.id]);
 }
 
 async function loadOpenInvoices() {
@@ -3041,18 +3070,28 @@ function renderHorsePhotoGrid() {
   if (!grid || !h) return;
   const synced = (h.photos || []).map(p => `
     <div class="photo-tile">
-      <img src="${p.url}" alt="${h.name||'horse'} photo">
+      <img src="${p.url}" alt="${h.name||'horse'} photo" onclick="openPhotoViewer('${p.url.replace(/'/g,"\\'")}')">
       <button class="photo-remove-btn" onclick="removeSyncedHorsePhoto('${(p.storagePath||'').replace(/'/g,"\\'")}')" aria-label="Remove photo">✕</button>
     </div>
   `).join('');
   const pending = _pendingPhotoPreviews[h.id] || [];
   const pendingTiles = pending.map(p => `
     <div class="photo-tile pending">
-      <img src="${p.previewUrl}" alt="pending upload">
+      <img src="${p.previewUrl}" alt="pending upload" onclick="openPhotoViewer('${p.previewUrl.replace(/'/g,"\\'")}')">
       <button class="photo-remove-btn" onclick="removePendingHorsePhoto('${p.id}')" aria-label="Remove photo">✕</button>
     </div>
   `).join('');
   grid.innerHTML = synced + pendingTiles + `<div class="add-photo-tile" onclick="document.getElementById('horse-photo-input').click()"><span style="font-size:1.4rem;">📷</span>Add Photo</div>`;
+}
+
+function openPhotoViewer(url) {
+  document.getElementById('photo-viewer-img').src = url;
+  document.getElementById('photo-viewer').style.display = 'flex';
+}
+
+function closePhotoViewer() {
+  document.getElementById('photo-viewer').style.display = 'none';
+  document.getElementById('photo-viewer-img').src = '';
 }
 
 // ── HORSE PHOTOS: offline-capable upload outbox ──
