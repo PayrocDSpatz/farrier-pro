@@ -2041,12 +2041,12 @@ async function seedDefaultServicesIfEmpty_(userId) {
     { name: "Trim", category: "Shoeing" },
     { name: "Trim 2 Keg Shoes in Front", category: "Shoeing" },
     { name: "Trim 2 Alum Shoes in Front", category: "Shoeing" },
-    { name: "Trim 4 Keg Shoes", category: "Shoeing" },
     { name: "Trim 4 Handmade Shoes", category: "Shoeing" },
     { name: "Trim 2 Alum Shoes in Front, Keg Shoes Behind", category: "Shoeing" },
     { name: "Trim 2 Glue-On Shoes", category: "Shoeing" },
     { name: "Trim 2 Bar Shoes in Front, 2 Keg Shoes Behind", category: "Shoeing" },
     { name: "Set of Therapeutic Shoes", category: "Shoeing" },
+    { name: "Trim 4 Keg Shoes", category: "Top Services" },
     { name: "Replace Lost Shoe", category: "Repairs" },
     { name: "Tack on Shoe", category: "Repairs" },
     { name: "Extra - Pads", category: "Extras" },
@@ -2058,6 +2058,8 @@ async function seedDefaultServicesIfEmpty_(userId) {
     { name: "Extra - Square Toe/Rocker Toe", category: "Extras" },
     { name: "Traction Device", category: "Extras" },
     { name: "Welding Insert", category: "Extras" },
+    { name: "Emergency Call Out", category: "Top Services" },
+    { name: "Barn Trip", category: "Top Services" },
   ].map(s => ({ ...s, price: 0 }));
 
   const batch = db.batch();
@@ -10647,6 +10649,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
     function InvoicesView({ userId, userProfile }) {
       const [invoices, setInvoices] = useState([]);
       const [showCreateModal, setShowCreateModal] = useState(false);
+      const [editingInvoice, setEditingInvoice] = useState(null);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
       const [showManualPaymentModal, setShowManualPaymentModal] = useState(false);
       const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -11123,7 +11126,14 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                       )}
                       {(invoice.status === 'outstanding' || invoice.status === 'partial') && (
                         <>
-                          <button 
+                          <button
+                            className="btn btn-sm btn-outline"
+                            onClick={() => setEditingInvoice(invoice)}
+                            title="Edit invoice"
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
                             className="btn btn-sm btn-success"
                             onClick={() => {
                               setSelectedInvoice(invoice);
@@ -11175,15 +11185,18 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             )}
           </div>
 
-          {showCreateModal && (
-            <InvoiceCreateModal 
+          {(showCreateModal || editingInvoice) && (
+            <InvoiceCreateModal
               userId={userId}
               userProfile={userProfile}
-              onClose={() => setShowCreateModal(false)}
+              editingInvoice={editingInvoice}
+              onClose={() => { setShowCreateModal(false); setEditingInvoice(null); }}
               onCreated={async (createdInvoice) => {
+                const wasEditing = !!editingInvoice;
                 setShowCreateModal(false);
+                setEditingInvoice(null);
                 loadInvoices();
-                if (createdInvoice) {
+                if (createdInvoice && !wasEditing) {
                   // Auto-open PDF after create (toggle in Settings)
                   openInvoicePdf(createdInvoice, userProfile, userProfile?.autoPrintPdf ?? true);
                   // SMS + email sent inside InvoiceCreateModal after payment link is generated
@@ -11612,14 +11625,22 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       );
     }
 
-    function InvoiceCreateModal({ userId, userProfile, onClose, onCreated, prefillData }) {
-      const [customerId, setCustomerId] = useState(prefillData?.customerId || '');
-      const [customerName, setCustomerName] = useState(prefillData?.customerName || '');
-      const [customerFarmName, setCustomerFarmName] = useState(prefillData?.customerFarmName || '');
-      const [customerEmail, setCustomerEmail] = useState(prefillData?.customerEmail || '');
-      const [customerPhone, setCustomerPhone] = useState(prefillData?.customerPhone || '');
-      const [items, setItems] = useState([{ description: '', amount: 0, horseId: '', horseName: '' }]);
-      const [milesDriven, setMilesDriven] = useState(0);
+    function InvoiceCreateModal({ userId, userProfile, onClose, onCreated, prefillData, editingInvoice }) {
+      // Editing an already-paid invoice would silently desync it from the payment
+      // that was already taken, so the caller only ever offers Edit for
+      // outstanding/partial invoices — this is just a defensive backstop.
+      const editLocked = editingInvoice && editingInvoice.status === 'paid';
+      const [customerId, setCustomerId] = useState(editingInvoice?.customerId || prefillData?.customerId || '');
+      const [customerName, setCustomerName] = useState(editingInvoice?.customerName || prefillData?.customerName || '');
+      const [customerFarmName, setCustomerFarmName] = useState(editingInvoice?.customerFarmName || prefillData?.customerFarmName || '');
+      const [customerEmail, setCustomerEmail] = useState(editingInvoice?.customerEmail || prefillData?.customerEmail || '');
+      const [customerPhone, setCustomerPhone] = useState(editingInvoice?.customerPhone || prefillData?.customerPhone || '');
+      const [items, setItems] = useState(
+        editingInvoice?.items?.length
+          ? editingInvoice.items.map(i => ({ ...i, qty: i.qty || 1 }))
+          : [{ description: '', amount: 0, horseId: '', horseName: '' }]
+      );
+      const [milesDriven, setMilesDriven] = useState(editingInvoice?.milesDriven || 0);
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
       const [customers, setCustomers] = useState([]);
@@ -11915,6 +11936,11 @@ useEffect(() => {
       const total = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
       const generatePaymentLink = async () => {
+        if (editLocked) {
+          setError('This invoice has been paid and can no longer be edited.');
+          return;
+        }
+
         if (!customerName || !customerEmail) {
           setError('Customer name and email are required');
           return;
@@ -11948,6 +11974,92 @@ useEffect(() => {
 
         setError('');
         setLoading(true);
+
+        // Editing an existing invoice: update in place, keep the invoice number and
+        // status, and re-point the Stripe payment link at the new amount if one was
+        // already issued (otherwise "Pay Now" would still charge the old total).
+        if (editingInvoice) {
+          try {
+            if (!db) { setError('Database not available'); return; }
+
+            for (const item of cleanedItems) {
+              if (item._newHorse) {
+                const horseRef = await db.collection('horses').add({
+                  farrierId: userId,
+                  customerId: customerId || '',
+                  customerName,
+                  name: item._newHorse,
+                  breed: '', dob: '', sex: '', color: '',
+                  shoeingCycleWeeks: null, shoeSize: '', shoeType: '',
+                  gaitNotes: '', hoofNotes: '', knownIssues: '',
+                  photos: [],
+                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+                item.horseId = horseRef.id;
+              }
+              delete item._newHorse;
+            }
+
+            const updates = {
+              customerName,
+              customerFarmName,
+              customerEmail,
+              customerPhone,
+              items: cleanedItems,
+              total,
+              milesDriven: milesDriven || 0,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            };
+
+            const totalChanged = Math.abs((editingInvoice.total || 0) - total) > 0.001;
+            let paymentUrl = editingInvoice.paymentUrl || '';
+            if (editingInvoice.paymentUrl && totalChanged) {
+              try {
+                let stripeKey = userProfile?.stripeSecretKey || '';
+                const freshProfile = await db.collection('users').doc(userId).get();
+                if (freshProfile.exists) stripeKey = freshProfile.data()?.stripeSecretKey || stripeKey;
+                if (stripeKey && total > 0) {
+                  const plRes = await fetch('/api/stripe-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'payment_link',
+                      stripeSecretKey: stripeKey,
+                      amount: total,
+                      invoiceId: editingInvoice.id,
+                      invoiceNumber: editingInvoice.invoiceNumber,
+                      customerEmail,
+                      customerName,
+                      farrierId: userId,
+                    }),
+                  });
+                  const plData = await plRes.json();
+                  if (plData.success && plData.paymentUrl) {
+                    paymentUrl = plData.paymentUrl;
+                    updates.paymentUrl = paymentUrl;
+                    updates.paymentLinkId = plData.paymentLinkId || '';
+                  } else {
+                    console.error('Payment link regeneration failed:', plData.error);
+                  }
+                }
+              } catch (plErr) {
+                console.error('Payment link regeneration error:', plErr);
+              }
+            }
+
+            await db.collection('invoices').doc(editingInvoice.id).update(updates);
+
+            alert('✅ Invoice updated!');
+            onCreated({ ...editingInvoice, ...updates, paymentUrl, total, items: cleanedItems });
+          } catch (err) {
+            console.error('❌ Error updating invoice:', err);
+            setError('Error updating invoice. Please try again.');
+          } finally {
+            setLoading(false);
+          }
+          return;
+        }
 
         try {
           // Save invoice to Firestore (no payment link needed - using Pay Now button)
@@ -12172,9 +12284,13 @@ useEffect(() => {
         <div className="modal-overlay" onClick={onClose}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Create Invoice</h2>
+              <h2>{editingInvoice ? `Edit Invoice #${editingInvoice.invoiceNumber}` : 'Create Invoice'}</h2>
               <button className="close-btn" onClick={onClose}>×</button>
             </div>
+
+            {editLocked && (
+              <div className="error-message">This invoice has been paid and can no longer be edited.</div>
+            )}
 
             {error && <div className="error-message">{error}</div>}
 
@@ -12195,7 +12311,7 @@ useEffect(() => {
               </div>
             )}
 
-            {!prefillData && (
+            {!prefillData && !editingInvoice && (
               <div className="form-group">
                 <label>Select Existing Customer (Optional)</label>
                 {loadingCustomers ? (
@@ -12522,17 +12638,17 @@ useEffect(() => {
               </div>
             </div>
 
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary"
               style={{width: '100%', marginTop: '1rem'}}
               onClick={generatePaymentLink}
-              disabled={loading}
+              disabled={loading || editLocked}
             >
-              {loading ? <span className="spinner"></span> : '✓ Create Invoice'}
+              {loading ? <span className="spinner"></span> : (editingInvoice ? '✓ Save Changes' : '✓ Create Invoice')}
             </button>
 
             <p style={{fontSize: '0.875rem', color: '#666', marginTop: '0.5rem', textAlign: 'center'}}>
-              Customer will use "Pay Now" button to pay with Stripe
+              {editingInvoice ? 'Saving will update the amount due on the existing Pay Now link.' : 'Customer will use "Pay Now" button to pay with Stripe'}
             </p>
           </div>
         </div>

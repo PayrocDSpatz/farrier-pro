@@ -383,6 +383,14 @@
         <div class="big-btn-icon" style="background:#0F766E;">🚗</div>
         <div class="big-btn-label">Mileage Log</div>
       </button>
+      <button class="big-btn" onclick="goTo('screen-services-catalog'); loadServicesCatalog();">
+        <div class="big-btn-icon" style="background:#0369A1;">🧰</div>
+        <div class="big-btn-label">Services</div>
+      </button>
+      <button class="big-btn" onclick="goTo('screen-settings'); loadSettingsScreen();">
+        <div class="big-btn-icon" style="background:#475569;">⚙️</div>
+        <div class="big-btn-label">Settings</div>
+      </button>
       <button class="big-btn" onclick="startTour()">
         <div class="big-btn-icon" style="background:#FF0000;">▶️</div>
         <div class="big-btn-label">How to Use</div>
@@ -504,7 +512,7 @@
 <div class="screen hidden" id="screen-services">
   <div class="header">
     <button class="back-btn" onclick="goBack()">‹</button>
-    <div class="header-title">Select Services</div>
+    <div class="header-title" id="svc-header-title">Select Services</div>
   </div>
   <div class="scroll-body">
     <div class="card" style="margin-bottom:12px;">
@@ -557,7 +565,7 @@
 <div class="screen hidden" id="screen-invoice-review">
   <div class="header">
     <button class="back-btn" onclick="goBack()">‹</button>
-    <div class="header-title">Invoice Review</div>
+    <div class="header-title" id="review-header-title">Invoice Review</div>
   </div>
   <div class="scroll-body">
     <div class="card">
@@ -605,6 +613,7 @@
       <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600; margin-bottom:6px;" id="pay-invoice-num"></div>
       <div style="font-size:0.85rem; color:var(--text-muted);" id="pay-customer-name"></div>
       <div style="font-size:2.8rem; font-weight:800; color:var(--blue); margin:12px 0;" id="pay-amount"></div>
+      <button id="pay-edit-invoice-btn" onclick="startEditInvoice(state.currentInvoice)" style="background:none; border:2px solid var(--border); border-radius:8px; padding:8px 16px; font-weight:700; font-size:0.85rem; color:var(--text-muted); cursor:pointer;">✏️ Edit Invoice</button>
     </div>
 
     <div class="section-label">Payment Method</div>
@@ -913,6 +922,114 @@
   </div>
 </div>
 
+<div class="screen hidden" id="screen-services-catalog">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Services</div>
+    <button onclick="startNewService()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">+ New</button>
+  </div>
+  <div class="scroll-body">
+    <div id="services-catalog-loading" class="loading-wrap"><div class="spinner"></div></div>
+    <div id="services-catalog-list"></div>
+  </div>
+</div>
+
+<div class="screen hidden" id="screen-service-form">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title" id="svcf-form-title">New Service</div>
+  </div>
+  <div class="scroll-body">
+    <div class="field"><label>Service Name *</label><input type="text" id="svcf-name" placeholder="e.g. Full Set"></div>
+    <div class="field"><label>Default Price *</label><input type="number" id="svcf-price" min="0" step="0.01" placeholder="0.00" inputmode="decimal"></div>
+    <div class="field"><label>Category <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label><input type="text" id="svcf-category" placeholder="e.g. Trim, Shoes, Extras"></div>
+    <label style="display:flex; align-items:center; gap:10px; font-size:0.9rem; font-weight:600; cursor:pointer; margin:16px 0; padding:12px 14px; background:var(--surface); border-radius:10px;">
+      <input type="checkbox" id="svcf-active" style="width:18px;height:18px;flex-shrink:0;" checked>
+      Active — shown when building invoices
+    </label>
+    <button class="btn-primary" id="svcf-save-btn" onclick="saveServiceForm()">Save Service</button>
+    <div style="margin-top:8px;"></div>
+    <button class="btn-secondary" onclick="goBack()">Cancel</button>
+    <div id="svcf-delete-wrap" style="display:none; margin-top:24px; text-align:center;">
+      <button onclick="deleteServiceForm()" style="background:none;border:none;color:#dc2626;font-weight:700;font-size:0.9rem;cursor:pointer;padding:10px;">🗑️ Delete Service</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen hidden" id="screen-settings">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Settings</div>
+  </div>
+  <div class="scroll-body">
+
+    <div id="settings-saved-banner" style="display:none; background:#f0fdf4; border:2px solid #86efac; border-radius:10px; padding:10px 14px; margin-bottom:14px; color:#16a34a; font-weight:700; font-size:0.88rem;">✅ Saved!</div>
+
+    <div class="card">
+      <div class="card-title">🏢 Business Profile</div>
+      <div class="field"><label>Business Name *</label><input type="text" id="set-business-name" placeholder="John's Farrier Services"></div>
+      <div style="display:flex; gap:8px;">
+        <div class="field" style="flex:1;"><label>First Name *</label><input type="text" id="set-first-name" placeholder="John"></div>
+        <div class="field" style="flex:1;"><label>Last Name *</label><input type="text" id="set-last-name" placeholder="Smith"></div>
+      </div>
+      <div class="field"><label>Email</label><input type="email" id="set-email" disabled style="opacity:0.7;"></div>
+      <div class="field"><label>Phone *</label><input type="tel" id="set-phone" placeholder="(555) 555-5555" inputmode="tel" oninput="formatPhoneInput(this)"></div>
+      <div class="field"><label>Business Address *</label><input type="text" id="set-address" placeholder="123 Main Street"></div>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="set-city" placeholder="City" style="flex:2; padding:12px 14px; border:2px solid var(--border); border-radius:10px; font-size:0.95rem;">
+        <input type="text" id="set-state" placeholder="State" maxlength="2" style="flex:1; text-transform:uppercase; padding:12px 14px; border:2px solid var(--border); border-radius:10px; font-size:0.95rem;">
+        <input type="text" id="set-zip" placeholder="Zip" style="flex:1; padding:12px 14px; border:2px solid var(--border); border-radius:10px; font-size:0.95rem;">
+      </div>
+      <div class="field" style="margin-top:10px;"><label>Logo URL <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label><input type="text" id="set-logo-url" placeholder="https://…/logo.png"></div>
+      <div class="field"><label>About Me <span style="font-weight:400; color:var(--text-muted);">(shown to customers on your booking page)</span></label><textarea id="set-about-me" rows="4" maxlength="500" placeholder="Your experience, specialties, service area…"></textarea></div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="card-title">⚙️ Preferences</div>
+      <label style="display:flex; align-items:center; gap:10px; font-size:0.9rem; font-weight:600; cursor:pointer; margin-bottom:10px;">
+        <input type="checkbox" id="set-auto-print" style="width:18px;height:18px;flex-shrink:0;">
+        Auto-open PDF after creating an invoice
+      </label>
+      <label style="display:flex; align-items:center; gap:10px; font-size:0.9rem; font-weight:600; cursor:pointer;">
+        <input type="checkbox" id="set-manual-pay" style="width:18px;height:18px;flex-shrink:0;">
+        Allow manual payments (Cash / Check) on invoices
+      </label>
+    </div>
+
+    <button class="btn-primary" id="settings-save-btn" onclick="saveSettingsProfile()" style="margin-top:14px;">Save Changes</button>
+
+    <div class="card" style="margin-top:22px;">
+      <div class="card-title">📱 SMS & Messaging</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Send automated appointment reminders and invoice notifications via text.</div>
+      <label style="display:flex; align-items:center; gap:10px; font-size:0.9rem; font-weight:600; cursor:pointer;">
+        <input type="checkbox" id="set-sms-enabled" style="width:18px;height:18px;flex-shrink:0;">
+        Enable SMS notifications for my customers
+      </label>
+      <button class="btn-secondary" onclick="saveSmsSetting()" style="margin-top:12px;">Save SMS Setting</button>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="card-title">💳 Stripe Payments</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Connect Stripe to accept card payments on invoices. Your keys are stored securely.</div>
+      <div id="stripe-status-banner" style="display:none;"></div>
+      <div class="field"><label>Publishable Key <span style="font-weight:400; color:var(--text-muted);">(starts with pk_)</span></label><input type="text" id="set-stripe-pk" placeholder="pk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
+      <div class="field"><label>Secret Key <span style="font-weight:400; color:var(--text-muted);">(starts with sk_)</span></label><input type="password" id="set-stripe-sk" placeholder="sk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
+      <div style="font-size:0.75rem; color:var(--text-muted); margin:-6px 0 12px;">Find these at dashboard.stripe.com/apikeys</div>
+      <button class="btn-primary" id="stripe-validate-btn" onclick="validateAndSaveStripe()">✓ Validate & Save</button>
+      <div style="margin-top:8px;"></div>
+      <button class="btn-secondary" id="stripe-disconnect-btn" onclick="disconnectStripe()" style="display:none;">Disconnect Stripe</button>
+    </div>
+
+    <div class="card" style="margin-top:14px; margin-bottom:24px;">
+      <div class="card-title">📅 Availability</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Set your working hours. Customers only see available times when booking.</div>
+      <div id="availability-days"></div>
+      <button class="btn-secondary" onclick="saveAvailability()" style="margin-top:8px;">Save Availability</button>
+    </div>
+
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════ -->
 <!-- SCREEN: HOW TO USE FARRITECH               -->
 <!-- ══════════════════════════════════════════ -->
@@ -1023,6 +1140,9 @@ const state = {
   editingCustomerId: null,
   editingApptId: null,
   editingHorseId: null,
+  editingInvoice: null, // full invoice doc being edited (outstanding only), or null when creating a new one
+  editingServiceId: null,
+  settingsAvailability: null, // working copy of the availability grid while screen-settings is open
   currentHorse: null,
   customerHorses: [],   // horses for state.customer, populated by loadCustomerDetail()
   allHorses: [],        // every horse for this farrier, populated by loadAllHorses() — powers Find Horse
@@ -1345,26 +1465,28 @@ async function loadServices() {
       // Fallback only — matches seedDefaultServicesIfEmpty_ in index.html so a farrier
       // sees the same catalog here even in the rare case Firestore has none yet.
       state.services = [
-        { name: 'Trim', price: 0 },
-        { name: 'Trim 2 Keg Shoes in Front', price: 0 },
-        { name: 'Trim 2 Alum Shoes in Front', price: 0 },
-        { name: 'Trim 4 Keg Shoes', price: 0 },
-        { name: 'Trim 4 Handmade Shoes', price: 0 },
-        { name: 'Trim 2 Alum Shoes in Front, Keg Shoes Behind', price: 0 },
-        { name: 'Trim 2 Glue-On Shoes', price: 0 },
-        { name: 'Trim 2 Bar Shoes in Front, 2 Keg Shoes Behind', price: 0 },
-        { name: 'Set of Therapeutic Shoes', price: 0 },
-        { name: 'Replace Lost Shoe', price: 0 },
-        { name: 'Tack on Shoe', price: 0 },
-        { name: 'Extra - Pads', price: 0 },
-        { name: 'Extra - Packing', price: 0 },
-        { name: 'Extra - Stud Holes', price: 0 },
-        { name: 'Extra - Repair Moderate Hoof Crack', price: 0 },
-        { name: 'Extra - Clips', price: 0 },
-        { name: 'Extra - Trailers', price: 0 },
-        { name: 'Extra - Square Toe/Rocker Toe', price: 0 },
-        { name: 'Traction Device', price: 0 },
-        { name: 'Welding Insert', price: 0 },
+        { name: 'Trim', category: 'Shoeing', price: 0 },
+        { name: 'Trim 2 Keg Shoes in Front', category: 'Shoeing', price: 0 },
+        { name: 'Trim 2 Alum Shoes in Front', category: 'Shoeing', price: 0 },
+        { name: 'Trim 4 Handmade Shoes', category: 'Shoeing', price: 0 },
+        { name: 'Trim 2 Alum Shoes in Front, Keg Shoes Behind', category: 'Shoeing', price: 0 },
+        { name: 'Trim 2 Glue-On Shoes', category: 'Shoeing', price: 0 },
+        { name: 'Trim 2 Bar Shoes in Front, 2 Keg Shoes Behind', category: 'Shoeing', price: 0 },
+        { name: 'Set of Therapeutic Shoes', category: 'Shoeing', price: 0 },
+        { name: 'Trim 4 Keg Shoes', category: 'Top Services', price: 0 },
+        { name: 'Replace Lost Shoe', category: 'Repairs', price: 0 },
+        { name: 'Tack on Shoe', category: 'Repairs', price: 0 },
+        { name: 'Extra - Pads', category: 'Extras', price: 0 },
+        { name: 'Extra - Packing', category: 'Extras', price: 0 },
+        { name: 'Extra - Stud Holes', category: 'Extras', price: 0 },
+        { name: 'Extra - Repair Moderate Hoof Crack', category: 'Extras', price: 0 },
+        { name: 'Extra - Clips', category: 'Extras', price: 0 },
+        { name: 'Extra - Trailers', category: 'Extras', price: 0 },
+        { name: 'Extra - Square Toe/Rocker Toe', category: 'Extras', price: 0 },
+        { name: 'Traction Device', category: 'Extras', price: 0 },
+        { name: 'Welding Insert', category: 'Extras', price: 0 },
+        { name: 'Emergency Call Out', category: 'Top Services', price: 0 },
+        { name: 'Barn Trip', category: 'Top Services', price: 0 },
       ];
     }
   } catch(e) { console.warn('Services load:', e); }
@@ -1787,6 +1909,8 @@ function emptyInvoiceLine() {
 }
 
 function startNewInvoice() {
+  state.editingInvoice = null;
+  document.getElementById('svc-header-title').textContent = 'Select Services';
   state.customItems = [];
   state.invoiceLines = [emptyInvoiceLine()];
   renderInvoiceLines();
@@ -1797,6 +1921,66 @@ function startNewInvoice() {
   document.getElementById('custom-item-name').value = '';
   document.getElementById('custom-item-price').value = '';
   document.getElementById('custom-items-list').innerHTML = '';
+  updateServiceTotal();
+  goTo('screen-services');
+}
+
+// Splits a saved invoice's flat items[] back into the two shapes the services screen
+// edits separately: catalog-service lines (identified by a saved serviceId) vs.
+// free-typed custom items. Mirrors how buildInvoiceItems() flattens them on save.
+function splitInvoiceItemsForEdit(items) {
+  const lines = [];
+  const customs = [];
+  (items || []).forEach(i => {
+    if (i.serviceId) {
+      lines.push({ horseId: i.horseId || '', horseName: i.horseName || '', serviceId: i.serviceId, serviceName: i.description || '', price: i.amount || 0 });
+    } else {
+      customs.push({ name: i.description || '', price: i.amount || 0 });
+    }
+  });
+  if (!lines.length) lines.push(emptyInvoiceLine());
+  return { lines, customs };
+}
+
+// Re-opens the services screen pre-filled from an already-created invoice so its
+// lines/prices/miles/notes can be corrected. Only outstanding invoices are editable —
+// once money has moved (paid/partial) or the invoice was cancelled, editing would
+// desync it from what actually happened, so this refuses and sends the farrier back
+// to the payment screen instead.
+function startEditInvoice(inv) {
+  if (!inv) return;
+  if (inv.status !== 'outstanding') {
+    showToast('Only outstanding invoices can be edited', 'error');
+    return;
+  }
+  state.editingInvoice = inv;
+  document.getElementById('svc-header-title').textContent = `Edit Invoice #${inv.invoiceNumber || ''}`;
+
+  const found = state.customers.find(c => c.name === inv.customerName);
+  state.customer = found || {
+    name: inv.customerName || '',
+    farmName: inv.customerFarmName || '',
+    email: inv.customerEmail || '',
+    phone: inv.customerPhone || '',
+  };
+  state.customerHorses = [];
+  if (found?.id) {
+    db.collection('horses').where('farrierId', '==', state.user.uid).where('customerId', '==', found.id).get()
+      .then(snap => { state.customerHorses = snap.docs.map(d => ({ id: d.id, ...d.data() })); })
+      .catch(() => {});
+  }
+
+  const { lines, customs } = splitInvoiceItemsForEdit(inv.items);
+  state.invoiceLines = lines;
+  state.customItems = customs;
+  renderInvoiceLines();
+  document.getElementById('svc-customer-name').textContent = state.customer.name;
+  document.getElementById('svc-customer-farm').textContent = state.customer.farmName || '';
+  document.getElementById('svc-notes').value = inv.notes || '';
+  document.getElementById('svc-miles').value = inv.milesDriven || '';
+  document.getElementById('custom-item-name').value = '';
+  document.getElementById('custom-item-price').value = '';
+  renderCustomItems();
   updateServiceTotal();
   goTo('screen-services');
 }
@@ -2074,6 +2258,7 @@ function continueToInvoiceReview() {
   `).join('');
   document.getElementById('review-total').textContent = '$' + total.toFixed(2);
   document.getElementById('review-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('review-header-title').textContent = state.editingInvoice ? 'Review Changes' : 'Invoice Review';
   goTo('screen-invoice-review');
 }
 
@@ -2450,10 +2635,81 @@ function generateInvoiceNumber() {
   return `INV-${datePart}-${rand}`;
 }
 
+// Saves edits to an already-created invoice in place — same doc id and invoice
+// number, no new mileage log entry, and (unlike a fresh invoice) no auto-SMS/email,
+// since re-notifying the customer on every correction would be surprising. If a
+// Stripe payment link was already issued and the total changed, it's regenerated so
+// "Pay Now" charges the corrected amount instead of the stale one.
+async function updateExistingInvoice(inv, allItems, total) {
+  if (inv.status !== 'outstanding') {
+    throw new Error('This invoice can no longer be edited.');
+  }
+  const c = state.customer;
+  const miles = parseInt(document.getElementById('svc-miles')?.value) || 0;
+  const notes = document.getElementById('svc-notes')?.value.trim() || '';
+
+  const updates = {
+    customerName: c.name,
+    customerFarmName: c.farmName || '',
+    customerEmail: c.email || '',
+    customerPhone: c.phone || '',
+    items: allItems,
+    total,
+    milesDriven: miles,
+    notes,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  let paymentUrl = inv.paymentUrl || '';
+  const totalChanged = Math.abs((inv.total || 0) - total) > 0.001;
+  if (netState.online && inv.paymentUrl && totalChanged) {
+    const stripeKey = state.userProfile?.stripeSecretKey || '';
+    if (stripeKey && total > 0) {
+      try {
+        const plRes = await fetch('/api/stripe-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'payment_link', stripeSecretKey: stripeKey, amount: total, invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, customerEmail: c.email || '', customerName: c.name, farrierId: state.user.uid }),
+        });
+        const plData = await plRes.json();
+        if (plData.success && plData.paymentUrl) {
+          paymentUrl = plData.paymentUrl;
+          updates.paymentUrl = paymentUrl;
+          updates.paymentLinkId = plData.paymentLinkId || '';
+        } else {
+          console.error('❌ Payment link regeneration failed:', plData.error);
+        }
+      } catch(e) {
+        console.error('❌ Payment link regeneration error:', e);
+      }
+    }
+  } else if (!netState.online && inv.paymentUrl && totalChanged) {
+    console.warn('⚠️ Offline — existing payment link amount will be stale until this syncs and is re-edited online.');
+  }
+
+  performWrite(() => db.collection('invoices').doc(inv.id).update(updates));
+
+  allItems.filter(i => i.horseId).forEach(i => {
+    performWrite(() => db.collection('horses').doc(i.horseId).update({
+      lastServiceId: i.serviceId || '',
+      lastServiceName: i.description,
+      lastServicePrice: i.amount,
+      lastServiceDate: firebase.firestore.FieldValue.serverTimestamp(),
+    }));
+  });
+
+  return { id: inv.id, invoiceNumber: inv.invoiceNumber, total, paymentUrl, status: 'outstanding', items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: c.phone||'', customerEmail: c.email||'', milesDriven: miles, notes };
+}
+
 async function createInvoice() {
   const c = state.customer;
   const allItems = buildInvoiceItems();
   const total = allItems.reduce((s,i) => s + i.amount, 0);
+
+  if (state.editingInvoice) {
+    return await updateExistingInvoice(state.editingInvoice, allItems, total);
+  }
+
   const invoiceNumber = generateInvoiceNumber();
 
   // db.collection(...).doc() generates the document ID client-side, synchronously —
@@ -2568,16 +2824,18 @@ async function createInvoice() {
     console.warn('⚠️ SMS not sent — customer has no phone number.');
   }
 
-  return { id: docRef.id, invoiceNumber, total, paymentUrl, customerName: c.name, customerPhone: c.phone||'', customerEmail: c.email||'' };
+  return { id: docRef.id, invoiceNumber, total, paymentUrl, status: 'outstanding', items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: c.phone||'', customerEmail: c.email||'', milesDriven: miles, notes: document.getElementById('svc-notes')?.value.trim() || '' };
 }
 
 async function saveInvoiceOnly() {
+  const wasEdit = !!state.editingInvoice;
   setBtnsDisabled(true);
   document.getElementById('review-saving').style.display = 'block';
   try {
     const inv = await createInvoice();
     state.currentInvoice = inv;
-    showSuccess('Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} created` + (netState.online ? '' : ' (will sync when back online)'));
+    state.editingInvoice = null;
+    showSuccess(wasEdit ? 'Invoice Updated!' : 'Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} ${wasEdit ? 'updated' : 'created'}` + (netState.online ? '' : ' (will sync when back online)'));
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
   setBtnsDisabled(false);
   document.getElementById('review-saving').style.display = 'none';
@@ -2589,6 +2847,7 @@ async function saveAndPay() {
   try {
     const inv = await createInvoice();
     state.currentInvoice = inv;
+    state.editingInvoice = null;
     openInvoicePayment(inv);
     document.getElementById('review-saving').style.display = 'none';
     setBtnsDisabled(false);
@@ -2600,11 +2859,13 @@ async function saveAndPay() {
 }
 
 async function saveAndSendLink() {
+  const wasEdit = !!state.editingInvoice;
   setBtnsDisabled(true);
   document.getElementById('review-saving').style.display = 'block';
   try {
     const inv = await createInvoice();
     state.currentInvoice = inv;
+    state.editingInvoice = null;
     if (inv.paymentUrl && inv.customerPhone) {
       await fetch('/api/send-sms', {
         method: 'POST',
@@ -2613,9 +2874,9 @@ async function saveAndSendLink() {
       });
       showSuccess('Invoice Sent!', `Payment link sent to ${inv.customerPhone}`);
     } else if (inv.paymentUrl) {
-      showSuccess('Invoice Created!', 'Payment link ready — copy from the main app to share');
+      showSuccess(wasEdit ? 'Invoice Updated!' : 'Invoice Created!', 'Payment link ready — copy from the main app to share');
     } else {
-      showSuccess('Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} created` + (netState.online ? ' — no payment link' : ' (will sync when back online)'));
+      showSuccess(wasEdit ? 'Invoice Updated!' : 'Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} ${wasEdit ? 'updated' : 'created'}` + (netState.online ? ' — no payment link' : ' (will sync when back online)'));
     }
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
   setBtnsDisabled(false);
@@ -2624,6 +2885,316 @@ async function saveAndSendLink() {
 
 function setBtnsDisabled(v) {
   ['save-inv-btn','pay-inv-btn'].forEach(id => { const el = document.getElementById(id); if(el) el.disabled = v; });
+}
+
+// ── SERVICES CATALOG ──
+// Full CRUD for the farrier's price list. state.services (loaded once at boot, active-
+// only) is what the invoice line picker reads from, so any add/edit/delete/toggle here
+// also refreshes that cache via loadServices() — otherwise a change wouldn't show up on
+// an invoice until the app was reloaded.
+async function loadServicesCatalog() {
+  const list = document.getElementById('services-catalog-list');
+  document.getElementById('services-catalog-loading').style.display = 'flex';
+  list.innerHTML = '';
+  try {
+    const snap = await db.collection('services').where('farrierId', '==', state.user.uid).get();
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
+    document.getElementById('services-catalog-loading').style.display = 'none';
+    if (!rows.length) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🧰</div><div class="empty-state-text">No services yet — tap + New to add one</div></div>`;
+      return;
+    }
+    list.innerHTML = rows.map(svc => `
+      <div class="horse-row" onclick="startEditService(${JSON.stringify(svc).replace(/"/g,'&quot;')})">
+        <div class="horse-row-avatar" style="background:${svc.isActive === false ? '#94a3b8' : '#0369A1'};">🧰</div>
+        <div style="flex:1; min-width:0;">
+          <div class="customer-row-name">${escapeHtml(svc.name || 'Unnamed')}</div>
+          <div class="customer-row-sub">${escapeHtml(svc.category || 'No category')} · $${Number(svc.price||0).toFixed(2)}</div>
+        </div>
+        <span class="badge badge-${svc.isActive === false ? 'warning' : 'success'}">${svc.isActive === false ? 'Inactive' : 'Active'}</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('services-catalog-loading').style.display = 'none';
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-text">Error loading services</div></div>`;
+  }
+}
+
+function startNewService() {
+  state.editingServiceId = null;
+  document.getElementById('svcf-form-title').textContent = 'New Service';
+  document.getElementById('svcf-save-btn').textContent = 'Save Service';
+  document.getElementById('svcf-name').value = '';
+  document.getElementById('svcf-price').value = '';
+  document.getElementById('svcf-category').value = '';
+  document.getElementById('svcf-active').checked = true;
+  document.getElementById('svcf-delete-wrap').style.display = 'none';
+  goTo('screen-service-form');
+}
+
+function startEditService(svc) {
+  if (!svc) return;
+  state.editingServiceId = svc.id;
+  document.getElementById('svcf-form-title').textContent = 'Edit Service';
+  document.getElementById('svcf-save-btn').textContent = 'Save Changes';
+  document.getElementById('svcf-name').value = svc.name || '';
+  document.getElementById('svcf-price').value = svc.price != null ? svc.price : '';
+  document.getElementById('svcf-category').value = svc.category || '';
+  document.getElementById('svcf-active').checked = svc.isActive !== false;
+  document.getElementById('svcf-delete-wrap').style.display = 'block';
+  goTo('screen-service-form');
+}
+
+// Fire-and-forget via performWrite, not awaited — a Firestore write promise doesn't
+// resolve until the server acks it, so awaiting here would hang "Saving…" indefinitely
+// while offline (see performWrite's own comment). The local cache write it makes is
+// synchronous, so the loadServices()/loadServicesCatalog() re-reads right after still
+// pick up the change instantly, online or off.
+function saveServiceForm() {
+  const name = document.getElementById('svcf-name').value.trim();
+  if (!name) { showToast('Service name is required', 'error'); return; }
+  const price = parseFloat(document.getElementById('svcf-price').value);
+  if (!isFinite(price) || price < 0) { showToast('Enter a valid price', 'error'); return; }
+
+  const editingId = state.editingServiceId;
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  const fields = {
+    name,
+    price,
+    category: document.getElementById('svcf-category').value.trim(),
+    isActive: document.getElementById('svcf-active').checked,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (editingId) {
+    performWrite(() => db.collection('services').doc(editingId).update(fields));
+  } else {
+    performWrite(() => db.collection('services').add({
+      farrierId: state.user.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      ...fields,
+    }));
+  }
+  showToast((editingId ? 'Service updated!' : 'Service added!') + suffix, 'success');
+  loadServices(); // refresh the active-only cache the invoice picker reads from
+  goBack();
+  loadServicesCatalog();
+}
+
+// Unlike horses, a deleted service is safe to remove even if it's on past invoices —
+// every invoice line stores its own immutable description/price snapshot at the time
+// it was billed (see buildInvoiceItems/cleanedItems), so old invoices never change.
+function deleteServiceForm() {
+  const id = state.editingServiceId;
+  if (!id) return;
+  if (!confirm('Delete this service? This cannot be undone.')) return;
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  performWrite(() => db.collection('services').doc(id).delete());
+  showToast('Service deleted' + suffix, 'success');
+  loadServices();
+  goBack();
+  loadServicesCatalog();
+}
+
+// ── SETTINGS ──
+// Business profile / preferences / SMS / Stripe keys / availability all live on the
+// same farriers/{uid} doc the app already listens to (see the onSnapshot near boot),
+// so a save here doesn't need to manually patch state.userProfile — it refreshes on
+// its own the moment Firestore acks the write.
+// DEFAULT_AVAILABILITY is declared once, further down, by the appointment booking
+// code (── APPOINTMENT AVAILABILITY / TIME SLOTS ──) — reused here as-is rather than
+// redeclared, since both need the exact same shape and a duplicate `const` of the
+// same name would collide (script-tag top-level `let`/`const` share one scope).
+
+function loadSettingsScreen() {
+  const p = state.userProfile || {};
+  document.getElementById('settings-saved-banner').style.display = 'none';
+
+  document.getElementById('set-business-name').value = p.businessName || '';
+  document.getElementById('set-first-name').value = p.firstName || '';
+  document.getElementById('set-last-name').value = p.lastName || '';
+  document.getElementById('set-email').value = p.email || state.user?.email || '';
+  document.getElementById('set-phone').value = fmtPhoneDisplay(p.phone || '');
+  document.getElementById('set-address').value = p.address || '';
+  document.getElementById('set-city').value = p.city || '';
+  document.getElementById('set-state').value = p.state || '';
+  document.getElementById('set-zip').value = p.zip || '';
+  document.getElementById('set-logo-url').value = p.logoUrl || '';
+  document.getElementById('set-about-me').value = p.aboutMe || '';
+
+  document.getElementById('set-auto-print').checked = p.autoPrintPdf ?? true;
+  document.getElementById('set-manual-pay').checked = p.allowManualPayments ?? true;
+  document.getElementById('set-sms-enabled').checked = Boolean(p.smsEnabled);
+
+  document.getElementById('set-stripe-pk').value = p.stripePublishableKey || '';
+  document.getElementById('set-stripe-sk').value = p.stripeSecretKey || '';
+  renderStripeStatus(p.stripePublishableKey ? 'connected' : 'none', p.stripeAccountName || '');
+
+  state.settingsAvailability = JSON.parse(JSON.stringify(p.availability || DEFAULT_AVAILABILITY));
+  renderAvailabilityDays();
+}
+
+// formatPhoneInput() (used on the New Customer / Edit Customer forms) formats as the
+// user types; here the value comes from a saved profile, so it's formatted once on load.
+function fmtPhoneDisplay(p) {
+  const d = String(p || '').replace(/\D/g, '');
+  if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
+  return p || '';
+}
+
+function renderAvailabilityDays() {
+  const days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+  const av = state.settingsAvailability || DEFAULT_AVAILABILITY;
+  document.getElementById('availability-days').innerHTML = days.map(day => {
+    const d = av[day] || { enabled: false, start: '09:00', end: '17:00' };
+    return `
+      <div style="border:2px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:8px; background:${d.enabled ? 'var(--surface)' : 'transparent'};">
+        <label style="display:flex; align-items:center; gap:10px; font-weight:700; cursor:pointer; text-transform:capitalize;">
+          <input type="checkbox" ${d.enabled ? 'checked' : ''} onchange="updateAvailabilityDay('${day}','enabled',this.checked)" style="width:18px;height:18px;flex-shrink:0;">
+          ${day}
+        </label>
+        ${d.enabled ? `
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <input type="time" value="${d.start}" onchange="updateAvailabilityDay('${day}','start',this.value)" style="flex:1; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:0.9rem;">
+            <input type="time" value="${d.end}" onchange="updateAvailabilityDay('${day}','end',this.value)" style="flex:1; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:0.9rem;">
+          </div>
+        ` : `<div style="color:var(--text-muted); font-size:0.82rem; font-style:italic; margin-top:4px;">Not available</div>`}
+      </div>
+    `;
+  }).join('');
+}
+
+function updateAvailabilityDay(day, field, value) {
+  if (!state.settingsAvailability) state.settingsAvailability = JSON.parse(JSON.stringify(DEFAULT_AVAILABILITY));
+  state.settingsAvailability[day] = { ...state.settingsAvailability[day], [field]: value };
+  // Re-render only when a day's enabled/disabled state flips, so the time-input row
+  // appears/disappears — retyping into a time field doesn't need a full re-render.
+  if (field === 'enabled') renderAvailabilityDays();
+}
+
+function showSettingsSaved(suffix = '') {
+  const banner = document.getElementById('settings-saved-banner');
+  banner.textContent = '✅ Saved!' + suffix;
+  banner.style.display = 'block';
+  setTimeout(() => { banner.style.display = 'none'; }, 2500);
+}
+
+function saveSettingsProfile() {
+  const businessName = document.getElementById('set-business-name').value.trim();
+  const firstName = document.getElementById('set-first-name').value.trim();
+  const lastName = document.getElementById('set-last-name').value.trim();
+  const phone = document.getElementById('set-phone').value.replace(/\D/g, '').slice(0, 11);
+  const address = document.getElementById('set-address').value.trim();
+  if (!businessName || !firstName || !lastName || !phone || !address) {
+    showToast('Business name, your name, phone, and address are required', 'error');
+    return;
+  }
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+    businessName,
+    firstName,
+    lastName,
+    phone,
+    address,
+    city: document.getElementById('set-city').value.trim(),
+    state: document.getElementById('set-state').value.trim(),
+    zip: document.getElementById('set-zip').value.trim(),
+    logoUrl: document.getElementById('set-logo-url').value.trim(),
+    aboutMe: document.getElementById('set-about-me').value,
+    autoPrintPdf: document.getElementById('set-auto-print').checked,
+    allowManualPayments: document.getElementById('set-manual-pay').checked,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true }));
+  showSettingsSaved(suffix);
+}
+
+function saveSmsSetting() {
+  const smsEnabled = document.getElementById('set-sms-enabled').checked;
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+    smsEnabled,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true }));
+  showToast((smsEnabled ? 'SMS enabled!' : 'SMS disabled.') + suffix, 'success');
+}
+
+function saveAvailability() {
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+    availability: state.settingsAvailability || DEFAULT_AVAILABILITY,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true }));
+  showSettingsSaved(suffix);
+}
+
+function renderStripeStatus(status, accountName) {
+  const el = document.getElementById('stripe-status-banner');
+  const disconnectBtn = document.getElementById('stripe-disconnect-btn');
+  if (status === 'connected') {
+    el.style.display = 'flex';
+    el.style.cssText = 'display:flex; align-items:center; gap:8px; background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:10px 12px; margin-bottom:12px; color:#16a34a; font-weight:600; font-size:0.88rem;';
+    el.innerHTML = `✅ Stripe connected${accountName ? ' — ' + escapeHtml(accountName) : ''}`;
+    disconnectBtn.style.display = 'block';
+  } else if (status === 'error') {
+    el.style.display = 'block';
+    el.style.cssText = 'display:block; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:10px 12px; margin-bottom:12px; color:#dc2626; font-weight:600; font-size:0.88rem;';
+    el.innerHTML = '❌ Invalid keys — please check and try again.';
+    disconnectBtn.style.display = 'none';
+  } else {
+    el.style.display = 'none';
+    disconnectBtn.style.display = 'none';
+  }
+}
+
+async function validateAndSaveStripe() {
+  const pk = document.getElementById('set-stripe-pk').value.trim();
+  const sk = document.getElementById('set-stripe-sk').value.trim();
+  if (!pk || !sk) { showToast('Enter both keys', 'error'); return; }
+  if (!pk.startsWith('pk_')) { showToast('Publishable key must start with pk_', 'error'); return; }
+  if (!sk.startsWith('sk_')) { showToast('Secret key must start with sk_', 'error'); return; }
+  if (!netState.online) { showToast('Connecting Stripe requires an internet connection', 'error'); return; }
+
+  const btn = document.getElementById('stripe-validate-btn');
+  btn.disabled = true; btn.textContent = 'Validating…';
+  try {
+    const res = await fetch('/api/stripe-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'validate', stripeSecretKey: sk }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      await db.collection('farriers').doc(state.user.uid).set({
+        stripePublishableKey: pk,
+        stripeSecretKey: sk,
+        stripeAccountName: data.accountName || '',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      renderStripeStatus('connected', data.accountName || '');
+      showToast('Stripe connected!', 'success');
+    } else {
+      renderStripeStatus('error', '');
+    }
+  } catch(e) {
+    renderStripeStatus('error', '');
+  }
+  btn.disabled = false; btn.textContent = '✓ Validate & Save';
+}
+
+function disconnectStripe() {
+  if (!confirm('Remove your Stripe connection? Pay Now links will stop working until you reconnect.')) return;
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+    stripePublishableKey: '',
+    stripeSecretKey: '',
+    stripeAccountName: '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true }));
+  document.getElementById('set-stripe-pk').value = '';
+  document.getElementById('set-stripe-sk').value = '';
+  renderStripeStatus('none', '');
+  showToast('Stripe disconnected' + suffix, 'success');
 }
 
 // ── INVOICE EMAIL BUILDER ──
@@ -2669,6 +3240,7 @@ function openInvoicePayment(inv) {
   document.getElementById('pay-invoice-num').textContent = '#' + (inv.invoiceNumber || '');
   document.getElementById('pay-customer-name').textContent = inv.customerName || '';
   document.getElementById('pay-amount').textContent = '$' + (inv.total||0).toFixed(2);
+  document.getElementById('pay-edit-invoice-btn').style.display = inv.status === 'outstanding' ? 'inline-block' : 'none';
   document.getElementById('check-fields').style.display = 'none';
   document.getElementById('card-fields').style.display = 'none';
   document.getElementById('link-fields').style.display = 'none';
