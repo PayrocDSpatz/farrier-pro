@@ -2982,16 +2982,42 @@ function saveServiceForm() {
   loadServicesCatalog();
 }
 
-// Unlike horses, a deleted service is safe to remove even if it's on past invoices —
-// every invoice line stores its own immutable description/price snapshot at the time
-// it was billed (see buildInvoiceItems/cleanedItems), so old invoices never change.
-function deleteServiceForm() {
+// Same rule as deleteHorse(): only deletable if it's never appeared on an invoice or
+// appointment. Invoices are matched by serviceId (falling back to name, for older
+// invoices saved before that linkage existed); appointments only ever stored the
+// service name, never an id (see the appointment service picker's row.services array).
+async function deleteServiceForm() {
   const id = state.editingServiceId;
+  const name = document.getElementById('svcf-name').value.trim();
   if (!id) return;
+  if (!netState.online) {
+    showToast("Can't check invoice/appointment history while offline — try again when you're back online.", 'error');
+    return;
+  }
+
+  const btn = document.getElementById('svcf-delete-wrap').querySelector('button');
+  btn.disabled = true; btn.textContent = 'Checking history…';
+  try {
+    const [invSnap, apptSnap] = await Promise.all([
+      db.collection('invoices').where('farrierId', '==', state.user.uid).get(),
+      db.collection('appointments').where('farrierId', '==', state.user.uid).get(),
+    ]);
+    const usedOnInvoice = invSnap.docs.some(d => (d.data().items || []).some(i => i.serviceId ? i.serviceId === id : i.description === name));
+    const usedOnAppt = apptSnap.docs.some(d => (d.data().services || []).includes(name));
+    if (usedOnInvoice || usedOnAppt) {
+      showToast(`Can't delete — it's been used on ${usedOnInvoice ? 'an invoice' : 'an appointment'}. Disable it instead.`, 'error');
+      return;
+    }
+  } catch (e) {
+    showToast('Error checking history: ' + e.message, 'error');
+    return;
+  } finally {
+    btn.disabled = false; btn.textContent = '🗑️ Delete Service';
+  }
+
   if (!confirm('Delete this service? This cannot be undone.')) return;
-  const suffix = netState.online ? '' : ' (will sync when back online)';
   performWrite(() => db.collection('services').doc(id).delete());
-  showToast('Service deleted' + suffix, 'success');
+  showToast('Service deleted', 'success');
   loadServices();
   goBack();
   loadServicesCatalog();

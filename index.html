@@ -6536,6 +6536,37 @@ function ServicesView({ userId }) {
     await loadServices();
   };
 
+  const [deletingId, setDeletingId] = useState(null);
+
+  // Only deletable if it's never appeared on an invoice or appointment — invoices are
+  // matched by serviceId (falling back to name, for older invoices saved before that
+  // linkage existed), appointments only ever stored the service name (see the
+  // horse/service picker rows' `services.includes(s.name)`), never an id.
+  const deleteService = async (svc) => {
+    if (!confirm(`Delete "${svc.name}"? This cannot be undone.`)) return;
+    setDeletingId(svc.id);
+    try {
+      const [invSnap, apptSnap] = await Promise.all([
+        db.collection("invoices").where("farrierId", "==", userId).get(),
+        db.collection("appointments").where("farrierId", "==", userId).get(),
+      ]);
+      const usedOnInvoice = invSnap.docs.some(d =>
+        (d.data().items || []).some(i => i.serviceId ? i.serviceId === svc.id : i.description === svc.name)
+      );
+      const usedOnAppt = apptSnap.docs.some(d => (d.data().services || []).includes(svc.name));
+      if (usedOnInvoice || usedOnAppt) {
+        alert(`"${svc.name}" has been used on ${usedOnInvoice ? "an invoice" : "an appointment"} and can't be deleted. Use Disable instead to hide it from new invoices.`);
+        return;
+      }
+      await db.collection("services").doc(svc.id).delete();
+      await loadServices();
+    } catch (e) {
+      alert("Could not delete service: " + e.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="card">
       <h2 style={{ marginBottom: "1rem" }}>Services</h2>
@@ -6600,6 +6631,9 @@ function ServicesView({ userId }) {
                     <button className="btn btn-sm btn-outline" onClick={() => startEdit(svc)}>Edit</button>
                     <button className="btn btn-sm btn-outline" onClick={() => toggleActive(svc)}>
                       {svc.isActive ? "Disable" : "Enable"}
+                    </button>
+                    <button className="btn btn-sm btn-outline" style={{color: "#dc2626", borderColor: "#dc2626"}} disabled={deletingId === svc.id} onClick={() => deleteService(svc)}>
+                      {deletingId === svc.id ? "…" : "Delete"}
                     </button>
                   </td>
                 </tr>
