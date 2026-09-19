@@ -16,6 +16,12 @@ const APP_SHELL = [
 
 const APP_SHELL_PATHS = new Set(APP_SHELL);
 
+// The HTML document itself always needs the freshest deploy when online — cache
+// is only a fallback for offline use, never the default. Stale-while-revalidate
+// was showing the previous deploy's code until a second app open (or a forced
+// cache clear) caught up with the background refresh.
+const NETWORK_FIRST_PATHS = new Set(['/mobile']);
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -67,6 +73,21 @@ self.addEventListener('fetch', event => {
     // always be fetched fresh so this service worker never serves one page's content
     // in place of another's.
     event.respondWith(fetch(req).catch(() => caches.match(req)));
+    return;
+  }
+
+  if (url.origin === self.location.origin && NETWORK_FIRST_PATHS.has(url.pathname)) {
+    // Network-first, cache as an offline fallback only — this is the actual app
+    // code, so a farrier online should always get today's deploy, not yesterday's.
+    event.respondWith(
+      fetch(req).then(res => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
+        }
+        return res;
+      }).catch(() => caches.match(req))
+    );
     return;
   }
 
