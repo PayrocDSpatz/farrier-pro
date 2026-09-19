@@ -4467,9 +4467,23 @@ async function reconcilePendingCardPayments() {
 // ── SEARCH SCREEN INIT ──
 // Single persistent tap handler — set once, never re-added
 let _custTouchFired = false;
+let _custTouchStart = null;
+const TAP_MOVE_TOLERANCE = 10; // px of finger movement still counted as a tap, not a scroll
+document.getElementById('search-results').addEventListener('touchstart', function(e) {
+  const t = e.touches[0];
+  _custTouchStart = { x: t.clientX, y: t.clientY };
+}, { passive: true });
 document.getElementById('search-results').addEventListener('touchend', function(e) {
   const row = e.target.closest('[data-cid]');
+  const start = _custTouchStart;
+  _custTouchStart = null;
   if (!row) return;
+  // A finger that moved before lifting was scrolling the list, not tapping a row.
+  if (start) {
+    const t = e.changedTouches[0];
+    const moved = Math.abs(t.clientX - start.x) > TAP_MOVE_TOLERANCE || Math.abs(t.clientY - start.y) > TAP_MOVE_TOLERANCE;
+    if (moved) return;
+  }
   e.preventDefault();
   _custTouchFired = true;
   const found = state.customers.find(c => c.id === row.dataset.cid);
@@ -4488,9 +4502,22 @@ document.getElementById('screen-search').addEventListener('transitionend', funct
 
 // ── HORSE SEARCH SCREEN INIT ──
 let _horseTouchFired = false;
+let _horseTouchStart = null;
+document.getElementById('horse-search-results').addEventListener('touchstart', function(e) {
+  const t = e.touches[0];
+  _horseTouchStart = { x: t.clientX, y: t.clientY };
+}, { passive: true });
 document.getElementById('horse-search-results').addEventListener('touchend', function(e) {
   const row = e.target.closest('[data-hid]');
+  const start = _horseTouchStart;
+  _horseTouchStart = null;
   if (!row) return;
+  // A finger that moved before lifting was scrolling the list, not tapping a row.
+  if (start) {
+    const t = e.changedTouches[0];
+    const moved = Math.abs(t.clientX - start.x) > TAP_MOVE_TOLERANCE || Math.abs(t.clientY - start.y) > TAP_MOVE_TOLERANCE;
+    if (moved) return;
+  }
   e.preventDefault();
   _horseTouchFired = true;
   const found = (state.allHorses||[]).find(h => h.id === row.dataset.hid);
