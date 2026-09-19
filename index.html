@@ -2431,6 +2431,23 @@ async function ensureFarriTechfile_(uid, profile) {
 
         setUser(u);
 
+        // Send phones to the mobile app instead of the desktop dashboard. The
+        // login/signup forms already do this (see redirectToMobileIfNeeded in
+        // AuthView), but that only fires on a fresh sign-in submit — a phone with
+        // an already-persisted Firebase session lands here via auth auto-restore
+        // instead, skipping AuthView entirely, which is why the mobile app could
+        // "revert" to the desktop QR code screen. Support sessions and the
+        // finish-signup flow are left alone since they already manage their own
+        // navigation.
+        if (!supportSessionId && !finishSignup) {
+          const isMobileDevice = window.innerWidth < 768 ||
+            /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          if (isMobileDevice) {
+            window.location.href = window.location.origin + '/mobile';
+            return;
+          }
+        }
+
         // Default to the signed-in farrier
         let farrierIdToUse = u.uid;
         let supportSessionData = null;
@@ -11975,8 +11992,8 @@ useEffect(() => {
           return;
         }
 
-        if (!customerName || !customerEmail) {
-          setError('Customer name and email are required');
+        if (!customerName || (!customerEmail && !customerPhone)) {
+          setError('Customer name and at least one of email or phone are required');
           return;
         }
 
