@@ -12472,7 +12472,7 @@ useEffect(() => {
 
       const total = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
-      const generatePaymentLink = async () => {
+      const generatePaymentLink = async (sendVia = null) => {
         if (editLocked) {
           setError('This invoice has been paid and can no longer be edited.');
           return;
@@ -12587,8 +12587,45 @@ useEffect(() => {
 
             await db.collection('invoices').doc(editingInvoice.id).update(updates);
 
-            alert('✅ Invoice updated!');
-            onCreated({ ...editingInvoice, ...updates, paymentUrl, total, items: cleanedItems });
+            const updatedInvoice = { ...editingInvoice, ...updates, paymentUrl, total, items: cleanedItems };
+
+            // Only send if the farrier explicitly tapped Send Text/Email on this edit —
+            // correcting an invoice must never auto-notify the customer as a side effect.
+            let sendNote = '';
+            if (sendVia === 'sms') {
+              if (!customerPhone) {
+                sendNote = ' No phone number entered — nothing was texted.';
+              } else {
+                try {
+                  const bizName = userProfile?.businessName || 'Your Farrier';
+                  const msg = `Hi ${customerName}, your invoice #${editingInvoice.invoiceNumber} for $${total.toFixed(2)} from ${bizName} has been updated.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
+                  await fetch('/api/send-sms', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to: customerPhone, body: msg }),
+                  });
+                  sendNote = ' Text sent to customer.';
+                } catch (smsErr) {
+                  console.error('Invoice SMS error:', smsErr);
+                  sendNote = ' Text failed to send — invoice was still saved.';
+                }
+              }
+            } else if (sendVia === 'email') {
+              if (!customerEmail) {
+                sendNote = ' No email entered — nothing was emailed.';
+              } else {
+                try {
+                  await emailInvoiceLink(updatedInvoice, userProfile);
+                  sendNote = ' Email sent to customer.';
+                } catch (emailErr) {
+                  console.error('Invoice email error:', emailErr);
+                  sendNote = ' Email failed to send — invoice was still saved.';
+                }
+              }
+            }
+
+            alert(`✅ Invoice updated!${sendNote}`);
+            onCreated(updatedInvoice);
           } catch (err) {
             console.error('❌ Error updating invoice:', err);
             setError('Error updating invoice. Please try again.');
@@ -12771,33 +12808,44 @@ useEffect(() => {
               createdAt: new Date()
             };
 
-            // Send SMS invoice notification
-            if (userProfile?.smsEnabled && customerPhone) {
-              try {
-                const bizName = userProfile?.businessName || 'Your Farrier';
-                const msg = `Hi ${customerName}, you have a new invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName}.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
-                await fetch('/api/send-sms', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ to: customerPhone, body: msg }),
-                });
-                console.log('✅ Invoice SMS sent');
-              } catch (smsErr) {
-                console.error('Invoice SMS error:', smsErr);
+            // Send invoice notification — ONLY when the farrier explicitly tapped
+            // Send Text or Send Email; a plain Save must never message the customer.
+            let sendNote = '';
+            if (sendVia === 'sms') {
+              if (!customerPhone) {
+                sendNote = ' No phone number entered — nothing was texted.';
+              } else {
+                try {
+                  const bizName = userProfile?.businessName || 'Your Farrier';
+                  const msg = `Hi ${customerName}, you have a new invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName}.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
+                  await fetch('/api/send-sms', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to: customerPhone, body: msg }),
+                  });
+                  console.log('✅ Invoice SMS sent');
+                  sendNote = ' Text sent to customer.';
+                } catch (smsErr) {
+                  console.error('Invoice SMS error:', smsErr);
+                  sendNote = ' Text failed to send — invoice was still saved.';
+                }
+              }
+            } else if (sendVia === 'email') {
+              if (!customerEmail) {
+                sendNote = ' No email entered — nothing was emailed.';
+              } else {
+                try {
+                  await emailInvoiceLink(createdInvoice, userProfile);
+                  console.log('✅ Invoice email sent');
+                  sendNote = ' Email sent to customer.';
+                } catch (emailErr) {
+                  console.error('Invoice email error:', emailErr);
+                  sendNote = ' Email failed to send — invoice was still saved.';
+                }
               }
             }
 
-            // Send email invoice if customer has email
-            if (customerEmail) {
-              try {
-                await emailInvoiceLink(createdInvoice, userProfile);
-                console.log('✅ Invoice email sent');
-              } catch (emailErr) {
-                console.error('Invoice email error:', emailErr);
-              }
-            }
-
-            alert(`✅ Invoice created!${paymentUrl ? ' Payment link generated and sent to customer.' : ' Add Stripe in Settings to enable Pay Now links.'}`);
+            alert(`✅ Invoice created!${paymentUrl ? ' Payment link generated.' : ' Add Stripe in Settings to enable Pay Now links.'}${sendNote}`);
             onCreated(createdInvoice);
           } else {
             console.error('❌ Database not initialized');
@@ -12810,12 +12858,6 @@ useEffect(() => {
   setLoading(false);
 }
 };
-
-      const sendInvoice = () => {
-        const message = `Hi ${customerName}! Your invoice for $${total.toFixed(2)} is ready. Pay here: ${paymentUrl}`;
-        alert(`SMS would be sent to ${customerPhone}:\n\n${message}`);
-        onCreated();
-      };
 
       return (
         <div className="modal-overlay" onClick={onClose}>
@@ -13175,17 +13217,35 @@ useEffect(() => {
               </div>
             </div>
 
-            <button
-              className="btn btn-primary"
-              style={{width: '100%', marginTop: '1rem'}}
-              onClick={generatePaymentLink}
-              disabled={loading || editLocked}
-            >
-              {loading ? <span className="spinner"></span> : (editingInvoice ? '✓ Save Changes' : '✓ Create Invoice')}
-            </button>
+            <div style={{display: 'flex', gap: '0.75rem', marginTop: '1rem'}}>
+              <button
+                className="btn btn-outline"
+                style={{flex: 1}}
+                onClick={() => generatePaymentLink(null)}
+                disabled={loading || editLocked}
+              >
+                {loading ? <span className="spinner"></span> : (editingInvoice ? '✓ Save Changes' : '💾 Save Only')}
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{flex: 1}}
+                onClick={() => generatePaymentLink('sms')}
+                disabled={loading || editLocked}
+              >
+                📲 Send Text
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{flex: 1}}
+                onClick={() => generatePaymentLink('email')}
+                disabled={loading || editLocked}
+              >
+                ✉️ Send Email
+              </button>
+            </div>
 
             <p style={{fontSize: '0.875rem', color: '#666', marginTop: '0.5rem', textAlign: 'center'}}>
-              {editingInvoice ? 'Saving will update the amount due on the existing Pay Now link.' : 'Customer will use "Pay Now" button to pay with Stripe'}
+              {editingInvoice ? 'Saving will update the amount due on the existing Pay Now link.' : 'Customer will use "Pay Now" button to pay with Stripe'} Save Only never messages the customer — use Send Text/Email to notify them.
             </p>
           </div>
         </div>
