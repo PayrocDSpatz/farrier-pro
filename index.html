@@ -6792,9 +6792,30 @@ function ServicesView({ userId }) {
       { key: 'knownIssues', header: 'Known Issues' },
     ];
 
+    const QUICKBOOKS_INVOICE_FIELDS = [
+      { key: 'invoiceNo', header: 'Invoice No' },
+      { key: 'customer', header: 'Customer' },
+      { key: 'invoiceDate', header: 'Invoice Date' },
+      { key: 'dueDate', header: 'Due Date' },
+      { key: 'item', header: 'Item(Product/Service)' },
+      { key: 'itemDescription', header: 'Item Description' },
+      { key: 'itemAmount', header: 'Item Amount' },
+      { key: 'memo', header: 'Memo' },
+    ];
+
+    // QuickBooks Online's CSV importer requires MM/DD/YYYY regardless of the
+    // farrier's locale.
+    function formatQbDate_(ts) {
+      const d = ts?.toDate ? ts.toDate() : (ts instanceof Date ? ts : new Date(ts || Date.now()));
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${mm}/${dd}/${d.getFullYear()}`;
+    }
+
     function DataManagementView({ userId }) {
       const [customers, setCustomers] = useState([]);
       const [horses, setHorses] = useState([]);
+      const [invoices, setInvoices] = useState([]);
       const [loading, setLoading] = useState(true);
 
       const [customerParsed, setCustomerParsed] = useState(null);
@@ -6807,16 +6828,22 @@ function ServicesView({ userId }) {
       const [horseResult, setHorseResult] = useState(null);
       const horseFileRef = useRef(null);
 
+      const [qbRange, setQbRange] = useState('thisMonth');
+      const [qbStart, setQbStart] = useState('');
+      const [qbEnd, setQbEnd] = useState('');
+
       const loadAll = async () => {
         if (!db) return;
         setLoading(true);
         try {
-          const [custSnap, horseSnap] = await Promise.all([
+          const [custSnap, horseSnap, invSnap] = await Promise.all([
             db.collection('customers').where('farrierId', '==', userId).get(),
             db.collection('horses').where('farrierId', '==', userId).get(),
+            db.collection('invoices').where('farrierId', '==', userId).get(),
           ]);
           setCustomers(custSnap.docs.map(d => ({ id: d.id, ...d.data() })));
           setHorses(horseSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setInvoices(invSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         } catch (e) {
           console.error('Error loading data for export:', e);
         }
@@ -7051,6 +7078,54 @@ function ServicesView({ userId }) {
         setHorseImporting(false);
       };
 
+      // ---- QuickBooks ----
+      const getQbInvoices = () => {
+        const list = invoices.filter(inv => inv.status !== 'cancelled');
+        const toDate = (ts) => ts?.toDate ? ts.toDate() : (ts instanceof Date ? ts : new Date(ts || 0));
+        if (qbRange === 'allTime') return list;
+        if (qbRange === 'custom') {
+          if (!qbStart || !qbEnd) return [];
+          const start = new Date(qbStart);
+          const end = new Date(qbEnd);
+          end.setHours(23, 59, 59, 999);
+          return list.filter(inv => { const d = toDate(inv.createdAt); return d >= start && d <= end; });
+        }
+        const now = new Date();
+        let targetYear = now.getFullYear();
+        let targetMonth = now.getMonth();
+        if (qbRange === 'lastMonth') {
+          targetMonth = targetMonth === 0 ? 11 : targetMonth - 1;
+          targetYear = now.getMonth() === 0 ? targetYear - 1 : targetYear;
+        }
+        return list.filter(inv => {
+          const d = toDate(inv.createdAt);
+          return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
+        });
+      };
+
+      const qbInvoices = getQbInvoices();
+
+      const exportQuickBooks = () => {
+        if (!qbInvoices.length) { alert('No invoices in this range.'); return; }
+        const rows = [];
+        qbInvoices.forEach(inv => {
+          const dateStr = formatQbDate_(inv.createdAt);
+          (inv.items || []).filter(i => Number(i.amount || 0) > 0).forEach(item => {
+            rows.push({
+              invoiceNo: inv.invoiceNumber || inv.id,
+              customer: inv.customerName || '',
+              invoiceDate: dateStr,
+              dueDate: dateStr,
+              item: item.description || item.serviceNameSnapshot || 'Service',
+              itemDescription: item.horseName ? `${item.description || ''} (${item.horseName})` : (item.description || ''),
+              itemAmount: Number(item.amount || 0).toFixed(2),
+              memo: inv.notes || '',
+            });
+          });
+        });
+        downloadCSV_('quickbooks_invoices.csv', toCSV_(QUICKBOOKS_INVOICE_FIELDS, rows));
+      };
+
       const errorList = (items, color) => items.length > 0 && (
         <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem', fontSize: '0.85rem', color }}>
           {items.slice(0, 10).map((it, i) => <li key={i}>Row {it.row}: {it.message}</li>)}
@@ -7142,6 +7217,50 @@ function ServicesView({ userId }) {
                 ✅ Added {horseResult.added}, updated {horseResult.updated} horse{(horseResult.added + horseResult.updated) === 1 ? '' : 's'}
                 {horseResult.skipped > 0 ? `, skipped ${horseResult.skipped} duplicate${horseResult.skipped === 1 ? '' : 's'}` : ''}
                 {horseResult.errors > 0 ? `, ${horseResult.errors} error${horseResult.errors === 1 ? '' : 's'}` : ''}.
+              </p>
+            )}
+          </div>
+
+          <div className="card" style={{ marginTop: '1.5rem' }}>
+            <h3 style={{ marginBottom: '1rem' }}>QuickBooks</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem', fontSize: '0.9rem' }}>
+              Exports invoices in the format QuickBooks Online's own Import Data tool expects
+              (Settings → Import Data → Invoices) — no QuickBooks connection needed here, just
+              upload the downloaded file over there.
+            </p>
+            <ul style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', paddingLeft: '1.25rem' }}>
+              <li>Customer names and service names must already exist in QuickBooks exactly as written here, or that row gets skipped during import.</li>
+              <li>QuickBooks caps each upload at 100 invoices — use the date range below to export in batches.</li>
+              <li>Won't import if QuickBooks Sales Tax is turned on for your company.</li>
+              <li>Due Date is set the same as Invoice Date (FarriTech doesn't track due dates yet) — adjust in QuickBooks if you use payment terms.</li>
+            </ul>
+
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <select
+                value={qbRange}
+                onChange={e => setQbRange(e.target.value)}
+                style={{ padding: '0.6rem', borderRadius: 8, border: '2px solid var(--border)' }}
+              >
+                <option value="thisMonth">This Month</option>
+                <option value="lastMonth">Last Month</option>
+                <option value="allTime">All Time</option>
+                <option value="custom">Custom Range</option>
+              </select>
+              {qbRange === 'custom' && (
+                <>
+                  <input type="date" value={qbStart} onChange={e => setQbStart(e.target.value)} style={{ padding: '0.6rem', borderRadius: 8, border: '2px solid var(--border)' }} />
+                  <span style={{ color: 'var(--text-muted)' }}>to</span>
+                  <input type="date" value={qbEnd} onChange={e => setQbEnd(e.target.value)} style={{ padding: '0.6rem', borderRadius: 8, border: '2px solid var(--border)' }} />
+                </>
+              )}
+              <button className="btn btn-primary" onClick={exportQuickBooks} disabled={loading}>
+                📤 Export for QuickBooks ({qbInvoices.length})
+              </button>
+            </div>
+
+            {qbInvoices.length > 100 && (
+              <p style={{ color: '#dc2626', fontSize: '0.85rem' }}>
+                ⚠️ {qbInvoices.length} invoices in this range — QuickBooks only accepts 100 per upload. Narrow the range or split the downloaded file before importing.
               </p>
             )}
           </div>
