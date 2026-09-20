@@ -3785,6 +3785,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 ]},
                 { label: '⚙️ Manage', items: [
                   { id: 'services', label: 'Services', icon: '🧾' },
+                  { id: 'data', label: 'Data Management', icon: '🗂️' },
                   { id: 'settings', label: 'Settings', icon: '⚙️' },
                   { id: 'tutorials', label: 'Video Tutorials', icon: '▶️' },
                   ...(isSponsorAdmin ? [{ id: 'sponsors', label: 'Sponsor Banners', icon: '📢' }] : []),
@@ -3910,6 +3911,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'customers' && <CustomersView userId={farrierId} userProfile={userProfile} />}
             {tab === 'sponsors' && isSponsorAdmin && <SponsorBannersView />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
+            {tab === 'data' && <DataManagementView userId={farrierId} />}
             {tab === 'reports' && <ReportsView userId={farrierId} />}
             {tab === 'mileage' && <MileageLogView userId={farrierId} userProfile={userProfile} />}
             {tab === 'route' && <RouteSheetView userId={farrierId} userProfile={userProfile} />}
@@ -6662,6 +6664,442 @@ function ServicesView({ userId }) {
     </div>
   );
 }
+
+    // ---- CSV helpers (Data Management) ----
+    function normalizeHeader_(h) {
+      return String(h || '').toLowerCase().replace(/\([^)]*\)/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    function parseCSV_(text) {
+      const rows = [];
+      let row = [];
+      let field = '';
+      let inQuotes = false;
+      const clean = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/^﻿/, '');
+      for (let i = 0; i < clean.length; i++) {
+        const c = clean[i];
+        if (inQuotes) {
+          if (c === '"') {
+            if (clean[i + 1] === '"') { field += '"'; i++; }
+            else { inQuotes = false; }
+          } else {
+            field += c;
+          }
+        } else if (c === '"') {
+          inQuotes = true;
+        } else if (c === ',') {
+          row.push(field); field = '';
+        } else if (c === '\n') {
+          row.push(field); rows.push(row); row = []; field = '';
+        } else {
+          field += c;
+        }
+      }
+      if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+      const nonEmpty = rows.filter(r => r.some(v => String(v).trim() !== ''));
+      if (nonEmpty.length === 0) return { headers: [], rows: [] };
+      const headers = nonEmpty[0].map(h => String(h).trim());
+      const rowObjects = nonEmpty.slice(1).map(r => {
+        const obj = {};
+        headers.forEach((h, idx) => { obj[h] = r[idx] !== undefined ? String(r[idx]).trim() : ''; });
+        return obj;
+      });
+      return { headers, rows: rowObjects };
+    }
+
+    function csvEscape_(val) {
+      const s = val === null || val === undefined ? '' : String(val);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+
+    function toCSV_(fields, rows) {
+      const lines = [fields.map(f => csvEscape_(f.header)).join(',')];
+      rows.forEach(r => lines.push(fields.map(f => csvEscape_(r[f.key])).join(',')));
+      return lines.join('\r\n');
+    }
+
+    function downloadCSV_(filename, csvText) {
+      const blob = new Blob(['﻿' + csvText], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function buildHeaderMap_(csvHeaders, fields) {
+      const normalized = csvHeaders.map(normalizeHeader_);
+      const map = {};
+      fields.forEach(f => {
+        const idx = normalized.indexOf(normalizeHeader_(f.header));
+        if (idx !== -1) map[f.key] = csvHeaders[idx];
+      });
+      return map;
+    }
+
+    async function batchWrite_(collectionName, payloads) {
+      const CHUNK = 400;
+      for (let i = 0; i < payloads.length; i += CHUNK) {
+        const chunk = payloads.slice(i, i + CHUNK);
+        const batch = db.batch();
+        chunk.forEach(payload => batch.set(db.collection(collectionName).doc(), payload));
+        await batch.commit();
+      }
+    }
+
+    const CUSTOMER_FIELDS = [
+      { key: 'name', header: 'Name' },
+      { key: 'farmName', header: 'Farm Name' },
+      { key: 'managerContact', header: 'Manager Contact' },
+      { key: 'email', header: 'Email' },
+      { key: 'phone', header: 'Phone' },
+      { key: 'address', header: 'Address' },
+      { key: 'city', header: 'City' },
+      { key: 'state', header: 'State' },
+      { key: 'zip', header: 'Zip' },
+      { key: 'notes', header: 'Notes' },
+      { key: 'source', header: 'Source' },
+    ];
+
+    const HORSE_FIELDS = [
+      { key: 'customerName', header: 'Customer Name' },
+      { key: 'customerEmail', header: 'Customer Email' },
+      { key: 'name', header: 'Horse Name' },
+      { key: 'breed', header: 'Breed' },
+      { key: 'dob', header: 'Date of Birth (YYYY-MM-DD)' },
+      { key: 'sex', header: 'Sex' },
+      { key: 'color', header: 'Color' },
+      { key: 'shoeingCycleWeeks', header: 'Shoeing Cycle (weeks)' },
+      { key: 'shoeSize', header: 'Shoe Size' },
+      { key: 'shoeType', header: 'Shoe Type' },
+      { key: 'gaitNotes', header: 'Gait Notes' },
+      { key: 'hoofNotes', header: 'Hoof Notes' },
+      { key: 'knownIssues', header: 'Known Issues' },
+    ];
+
+    function DataManagementView({ userId }) {
+      const [customers, setCustomers] = useState([]);
+      const [horses, setHorses] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      const [customerParsed, setCustomerParsed] = useState(null);
+      const [customerImporting, setCustomerImporting] = useState(false);
+      const [customerResult, setCustomerResult] = useState(null);
+      const customerFileRef = useRef(null);
+
+      const [horseParsed, setHorseParsed] = useState(null);
+      const [horseImporting, setHorseImporting] = useState(false);
+      const [horseResult, setHorseResult] = useState(null);
+      const horseFileRef = useRef(null);
+
+      const loadAll = async () => {
+        if (!db) return;
+        setLoading(true);
+        try {
+          const [custSnap, horseSnap] = await Promise.all([
+            db.collection('customers').where('farrierId', '==', userId).get(),
+            db.collection('horses').where('farrierId', '==', userId).get(),
+          ]);
+          setCustomers(custSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setHorses(horseSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (e) {
+          console.error('Error loading data for export:', e);
+        }
+        setLoading(false);
+      };
+
+      useEffect(() => { loadAll(); }, [userId]);
+
+      // ---- Customers ----
+      const downloadCustomerTemplate = () => {
+        const example = {
+          name: 'Jane Smith', farmName: 'Sunny Acres Farm', managerContact: '',
+          email: 'jane@example.com', phone: '555-123-4567', address: '123 Farm Rd',
+          city: 'Ocala', state: 'FL', zip: '34470',
+          notes: 'Prefers morning appointments', source: 'referral',
+        };
+        downloadCSV_('customer_import_template.csv', toCSV_(CUSTOMER_FIELDS, [example]));
+      };
+
+      const exportCustomers = () => {
+        downloadCSV_('customers_export.csv', toCSV_(CUSTOMER_FIELDS, customers));
+      };
+
+      const handleCustomerFile = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        const text = await file.text();
+        const { headers, rows } = parseCSV_(text);
+        setCustomerResult(null);
+        if (rows.length === 0) { alert('No data rows found in that CSV.'); return; }
+        const headerMap = buildHeaderMap_(headers, CUSTOMER_FIELDS);
+        if (!headerMap.name) { alert('Could not find a "Name" column. Please use the template.'); return; }
+
+        const existingByEmail = new Map(customers.filter(c => c.email).map(c => [c.email.toLowerCase(), c]));
+        const existingKeys = new Set(customers.map(c => `${(c.name || '').toLowerCase()}|${(c.phone || '').toLowerCase()}`));
+
+        const validRows = [];
+        const errors = [];
+        const skipped = [];
+        rows.forEach((r, idx) => {
+          const rowNum = idx + 2;
+          const get = (key) => headerMap[key] ? (r[headerMap[key]] || '') : '';
+          const name = get('name').trim();
+          if (!name) { errors.push({ row: rowNum, message: 'Name is required.' }); return; }
+          const email = get('email').trim();
+          const phone = get('phone').trim();
+          if (email && existingByEmail.has(email.toLowerCase())) {
+            skipped.push({ row: rowNum, message: `"${name}" — a customer with email ${email} already exists.` });
+            return;
+          }
+          if (!email && existingKeys.has(`${name.toLowerCase()}|${phone.toLowerCase()}`)) {
+            skipped.push({ row: rowNum, message: `"${name}" — already exists.` });
+            return;
+          }
+          validRows.push({
+            farrierId: userId,
+            name,
+            farmName: get('farmName').trim(),
+            managerContact: get('managerContact').trim(),
+            email,
+            phone,
+            address: get('address').trim(),
+            city: get('city').trim(),
+            state: get('state').trim().toUpperCase(),
+            zip: get('zip').trim(),
+            notes: get('notes').trim(),
+            source: get('source').trim() || 'referral',
+            smsOptOut: false,
+          });
+        });
+        setCustomerParsed({ totalRows: rows.length, validRows, errors, skipped });
+      };
+
+      const confirmCustomerImport = async () => {
+        if (!customerParsed?.validRows?.length) return;
+        setCustomerImporting(true);
+        try {
+          const now = firebase.firestore.FieldValue.serverTimestamp();
+          const payloads = customerParsed.validRows.map(p => ({ ...p, createdAt: now, updatedAt: now }));
+          await batchWrite_('customers', payloads);
+          setCustomerResult({ added: payloads.length, skipped: customerParsed.skipped.length, errors: customerParsed.errors.length });
+          setCustomerParsed(null);
+          await loadAll();
+        } catch (e) {
+          alert('Import failed: ' + e.message);
+        }
+        setCustomerImporting(false);
+      };
+
+      // ---- Horses ----
+      const downloadHorseTemplate = () => {
+        const example = {
+          customerName: 'Jane Smith', customerEmail: 'jane@example.com', name: 'Buddy',
+          breed: 'Quarter Horse', dob: '2016-04-12', sex: 'Gelding', color: 'Bay',
+          shoeingCycleWeeks: '6', shoeSize: '00', shoeType: 'Steel',
+          gaitNotes: '', hoofNotes: 'Slightly flared left front', knownIssues: '',
+        };
+        downloadCSV_('horse_import_template.csv', toCSV_(HORSE_FIELDS, [example]));
+      };
+
+      const exportHorses = () => {
+        const customersById = new Map(customers.map(c => [c.id, c]));
+        const rows = horses.map(h => ({
+          ...h,
+          customerName: h.customerName || customersById.get(h.customerId)?.name || '',
+          customerEmail: customersById.get(h.customerId)?.email || '',
+        }));
+        downloadCSV_('horses_export.csv', toCSV_(HORSE_FIELDS, rows));
+      };
+
+      const handleHorseFile = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        const text = await file.text();
+        const { headers, rows } = parseCSV_(text);
+        setHorseResult(null);
+        if (rows.length === 0) { alert('No data rows found in that CSV.'); return; }
+        const headerMap = buildHeaderMap_(headers, HORSE_FIELDS);
+        if (!headerMap.name || !headerMap.customerName) {
+          alert('Could not find "Horse Name" and "Customer Name" columns. Please use the template.');
+          return;
+        }
+
+        const byEmail = new Map(customers.filter(c => c.email).map(c => [c.email.toLowerCase(), c]));
+        const byName = new Map();
+        customers.forEach(c => {
+          const key = (c.name || '').toLowerCase();
+          if (!byName.has(key)) byName.set(key, []);
+          byName.get(key).push(c);
+        });
+        const existingHorseKeys = new Set(horses.map(h => `${h.customerId}|${(h.name || '').toLowerCase()}`));
+
+        const validRows = [];
+        const errors = [];
+        const skipped = [];
+        rows.forEach((r, idx) => {
+          const rowNum = idx + 2;
+          const get = (key) => headerMap[key] ? (r[headerMap[key]] || '') : '';
+          const horseName = get('name').trim();
+          const customerName = get('customerName').trim();
+          const customerEmail = get('customerEmail').trim();
+          if (!horseName) { errors.push({ row: rowNum, message: 'Horse Name is required.' }); return; }
+          if (!customerName && !customerEmail) { errors.push({ row: rowNum, message: 'Customer Name (or Customer Email) is required.' }); return; }
+
+          let customer = customerEmail ? byEmail.get(customerEmail.toLowerCase()) : null;
+          if (!customer) {
+            const matches = byName.get(customerName.toLowerCase()) || [];
+            if (matches.length === 1) customer = matches[0];
+            else if (matches.length > 1) {
+              errors.push({ row: rowNum, message: `Multiple customers named "${customerName}" — add a Customer Email column to disambiguate.` });
+              return;
+            }
+          }
+          if (!customer) {
+            errors.push({ row: rowNum, message: `No customer found matching "${customerName || customerEmail}". Add the customer first on the Customers tab.` });
+            return;
+          }
+          if (existingHorseKeys.has(`${customer.id}|${horseName.toLowerCase()}`)) {
+            skipped.push({ row: rowNum, message: `"${horseName}" — ${customer.name} already has a horse with this name.` });
+            return;
+          }
+
+          const cycle = parseInt(get('shoeingCycleWeeks'), 10);
+          validRows.push({
+            farrierId: userId,
+            customerId: customer.id,
+            customerName: customer.name,
+            name: horseName,
+            breed: get('breed').trim(),
+            dob: get('dob').trim(),
+            sex: get('sex').trim(),
+            color: get('color').trim(),
+            shoeingCycleWeeks: isFinite(cycle) ? cycle : null,
+            shoeSize: get('shoeSize').trim(),
+            shoeType: get('shoeType').trim(),
+            gaitNotes: get('gaitNotes').trim(),
+            hoofNotes: get('hoofNotes').trim(),
+            knownIssues: get('knownIssues').trim(),
+            photos: [],
+          });
+        });
+        setHorseParsed({ totalRows: rows.length, validRows, errors, skipped });
+      };
+
+      const confirmHorseImport = async () => {
+        if (!horseParsed?.validRows?.length) return;
+        setHorseImporting(true);
+        try {
+          const now = firebase.firestore.FieldValue.serverTimestamp();
+          const payloads = horseParsed.validRows.map(p => ({ ...p, createdAt: now, updatedAt: now }));
+          await batchWrite_('horses', payloads);
+          setHorseResult({ added: payloads.length, skipped: horseParsed.skipped.length, errors: horseParsed.errors.length });
+          setHorseParsed(null);
+          await loadAll();
+        } catch (e) {
+          alert('Import failed: ' + e.message);
+        }
+        setHorseImporting(false);
+      };
+
+      const errorList = (items, color) => items.length > 0 && (
+        <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem', fontSize: '0.85rem', color }}>
+          {items.slice(0, 10).map((it, i) => <li key={i}>Row {it.row}: {it.message}</li>)}
+          {items.length > 10 && <li>...and {items.length - 10} more</li>}
+        </ul>
+      );
+
+      return (
+        <div>
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <h2 style={{ marginBottom: '0.5rem' }}>Data Management</h2>
+            <p style={{ color: 'var(--text-muted)' }}>
+              Export your customers and horses to a spreadsheet, or bulk-import new records using the templates below.
+            </p>
+          </div>
+
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <h3 style={{ marginBottom: '1rem' }}>Customers</h3>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <button className="btn btn-outline" onClick={downloadCustomerTemplate}>⬇️ Download Template</button>
+              <button className="btn btn-outline" onClick={exportCustomers} disabled={loading}>
+                📤 Export All ({customers.length})
+              </button>
+              <button className="btn btn-primary" onClick={() => customerFileRef.current?.click()}>
+                📥 Import from CSV
+              </button>
+              <input ref={customerFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleCustomerFile} />
+            </div>
+
+            {customerParsed && (
+              <div style={{ padding: '1rem', border: '2px solid var(--border)', borderRadius: 8, marginBottom: '1rem' }}>
+                <p><strong>{customerParsed.validRows.length}</strong> ready to import, <strong>{customerParsed.skipped.length}</strong> skipped as duplicates, <strong>{customerParsed.errors.length}</strong> errors — out of {customerParsed.totalRows} rows.</p>
+                {errorList(customerParsed.errors, '#dc2626')}
+                {errorList(customerParsed.skipped, 'var(--text-muted)')}
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                  <button className="btn btn-primary" onClick={confirmCustomerImport} disabled={customerImporting || customerParsed.validRows.length === 0}>
+                    {customerImporting ? 'Importing...' : `Import ${customerParsed.validRows.length} Customer${customerParsed.validRows.length === 1 ? '' : 's'}`}
+                  </button>
+                  <button className="btn btn-outline" onClick={() => setCustomerParsed(null)} disabled={customerImporting}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {customerResult && (
+              <p style={{ color: 'var(--success)' }}>
+                ✅ Imported {customerResult.added} customer{customerResult.added === 1 ? '' : 's'}
+                {customerResult.skipped > 0 ? `, skipped ${customerResult.skipped} duplicate${customerResult.skipped === 1 ? '' : 's'}` : ''}
+                {customerResult.errors > 0 ? `, ${customerResult.errors} error${customerResult.errors === 1 ? '' : 's'}` : ''}.
+              </p>
+            )}
+          </div>
+
+          <div className="card">
+            <h3 style={{ marginBottom: '1rem' }}>Horses</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+              Each horse must be linked to a customer that already exists — match by Customer Name, or add a Customer Email column to disambiguate customers who share a name.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <button className="btn btn-outline" onClick={downloadHorseTemplate}>⬇️ Download Template</button>
+              <button className="btn btn-outline" onClick={exportHorses} disabled={loading}>
+                📤 Export All ({horses.length})
+              </button>
+              <button className="btn btn-primary" onClick={() => horseFileRef.current?.click()}>
+                📥 Import from CSV
+              </button>
+              <input ref={horseFileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={handleHorseFile} />
+            </div>
+
+            {horseParsed && (
+              <div style={{ padding: '1rem', border: '2px solid var(--border)', borderRadius: 8, marginBottom: '1rem' }}>
+                <p><strong>{horseParsed.validRows.length}</strong> ready to import, <strong>{horseParsed.skipped.length}</strong> skipped as duplicates, <strong>{horseParsed.errors.length}</strong> errors — out of {horseParsed.totalRows} rows.</p>
+                {errorList(horseParsed.errors, '#dc2626')}
+                {errorList(horseParsed.skipped, 'var(--text-muted)')}
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                  <button className="btn btn-primary" onClick={confirmHorseImport} disabled={horseImporting || horseParsed.validRows.length === 0}>
+                    {horseImporting ? 'Importing...' : `Import ${horseParsed.validRows.length} Horse${horseParsed.validRows.length === 1 ? '' : 'es'}`}
+                  </button>
+                  <button className="btn btn-outline" onClick={() => setHorseParsed(null)} disabled={horseImporting}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {horseResult && (
+              <p style={{ color: 'var(--success)' }}>
+                ✅ Imported {horseResult.added} horse{horseResult.added === 1 ? '' : 's'}
+                {horseResult.skipped > 0 ? `, skipped ${horseResult.skipped} duplicate${horseResult.skipped === 1 ? '' : 's'}` : ''}
+                {horseResult.errors > 0 ? `, ${horseResult.errors} error${horseResult.errors === 1 ? '' : 's'}` : ''}.
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
 
     function MileageLogView({ userId, userProfile }) {
       const [logs, setLogs] = useState([]);
