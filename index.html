@@ -6750,7 +6750,18 @@ function ServicesView({ userId }) {
       }
     }
 
+    async function batchUpdate_(collectionName, updates) {
+      const CHUNK = 400;
+      for (let i = 0; i < updates.length; i += CHUNK) {
+        const chunk = updates.slice(i, i + CHUNK);
+        const batch = db.batch();
+        chunk.forEach(u => batch.update(db.collection(collectionName).doc(u.id), u.payload));
+        await batch.commit();
+      }
+    }
+
     const CUSTOMER_FIELDS = [
+      { key: 'id', header: 'Customer ID' },
       { key: 'name', header: 'Name' },
       { key: 'farmName', header: 'Farm Name' },
       { key: 'managerContact', header: 'Manager Contact' },
@@ -6765,6 +6776,7 @@ function ServicesView({ userId }) {
     ];
 
     const HORSE_FIELDS = [
+      { key: 'id', header: 'Horse ID' },
       { key: 'customerName', header: 'Customer Name' },
       { key: 'customerEmail', header: 'Customer Email' },
       { key: 'name', header: 'Horse Name' },
@@ -6839,12 +6851,15 @@ function ServicesView({ userId }) {
         const headerMap = buildHeaderMap_(headers, CUSTOMER_FIELDS);
         if (!headerMap.name) { alert('Could not find a "Name" column. Please use the template.'); return; }
 
+        const existingById = new Map(customers.map(c => [c.id, c]));
         const existingByEmail = new Map(customers.filter(c => c.email).map(c => [c.email.toLowerCase(), c]));
         const existingKeys = new Set(customers.map(c => `${(c.name || '').toLowerCase()}|${(c.phone || '').toLowerCase()}`));
 
-        const validRows = [];
+        const toCreate = [];
+        const toUpdate = [];
         const errors = [];
         const skipped = [];
+        const info = [];
         rows.forEach((r, idx) => {
           const rowNum = idx + 2;
           const get = (key) => headerMap[key] ? (r[headerMap[key]] || '') : '';
@@ -6852,16 +6867,7 @@ function ServicesView({ userId }) {
           if (!name) { errors.push({ row: rowNum, message: 'Name is required.' }); return; }
           const email = get('email').trim();
           const phone = get('phone').trim();
-          if (email && existingByEmail.has(email.toLowerCase())) {
-            skipped.push({ row: rowNum, message: `"${name}" — a customer with email ${email} already exists.` });
-            return;
-          }
-          if (!email && existingKeys.has(`${name.toLowerCase()}|${phone.toLowerCase()}`)) {
-            skipped.push({ row: rowNum, message: `"${name}" — already exists.` });
-            return;
-          }
-          validRows.push({
-            farrierId: userId,
+          const fields = {
             name,
             farmName: get('farmName').trim(),
             managerContact: get('managerContact').trim(),
@@ -6873,20 +6879,42 @@ function ServicesView({ userId }) {
             zip: get('zip').trim(),
             notes: get('notes').trim(),
             source: get('source').trim() || 'referral',
-            smsOptOut: false,
-          });
+          };
+
+          const id = get('id').trim();
+          if (id) {
+            if (existingById.has(id)) {
+              toUpdate.push({ row: rowNum, id, payload: fields });
+              return;
+            }
+            info.push({ row: rowNum, message: `"${name}" — Customer ID not found on this account, will be added as a new customer.` });
+          }
+
+          if (email && existingByEmail.has(email.toLowerCase())) {
+            skipped.push({ row: rowNum, message: `"${name}" — a customer with email ${email} already exists.` });
+            return;
+          }
+          if (!email && existingKeys.has(`${name.toLowerCase()}|${phone.toLowerCase()}`)) {
+            skipped.push({ row: rowNum, message: `"${name}" — already exists.` });
+            return;
+          }
+          toCreate.push({ row: rowNum, payload: { ...fields, farrierId: userId, smsOptOut: false } });
         });
-        setCustomerParsed({ totalRows: rows.length, validRows, errors, skipped });
+        setCustomerParsed({ totalRows: rows.length, toCreate, toUpdate, errors, skipped, info });
       };
 
       const confirmCustomerImport = async () => {
-        if (!customerParsed?.validRows?.length) return;
+        if (!customerParsed || (!customerParsed.toCreate.length && !customerParsed.toUpdate.length)) return;
         setCustomerImporting(true);
         try {
           const now = firebase.firestore.FieldValue.serverTimestamp();
-          const payloads = customerParsed.validRows.map(p => ({ ...p, createdAt: now, updatedAt: now }));
-          await batchWrite_('customers', payloads);
-          setCustomerResult({ added: payloads.length, skipped: customerParsed.skipped.length, errors: customerParsed.errors.length });
+          const creates = customerParsed.toCreate.map(r => ({ ...r.payload, createdAt: now, updatedAt: now }));
+          const updates = customerParsed.toUpdate.map(r => ({ id: r.id, payload: { ...r.payload, updatedAt: now } }));
+          await Promise.all([
+            creates.length ? batchWrite_('customers', creates) : null,
+            updates.length ? batchUpdate_('customers', updates) : null,
+          ]);
+          setCustomerResult({ added: creates.length, updated: updates.length, skipped: customerParsed.skipped.length, errors: customerParsed.errors.length });
           setCustomerParsed(null);
           await loadAll();
         } catch (e) {
@@ -6930,6 +6958,7 @@ function ServicesView({ userId }) {
           return;
         }
 
+        const existingHorseById = new Map(horses.map(h => [h.id, h]));
         const byEmail = new Map(customers.filter(c => c.email).map(c => [c.email.toLowerCase(), c]));
         const byName = new Map();
         customers.forEach(c => {
@@ -6939,9 +6968,11 @@ function ServicesView({ userId }) {
         });
         const existingHorseKeys = new Set(horses.map(h => `${h.customerId}|${(h.name || '').toLowerCase()}`));
 
-        const validRows = [];
+        const toCreate = [];
+        const toUpdate = [];
         const errors = [];
         const skipped = [];
+        const info = [];
         rows.forEach((r, idx) => {
           const rowNum = idx + 2;
           const get = (key) => headerMap[key] ? (r[headerMap[key]] || '') : '';
@@ -6964,14 +6995,9 @@ function ServicesView({ userId }) {
             errors.push({ row: rowNum, message: `No customer found matching "${customerName || customerEmail}". Add the customer first on the Customers tab.` });
             return;
           }
-          if (existingHorseKeys.has(`${customer.id}|${horseName.toLowerCase()}`)) {
-            skipped.push({ row: rowNum, message: `"${horseName}" — ${customer.name} already has a horse with this name.` });
-            return;
-          }
 
           const cycle = parseInt(get('shoeingCycleWeeks'), 10);
-          validRows.push({
-            farrierId: userId,
+          const fields = {
             customerId: customer.id,
             customerName: customer.name,
             name: horseName,
@@ -6985,20 +7011,38 @@ function ServicesView({ userId }) {
             gaitNotes: get('gaitNotes').trim(),
             hoofNotes: get('hoofNotes').trim(),
             knownIssues: get('knownIssues').trim(),
-            photos: [],
-          });
+          };
+
+          const id = get('id').trim();
+          if (id) {
+            if (existingHorseById.has(id)) {
+              toUpdate.push({ row: rowNum, id, payload: fields });
+              return;
+            }
+            info.push({ row: rowNum, message: `"${horseName}" — Horse ID not found on this account, will be added as a new horse.` });
+          }
+
+          if (existingHorseKeys.has(`${customer.id}|${horseName.toLowerCase()}`)) {
+            skipped.push({ row: rowNum, message: `"${horseName}" — ${customer.name} already has a horse with this name.` });
+            return;
+          }
+          toCreate.push({ row: rowNum, payload: { ...fields, farrierId: userId, photos: [] } });
         });
-        setHorseParsed({ totalRows: rows.length, validRows, errors, skipped });
+        setHorseParsed({ totalRows: rows.length, toCreate, toUpdate, errors, skipped, info });
       };
 
       const confirmHorseImport = async () => {
-        if (!horseParsed?.validRows?.length) return;
+        if (!horseParsed || (!horseParsed.toCreate.length && !horseParsed.toUpdate.length)) return;
         setHorseImporting(true);
         try {
           const now = firebase.firestore.FieldValue.serverTimestamp();
-          const payloads = horseParsed.validRows.map(p => ({ ...p, createdAt: now, updatedAt: now }));
-          await batchWrite_('horses', payloads);
-          setHorseResult({ added: payloads.length, skipped: horseParsed.skipped.length, errors: horseParsed.errors.length });
+          const creates = horseParsed.toCreate.map(r => ({ ...r.payload, createdAt: now, updatedAt: now }));
+          const updates = horseParsed.toUpdate.map(r => ({ id: r.id, payload: { ...r.payload, updatedAt: now } }));
+          await Promise.all([
+            creates.length ? batchWrite_('horses', creates) : null,
+            updates.length ? batchUpdate_('horses', updates) : null,
+          ]);
+          setHorseResult({ added: creates.length, updated: updates.length, skipped: horseParsed.skipped.length, errors: horseParsed.errors.length });
           setHorseParsed(null);
           await loadAll();
         } catch (e) {
@@ -7020,6 +7064,8 @@ function ServicesView({ userId }) {
             <h2 style={{ marginBottom: '0.5rem' }}>Data Management</h2>
             <p style={{ color: 'var(--text-muted)' }}>
               Export your customers and horses to a spreadsheet, or bulk-import new records using the templates below.
+              Exports include an ID column — leave it blank to add a new record, or fill it in (e.g. after editing an
+              exported file) to update that existing record, including when moving records to another FarriTech account.
             </p>
           </div>
 
@@ -7038,12 +7084,13 @@ function ServicesView({ userId }) {
 
             {customerParsed && (
               <div style={{ padding: '1rem', border: '2px solid var(--border)', borderRadius: 8, marginBottom: '1rem' }}>
-                <p><strong>{customerParsed.validRows.length}</strong> ready to import, <strong>{customerParsed.skipped.length}</strong> skipped as duplicates, <strong>{customerParsed.errors.length}</strong> errors — out of {customerParsed.totalRows} rows.</p>
+                <p><strong>{customerParsed.toCreate.length}</strong> to add, <strong>{customerParsed.toUpdate.length}</strong> to update, <strong>{customerParsed.skipped.length}</strong> skipped as duplicates, <strong>{customerParsed.errors.length}</strong> errors — out of {customerParsed.totalRows} rows.</p>
                 {errorList(customerParsed.errors, '#dc2626')}
                 {errorList(customerParsed.skipped, 'var(--text-muted)')}
+                {errorList(customerParsed.info, 'var(--text-muted)')}
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-                  <button className="btn btn-primary" onClick={confirmCustomerImport} disabled={customerImporting || customerParsed.validRows.length === 0}>
-                    {customerImporting ? 'Importing...' : `Import ${customerParsed.validRows.length} Customer${customerParsed.validRows.length === 1 ? '' : 's'}`}
+                  <button className="btn btn-primary" onClick={confirmCustomerImport} disabled={customerImporting || (customerParsed.toCreate.length === 0 && customerParsed.toUpdate.length === 0)}>
+                    {customerImporting ? 'Importing...' : `Import (${customerParsed.toCreate.length + customerParsed.toUpdate.length})`}
                   </button>
                   <button className="btn btn-outline" onClick={() => setCustomerParsed(null)} disabled={customerImporting}>Cancel</button>
                 </div>
@@ -7052,7 +7099,7 @@ function ServicesView({ userId }) {
 
             {customerResult && (
               <p style={{ color: 'var(--success)' }}>
-                ✅ Imported {customerResult.added} customer{customerResult.added === 1 ? '' : 's'}
+                ✅ Added {customerResult.added}, updated {customerResult.updated} customer{(customerResult.added + customerResult.updated) === 1 ? '' : 's'}
                 {customerResult.skipped > 0 ? `, skipped ${customerResult.skipped} duplicate${customerResult.skipped === 1 ? '' : 's'}` : ''}
                 {customerResult.errors > 0 ? `, ${customerResult.errors} error${customerResult.errors === 1 ? '' : 's'}` : ''}.
               </p>
@@ -7077,12 +7124,13 @@ function ServicesView({ userId }) {
 
             {horseParsed && (
               <div style={{ padding: '1rem', border: '2px solid var(--border)', borderRadius: 8, marginBottom: '1rem' }}>
-                <p><strong>{horseParsed.validRows.length}</strong> ready to import, <strong>{horseParsed.skipped.length}</strong> skipped as duplicates, <strong>{horseParsed.errors.length}</strong> errors — out of {horseParsed.totalRows} rows.</p>
+                <p><strong>{horseParsed.toCreate.length}</strong> to add, <strong>{horseParsed.toUpdate.length}</strong> to update, <strong>{horseParsed.skipped.length}</strong> skipped as duplicates, <strong>{horseParsed.errors.length}</strong> errors — out of {horseParsed.totalRows} rows.</p>
                 {errorList(horseParsed.errors, '#dc2626')}
                 {errorList(horseParsed.skipped, 'var(--text-muted)')}
+                {errorList(horseParsed.info, 'var(--text-muted)')}
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-                  <button className="btn btn-primary" onClick={confirmHorseImport} disabled={horseImporting || horseParsed.validRows.length === 0}>
-                    {horseImporting ? 'Importing...' : `Import ${horseParsed.validRows.length} Horse${horseParsed.validRows.length === 1 ? '' : 'es'}`}
+                  <button className="btn btn-primary" onClick={confirmHorseImport} disabled={horseImporting || (horseParsed.toCreate.length === 0 && horseParsed.toUpdate.length === 0)}>
+                    {horseImporting ? 'Importing...' : `Import (${horseParsed.toCreate.length + horseParsed.toUpdate.length})`}
                   </button>
                   <button className="btn btn-outline" onClick={() => setHorseParsed(null)} disabled={horseImporting}>Cancel</button>
                 </div>
@@ -7091,7 +7139,7 @@ function ServicesView({ userId }) {
 
             {horseResult && (
               <p style={{ color: 'var(--success)' }}>
-                ✅ Imported {horseResult.added} horse{horseResult.added === 1 ? '' : 's'}
+                ✅ Added {horseResult.added}, updated {horseResult.updated} horse{(horseResult.added + horseResult.updated) === 1 ? '' : 's'}
                 {horseResult.skipped > 0 ? `, skipped ${horseResult.skipped} duplicate${horseResult.skipped === 1 ? '' : 's'}` : ''}
                 {horseResult.errors > 0 ? `, ${horseResult.errors} error${horseResult.errors === 1 ? '' : 's'}` : ''}.
               </p>
