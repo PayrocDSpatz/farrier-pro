@@ -589,14 +589,29 @@
       <input type="date" id="review-date">
     </div>
 
+    <div class="card">
+      <div class="card-title">Send To (optional)</div>
+      <div class="field">
+        <label>Mobile Number</label>
+        <input type="tel" id="review-phone" placeholder="(555) 555-5555">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="review-email" placeholder="customer@example.com">
+      </div>
+    </div>
+
     <div id="review-saving" style="display:none; text-align:center; padding:12px; color:var(--text-muted);">Creating invoice…</div>
 
     <div class="row-btns">
-      <button class="btn-outline" id="save-inv-btn" onclick="saveInvoiceOnly()">💾 Save</button>
+      <button class="btn-outline" id="save-inv-btn" onclick="saveInvoiceOnly()">💾 Save Only</button>
       <button class="btn-primary" id="pay-inv-btn" onclick="saveAndPay()">💳 Take Payment</button>
     </div>
     <div style="margin-top:8px;"></div>
-    <button class="btn-secondary" onclick="saveAndSendLink()">📲 Save & Send Payment Link</button>
+    <div class="row-btns">
+      <button class="btn-secondary" id="text-inv-btn" onclick="saveAndSendSms()">📲 Send Text</button>
+      <button class="btn-secondary" id="email-inv-btn" onclick="saveAndSendEmail()">📧 Send Email</button>
+    </div>
   </div>
 </div>
 
@@ -2258,6 +2273,8 @@ function continueToInvoiceReview() {
   `).join('');
   document.getElementById('review-total').textContent = '$' + total.toFixed(2);
   document.getElementById('review-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('review-phone').value = state.editingInvoice?.customerPhone || state.customer.phone || '';
+  document.getElementById('review-email').value = state.editingInvoice?.customerEmail || state.customer.email || '';
   document.getElementById('review-header-title').textContent = state.editingInvoice ? 'Review Changes' : 'Invoice Review';
   goTo('screen-invoice-review');
 }
@@ -2645,14 +2662,15 @@ async function updateExistingInvoice(inv, allItems, total) {
     throw new Error('This invoice can no longer be edited.');
   }
   const c = state.customer;
+  const { phone, email } = getReviewContact();
   const miles = parseInt(document.getElementById('svc-miles')?.value) || 0;
   const notes = document.getElementById('svc-notes')?.value.trim() || '';
 
   const updates = {
     customerName: c.name,
     customerFarmName: c.farmName || '',
-    customerEmail: c.email || '',
-    customerPhone: c.phone || '',
+    customerEmail: email,
+    customerPhone: phone,
     items: allItems,
     total,
     milesDriven: miles,
@@ -2669,7 +2687,7 @@ async function updateExistingInvoice(inv, allItems, total) {
         const plRes = await fetch('/api/stripe-payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'payment_link', stripeSecretKey: stripeKey, amount: total, invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, customerEmail: c.email || '', customerName: c.name, farrierId: state.user.uid }),
+          body: JSON.stringify({ action: 'payment_link', stripeSecretKey: stripeKey, amount: total, invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, customerEmail: email, customerName: c.name, farrierId: state.user.uid }),
         });
         const plData = await plRes.json();
         if (plData.success && plData.paymentUrl) {
@@ -2698,11 +2716,22 @@ async function updateExistingInvoice(inv, allItems, total) {
     }));
   });
 
-  return { id: inv.id, invoiceNumber: inv.invoiceNumber, total, paymentUrl, status: 'outstanding', items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: c.phone||'', customerEmail: c.email||'', milesDriven: miles, notes };
+  return { id: inv.id, invoiceNumber: inv.invoiceNumber, total, paymentUrl, status: 'outstanding', items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: phone, customerEmail: email, milesDriven: miles, notes };
+}
+
+// Reads the (editable) Mobile Number / Email fields on the invoice review screen —
+// they default to the customer's saved contact info but can be corrected per-invoice
+// without touching the customer record itself.
+function getReviewContact() {
+  return {
+    phone: document.getElementById('review-phone')?.value.trim() || '',
+    email: document.getElementById('review-email')?.value.trim() || '',
+  };
 }
 
 async function createInvoice() {
   const c = state.customer;
+  const { phone, email } = getReviewContact();
   const allItems = buildInvoiceItems();
   const total = allItems.reduce((s,i) => s + i.amount, 0);
 
@@ -2722,8 +2751,8 @@ async function createInvoice() {
     farrierId: state.user.uid,
     customerName: c.name,
     customerFarmName: c.farmName || '',
-    customerEmail: c.email || '',
-    customerPhone: c.phone || '',
+    customerEmail: email,
+    customerPhone: phone,
     items: allItems,
     total,
     invoiceNumber,
@@ -2768,20 +2797,21 @@ async function createInvoice() {
     }));
   }
 
-  // Payment link / SMS both require network (Stripe API, Twilio) — skip them
-  // entirely while offline instead of letting them fail with a confusing error.
-  // The invoice itself still saves and syncs; the link can be generated later
-  // from the main app once back online.
+  // Payment link generation requires network (Stripe API) — skip it entirely while
+  // offline instead of letting it fail with a confusing error. The invoice itself
+  // still saves and syncs; the link can be generated later from the main app once
+  // back online. Note: creating an invoice never sends a text or email on its own —
+  // that only happens if the farrier explicitly taps Send Text / Send Email below.
   let paymentUrl = '';
   const stripeKey = state.userProfile?.stripeSecretKey || '';
   if (!netState.online) {
-    console.warn('⚠️ Offline — skipping payment link/SMS; invoice will sync once back online.');
+    console.warn('⚠️ Offline — skipping payment link; invoice will sync once back online.');
   } else if (stripeKey && total > 0) {
     try {
       const plRes = await fetch('/api/stripe-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'payment_link', stripeSecretKey: stripeKey, amount: total, invoiceId: docRef.id, invoiceNumber, customerEmail: c.email||'', customerName: c.name, farrierId: state.user.uid }),
+        body: JSON.stringify({ action: 'payment_link', stripeSecretKey: stripeKey, amount: total, invoiceId: docRef.id, invoiceNumber, customerEmail: email, customerName: c.name, farrierId: state.user.uid }),
       });
       const plData = await plRes.json();
       console.log('💳 Stripe response:', JSON.stringify(plData));
@@ -2802,29 +2832,7 @@ async function createInvoice() {
     showToast('Stripe not connected — no payment link', 'error');
   }
 
-  // Send SMS with payment link
-  const smsEnabled = state.userProfile?.smsEnabled;
-  if (netState.online && smsEnabled && c.phone) {
-    try {
-      const bizName = state.userProfile?.businessName || 'Your Farrier';
-      const msg = paymentUrl
-        ? `Hi ${c.name}, your invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName} is ready. Pay here: ${paymentUrl} Reply STOP to opt out.`
-        : `Hi ${c.name}, your invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName} has been created. Reply STOP to opt out.`;
-      const smsRes = await fetch('/api/send-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: c.phone, body: msg })
-      });
-      const smsData = await smsRes.json();
-      console.log('✅ SMS result:', smsData);
-    } catch(e) { console.warn('SMS error:', e); }
-  } else if (!smsEnabled) {
-    console.warn('⚠️ SMS not sent — smsEnabled is false. Enable SMS in Settings on the main app.');
-  } else if (netState.online && !c.phone) {
-    console.warn('⚠️ SMS not sent — customer has no phone number.');
-  }
-
-  return { id: docRef.id, invoiceNumber, total, paymentUrl, status: 'outstanding', items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: c.phone||'', customerEmail: c.email||'', milesDriven: miles, notes: document.getElementById('svc-notes')?.value.trim() || '' };
+  return { id: docRef.id, invoiceNumber, total, paymentUrl, status: 'outstanding', items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: phone, customerEmail: email, milesDriven: miles, notes: document.getElementById('svc-notes')?.value.trim() || '' };
 }
 
 async function saveInvoiceOnly() {
@@ -2858,25 +2866,70 @@ async function saveAndPay() {
   }
 }
 
-async function saveAndSendLink() {
-  const wasEdit = !!state.editingInvoice;
+// Explicit "Send Text" — only fires when the farrier taps this button, using
+// whatever's currently in the (editable) Mobile Number field. Save Only / Take
+// Payment never call this, so saving an invoice can no longer text a customer
+// as a surprise side effect.
+async function saveAndSendSms() {
+  const phone = document.getElementById('review-phone').value.trim();
+  if (!phone) { showToast('Enter a mobile number first', 'error'); return; }
   setBtnsDisabled(true);
   document.getElementById('review-saving').style.display = 'block';
   try {
     const inv = await createInvoice();
     state.currentInvoice = inv;
     state.editingInvoice = null;
-    if (inv.paymentUrl && inv.customerPhone) {
-      await fetch('/api/send-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} is ready. Pay here: ${inv.paymentUrl}` })
-      });
-      showSuccess('Invoice Sent!', `Payment link sent to ${inv.customerPhone}`);
-    } else if (inv.paymentUrl) {
-      showSuccess(wasEdit ? 'Invoice Updated!' : 'Invoice Created!', 'Payment link ready — copy from the main app to share');
+    const bizName = state.userProfile?.businessName || 'Your Farrier';
+    const msg = inv.paymentUrl
+      ? `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} from ${bizName} is ready. Pay here: ${inv.paymentUrl} Reply STOP to opt out.`
+      : `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} from ${bizName} has been created. Reply STOP to opt out.`;
+    const res = await fetch('/api/send-sms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: phone, body: msg })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showSuccess('Text Sent!', `Invoice sent to ${phone}`);
     } else {
-      showSuccess(wasEdit ? 'Invoice Updated!' : 'Invoice Saved!', `#${inv.invoiceNumber} for $${inv.total.toFixed(2)} ${wasEdit ? 'updated' : 'created'}` + (netState.online ? ' — no payment link' : ' (will sync when back online)'));
+      showSuccess('Invoice Saved', `Saved, but the text failed: ${data.error || 'Unknown error'}`, '⚠️');
+    }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  setBtnsDisabled(false);
+  document.getElementById('review-saving').style.display = 'none';
+}
+
+// Explicit "Send Email" — same idea as saveAndSendSms above, using the (editable)
+// Email field. Only fires on this button tap, never as a side effect of saving.
+async function saveAndSendEmail() {
+  const email = document.getElementById('review-email').value.trim();
+  if (!email) { showToast('Enter an email address first', 'error'); return; }
+  setBtnsDisabled(true);
+  document.getElementById('review-saving').style.display = 'block';
+  try {
+    const inv = await createInvoice();
+    state.currentInvoice = inv;
+    state.editingInvoice = null;
+    const bizName = state.userProfile?.businessName || 'Your Farrier';
+    const payBlock = inv.paymentUrl
+      ? `<p style="text-align:center;margin:24px 0;"><a href="${inv.paymentUrl}" style="background:#2563eb;color:#fff;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;">Pay Invoice — $${inv.total.toFixed(2)}</a></p>`
+      : '';
+    const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:520px;margin:0 auto;padding:20px;color:#333;">
+      <h2 style="color:#1a365d;">Invoice #${escapeHtml(inv.invoiceNumber)} from ${escapeHtml(bizName)}</h2>
+      <p>Hi ${escapeHtml(inv.customerName)},</p>
+      <p>Your invoice total is <strong>$${inv.total.toFixed(2)}</strong>.</p>
+      ${payBlock}
+    </div>`;
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: email, subject: `Invoice #${inv.invoiceNumber} from ${bizName}`, html })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showSuccess('Email Sent!', `Invoice sent to ${email}`);
+    } else {
+      showSuccess('Invoice Saved', `Saved, but the email failed: ${data.error || 'Unknown error'}`, '⚠️');
     }
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
   setBtnsDisabled(false);
@@ -2884,7 +2937,7 @@ async function saveAndSendLink() {
 }
 
 function setBtnsDisabled(v) {
-  ['save-inv-btn','pay-inv-btn'].forEach(id => { const el = document.getElementById(id); if(el) el.disabled = v; });
+  ['save-inv-btn','pay-inv-btn','text-inv-btn','email-inv-btn'].forEach(id => { const el = document.getElementById(id); if(el) el.disabled = v; });
 }
 
 // ── SERVICES CATALOG ──
