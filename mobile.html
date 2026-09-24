@@ -322,6 +322,8 @@
       </div>
     </div>
 
+    <div id="dash-low-stock-banner" onclick="goTo('screen-inventory'); loadInventoryList();" style="display:none; background:#fff5f5; border:2px solid #fecaca; border-radius:12px; padding:14px 16px; margin-bottom:12px; color:#dc2626; font-weight:700; font-size:0.88rem; cursor:pointer;"></div>
+
     <!-- Today's schedule -->
     <div id="today-appts-section" style="display:none;">
       <div class="section-label">📅 Today's Schedule</div>
@@ -386,6 +388,10 @@
       <button class="big-btn" onclick="goTo('screen-services-catalog'); loadServicesCatalog();">
         <div class="big-btn-icon" style="background:#0369A1;">🧰</div>
         <div class="big-btn-label">Services</div>
+      </button>
+      <button class="big-btn" onclick="goTo('screen-inventory'); loadInventoryList();">
+        <div class="big-btn-icon" style="background:#B45309;">📦</div>
+        <div class="big-btn-label">Inventory</div>
       </button>
       <button class="big-btn" onclick="goTo('screen-settings'); loadSettingsScreen();">
         <div class="big-btn-icon" style="background:#475569;">⚙️</div>
@@ -968,6 +974,43 @@
     <div id="svcf-delete-wrap" style="display:none; margin-top:24px; text-align:center;">
       <button onclick="deleteServiceForm()" style="background:none;border:none;color:#dc2626;font-weight:700;font-size:0.9rem;cursor:pointer;padding:10px;">🗑️ Delete Service</button>
     </div>
+  </div>
+</div>
+
+<div class="screen hidden" id="screen-inventory">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Inventory</div>
+    <button onclick="startNewInventoryItem()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">+ New</button>
+  </div>
+  <div class="scroll-body">
+    <div id="inventory-low-stock-banner" style="display:none; background:#fff5f5; border:2px solid #fecaca; border-radius:10px; padding:10px 14px; margin-bottom:14px; color:#dc2626; font-weight:700; font-size:0.88rem;"></div>
+    <div id="inventory-loading" class="loading-wrap"><div class="spinner"></div></div>
+    <div id="inventory-list"></div>
+  </div>
+</div>
+
+<div class="screen hidden" id="screen-inventory-form">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title" id="invf-form-title">New Item</div>
+  </div>
+  <div class="scroll-body">
+    <div class="field"><label>Item Name *</label><input type="text" id="invf-name" placeholder="e.g. St. Croix Eventer Front 00"></div>
+    <div class="field"><label>Category <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label><input type="text" id="invf-category" placeholder="e.g. Shoes, Nails, Tools"></div>
+    <div class="field"><label>Brand <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label><input type="text" id="invf-brand" placeholder="St. Croix"></div>
+    <div class="field"><label>Size <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label><input type="text" id="invf-size" placeholder="00"></div>
+    <div class="field"><label>Unit <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label><input type="text" id="invf-unit" placeholder="e.g. pair, box, each"></div>
+    <div class="field"><label>Quantity On Hand *</label><input type="number" id="invf-qty" min="0" inputmode="numeric" placeholder="0"></div>
+    <div class="field"><label>Reorder Threshold</label><input type="number" id="invf-threshold" min="0" inputmode="numeric" placeholder="0"></div>
+    <div class="field"><label>Cost Per Unit ($)</label><input type="number" id="invf-cost" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+    <label style="display:flex; align-items:center; gap:10px; font-size:0.9rem; font-weight:600; cursor:pointer; margin:16px 0; padding:12px 14px; background:var(--surface); border-radius:10px;">
+      <input type="checkbox" id="invf-consumable" style="width:18px;height:18px;flex-shrink:0;" checked>
+      Consumable — deduct stock automatically, alert on low stock
+    </label>
+    <button class="btn-primary" id="invf-save-btn" onclick="saveInventoryItemForm()">Save Item</button>
+    <div style="margin-top:8px;"></div>
+    <button class="btn-secondary" onclick="goBack()">Cancel</button>
   </div>
 </div>
 
@@ -1578,6 +1621,24 @@ async function loadDashboard() {
   } catch(e) {}
 
   document.getElementById('dash-stats').style.display = 'grid';
+
+  // Low-stock inventory banner
+  try {
+    const snap = await db.collection('inventoryItems')
+      .where('farrierId', '==', state.user.uid)
+      .where('isConsumable', '==', true)
+      .get();
+    const lowStock = snap.docs
+      .map(d => d.data())
+      .filter(d => Number(d.quantityOnHand || 0) < Number(d.reorderThreshold || 0));
+    const banner = document.getElementById('dash-low-stock-banner');
+    if (lowStock.length) {
+      banner.textContent = `⚠️ ${lowStock.length} inventory item${lowStock.length > 1 ? 's' : ''} low on stock — tap to view`;
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  } catch(e) {}
 
   // Show Stripe warning if not connected
   const stripeWarning = document.getElementById('stripe-warning');
@@ -3074,6 +3135,143 @@ async function deleteServiceForm() {
   loadServices();
   goBack();
   loadServicesCatalog();
+}
+
+// ── INVENTORY ──
+// View + manual restock/adjust only — mobile never creates invoices (that only
+// happens in the desktop app), so auto-deduct and the service->item consumedItems
+// mapping live entirely in index.html. This screen just needs to show truck stock
+// and let a farrier add/restock items from the barn.
+async function loadInventoryList() {
+  const list = document.getElementById('inventory-list');
+  const banner = document.getElementById('inventory-low-stock-banner');
+  document.getElementById('inventory-loading').style.display = 'flex';
+  list.innerHTML = '';
+  banner.style.display = 'none';
+  try {
+    const snap = await db.collection('inventoryItems').where('farrierId', '==', state.user.uid).get();
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
+    document.getElementById('inventory-loading').style.display = 'none';
+    if (!rows.length) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">No inventory items yet — tap + New to add one</div></div>`;
+      return;
+    }
+
+    const lowStock = rows.filter(i => i.isConsumable !== false && Number(i.quantityOnHand || 0) < Number(i.reorderThreshold || 0));
+    if (lowStock.length) {
+      banner.textContent = `⚠️ ${lowStock.length} item${lowStock.length > 1 ? 's' : ''} low on stock`;
+      banner.style.display = 'block';
+    }
+
+    const renderRow = (item) => {
+      const isLow = item.isConsumable !== false && Number(item.quantityOnHand || 0) < Number(item.reorderThreshold || 0);
+      return `
+      <div class="horse-row">
+        <div class="horse-row-avatar" style="background:${isLow ? '#dc2626' : (item.isConsumable === false ? '#94a3b8' : '#B45309')};">${item.isConsumable === false ? '🔧' : '📦'}</div>
+        <div style="flex:1; min-width:0;" onclick='startEditInventoryItem(${JSON.stringify(item).replace(/"/g,'&quot;')})'>
+          <div class="customer-row-name">${escapeHtml(item.name || 'Unnamed')}${item.size ? ' (' + escapeHtml(item.size) + ')' : ''}</div>
+          <div class="customer-row-sub">${escapeHtml(item.category || 'No category')} · ${item.quantityOnHand ?? 0} ${escapeHtml(item.unit || '')}${isLow ? ' · ⚠ Low' : ''}</div>
+        </div>
+        <button onclick='event.stopPropagation(); restockInventoryItem(${JSON.stringify(item).replace(/"/g,'&quot;')})' style="background:var(--surface); border:2px solid var(--border); border-radius:8px; padding:6px 10px; font-size:0.8rem; font-weight:600; cursor:pointer;">Restock</button>
+      </div>`;
+    };
+
+    const consumables = rows.filter(i => i.isConsumable !== false);
+    const tools = rows.filter(i => i.isConsumable === false);
+    list.innerHTML =
+      (consumables.length ? `<div class="section-label">Shoes, Nails &amp; Consumables</div>${consumables.map(renderRow).join('')}` : '') +
+      (tools.length ? `<div class="section-label" style="margin-top:14px;">Tools</div>${tools.map(renderRow).join('')}` : '');
+  } catch(e) {
+    document.getElementById('inventory-loading').style.display = 'none';
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-text">Error loading inventory</div></div>`;
+  }
+}
+
+function startNewInventoryItem() {
+  state.editingInventoryItemId = null;
+  document.getElementById('invf-form-title').textContent = 'New Item';
+  document.getElementById('invf-save-btn').textContent = 'Save Item';
+  document.getElementById('invf-name').value = '';
+  document.getElementById('invf-category').value = '';
+  document.getElementById('invf-brand').value = '';
+  document.getElementById('invf-size').value = '';
+  document.getElementById('invf-unit').value = '';
+  document.getElementById('invf-qty').value = '0';
+  document.getElementById('invf-threshold').value = '0';
+  document.getElementById('invf-cost').value = '';
+  document.getElementById('invf-consumable').checked = true;
+  goTo('screen-inventory-form');
+}
+
+function startEditInventoryItem(item) {
+  if (!item) return;
+  state.editingInventoryItemId = item.id;
+  document.getElementById('invf-form-title').textContent = 'Edit Item';
+  document.getElementById('invf-save-btn').textContent = 'Save Changes';
+  document.getElementById('invf-name').value = item.name || '';
+  document.getElementById('invf-category').value = item.category || '';
+  document.getElementById('invf-brand').value = item.brand || '';
+  document.getElementById('invf-size').value = item.size || '';
+  document.getElementById('invf-unit').value = item.unit || '';
+  document.getElementById('invf-qty').value = item.quantityOnHand != null ? item.quantityOnHand : 0;
+  document.getElementById('invf-threshold').value = item.reorderThreshold != null ? item.reorderThreshold : 0;
+  document.getElementById('invf-cost').value = item.costPerUnit != null ? item.costPerUnit : '';
+  document.getElementById('invf-consumable').checked = item.isConsumable !== false;
+  goTo('screen-inventory-form');
+}
+
+function saveInventoryItemForm() {
+  const name = document.getElementById('invf-name').value.trim();
+  if (!name) { showToast('Item name is required', 'error'); return; }
+
+  const editingId = state.editingInventoryItemId;
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  const fields = {
+    name,
+    category: document.getElementById('invf-category').value.trim(),
+    brand: document.getElementById('invf-brand').value.trim(),
+    size: document.getElementById('invf-size').value.trim(),
+    unit: document.getElementById('invf-unit').value.trim(),
+    quantityOnHand: Number(document.getElementById('invf-qty').value) || 0,
+    reorderThreshold: Number(document.getElementById('invf-threshold').value) || 0,
+    costPerUnit: Number(document.getElementById('invf-cost').value) || 0,
+    isConsumable: document.getElementById('invf-consumable').checked,
+    isActive: true,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (editingId) {
+    performWrite(() => db.collection('inventoryItems').doc(editingId).update(fields));
+  } else {
+    performWrite(() => db.collection('inventoryItems').add({
+      farrierId: state.user.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      ...fields,
+    }));
+  }
+  showToast((editingId ? 'Item updated!' : 'Item added!') + suffix, 'success');
+  goBack();
+  loadInventoryList();
+}
+
+function restockInventoryItem(item) {
+  const input = prompt(`Add how many ${item.unit || 'units'} to ${item.name}? (use a negative number to correct a miscount)`, '1');
+  if (input === null) return;
+  const qty = Number(input);
+  if (!isFinite(qty) || qty === 0) { showToast('Enter a non-zero quantity', 'error'); return; }
+
+  performWrite(() => db.collection('inventoryItems').doc(item.id).update({
+    quantityOnHand: firebase.firestore.FieldValue.increment(qty),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }));
+  performWrite(() => db.collection('inventoryTransactions').add({
+    farrierId: state.user.uid, itemId: item.id, qtyDelta: qty,
+    type: qty > 0 ? 'restock' : 'manual-adjust',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }));
+  showToast(qty > 0 ? 'Restocked!' : 'Adjusted!', 'success');
+  loadInventoryList();
 }
 
 // ── SETTINGS ──

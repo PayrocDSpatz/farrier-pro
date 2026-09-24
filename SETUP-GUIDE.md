@@ -311,6 +311,20 @@ service cloud.firestore {
       allow read, update, delete: if request.auth != null && 
         resource.data.farrierId == request.auth.uid;
     }
+
+    // Inventory — no public-create case like appointments has, so every
+    // operation (including create) is gated on the farrier's own uid.
+    match /inventoryItems/{itemId} {
+      allow create: if request.auth != null && request.resource.data.farrierId == request.auth.uid;
+      allow read, update, delete: if request.auth != null &&
+        resource.data.farrierId == request.auth.uid;
+    }
+
+    match /inventoryTransactions/{transactionId} {
+      allow create: if request.auth != null && request.resource.data.farrierId == request.auth.uid;
+      allow read, update, delete: if request.auth != null &&
+        resource.data.farrierId == request.auth.uid;
+    }
   }
 }
 ```

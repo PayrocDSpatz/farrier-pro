@@ -3785,6 +3785,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 ]},
                 { label: '⚙️ Manage', items: [
                   { id: 'services', label: 'Services', icon: '🧾' },
+                  { id: 'inventory', label: 'Inventory', icon: '📦' },
                   { id: 'data', label: 'Data Management', icon: '🗂️' },
                   { id: 'settings', label: 'Settings', icon: '⚙️' },
                   { id: 'tutorials', label: 'Video Tutorials', icon: '▶️' },
@@ -3904,13 +3905,14 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 disconnectGoogleCalendar={disconnectGoogleCalendar}
               />
             )}
-            {tab === 'dashboard' && <DashboardView userId={farrierId} />}
+            {tab === 'dashboard' && <DashboardView userId={farrierId} setTab={setTab} />}
             {tab === 'calendar' && <CalendarView userId={farrierId} />}
             {tab === 'appointments' && <AppointmentsView userId={farrierId} userProfile={userProfile} />}
             {tab === 'invoices' && <InvoicesView userId={farrierId} userProfile={userProfile} />}
             {tab === 'customers' && <CustomersView userId={farrierId} userProfile={userProfile} />}
             {tab === 'sponsors' && isSponsorAdmin && <SponsorBannersView />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
+            {tab === 'inventory' && <InventoryView userId={farrierId} />}
             {tab === 'data' && <DataManagementView userId={farrierId} />}
             {tab === 'reports' && <ReportsView userId={farrierId} />}
             {tab === 'mileage' && <MileageLogView userId={farrierId} userProfile={userProfile} />}
@@ -6490,6 +6492,12 @@ function ServicesView({ userId }) {
 
   const [editingId, setEditingId] = useState(null);
 
+  // Consumable inventory items this service uses (e.g. "Shoeing - Front" -> 2 front
+  // shoes) — read at invoice-save time to auto-deduct stock. Tools are excluded since
+  // they're never consumed by a job.
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [consumedItems, setConsumedItems] = useState([]);
+
   const loadServices = async () => {
     if (!db) return;
     setLoading(true);
@@ -6503,10 +6511,23 @@ function ServicesView({ userId }) {
     setLoading(false);
   };
 
-  useEffect(() => { loadServices(); }, [userId]);
+  const loadInventoryItems = async () => {
+    if (!db) return;
+    const snap = await db.collection("inventoryItems")
+      .where("farrierId", "==", userId)
+      .where("isConsumable", "==", true)
+      .where("isActive", "==", true)
+      .get();
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    rows.sort((a,b) => (a.category || "").localeCompare(b.category || "") || (a.name || "").localeCompare(b.name || ""));
+    setInventoryItems(rows);
+  };
+
+  useEffect(() => { loadServices(); loadInventoryItems(); }, [userId]);
 
   const resetForm = () => {
     setName(""); setPrice(""); setCategory(""); setIsActive(true); setEditingId(null);
+    setConsumedItems([]);
   };
 
   const startEdit = (svc) => {
@@ -6515,6 +6536,18 @@ function ServicesView({ userId }) {
     setPrice(String(svc.price ?? ""));
     setCategory(svc.category || "");
     setIsActive(Boolean(svc.isActive));
+    setConsumedItems(svc.consumedItems || []);
+  };
+
+  const toggleConsumedItem = (itemId, checked) => {
+    setConsumedItems(prev => {
+      if (checked) return [...prev, { itemId, qty: 1 }];
+      return prev.filter(ci => ci.itemId !== itemId);
+    });
+  };
+
+  const setConsumedItemQty = (itemId, qty) => {
+    setConsumedItems(prev => prev.map(ci => ci.itemId === itemId ? { ...ci, qty: Number(qty) || 0 } : ci));
   };
 
   const saveService = async () => {
@@ -6531,6 +6564,7 @@ function ServicesView({ userId }) {
       price: p,
       category: category.trim(),
       isActive: Boolean(isActive),
+      consumedItems: consumedItems.filter(ci => ci.itemId && ci.qty > 0),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -6625,6 +6659,34 @@ function ServicesView({ userId }) {
         </div>
       </div>
 
+      <div style={{ marginTop: "1rem" }}>
+        <label style={{ fontWeight: 600 }}>Consumes from inventory (optional)</label>
+        <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+          When this service is invoiced, checked items are auto-deducted from truck stock.
+        </div>
+        {inventoryItems.length === 0 ? (
+          <div style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>No consumable inventory items yet — add some under the Inventory tab.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            {inventoryItems.map(item => {
+              const consumed = consumedItems.find(ci => ci.itemId === item.id);
+              return (
+                <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <input type="checkbox" checked={!!consumed}
+                    onChange={(e) => toggleConsumedItem(item.id, e.target.checked)} />
+                  <span style={{ flex: 1 }}>{item.name}{item.size ? ` (${item.size})` : ""}</span>
+                  {consumed && (
+                    <input type="number" min="0" value={consumed.qty}
+                      onChange={(e) => setConsumedItemQty(item.id, e.target.value)}
+                      style={{ width: "60px", padding: "0.25rem", borderRadius: 6, border: "2px solid var(--border)" }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <div style={{ marginTop: "1.5rem" }}>
         {loading ? (
           <div>Loading...</div>
@@ -6664,6 +6726,269 @@ function ServicesView({ userId }) {
     </div>
   );
 }
+
+    function InventoryView({ userId }) {
+      const [items, setItems] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [itemModal, setItemModal] = useState(null); // { item } | null — null = closed, item: null = add
+      const [restockModal, setRestockModal] = useState(null); // { item } | null
+
+      const loadItems = async () => {
+        if (!db) return;
+        setLoading(true);
+        const snap = await db.collection('inventoryItems').where('farrierId', '==', userId).get();
+        const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        rows.sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
+        setItems(rows);
+        setLoading(false);
+      };
+
+      useEffect(() => { loadItems(); }, [userId]);
+
+      const consumables = items.filter(i => i.isConsumable !== false);
+      const tools = items.filter(i => i.isConsumable === false);
+      const lowStock = consumables.filter(i => Number(i.quantityOnHand || 0) < Number(i.reorderThreshold || 0));
+
+      const renderRow = (item, showReorderBadge) => {
+        const isLow = showReorderBadge && Number(item.quantityOnHand || 0) < Number(item.reorderThreshold || 0);
+        return (
+          <tr key={item.id} style={{ borderTop: '1px solid var(--border)', background: isLow ? '#fff5f5' : 'transparent' }}>
+            <td style={{ padding: '0.5rem' }}>
+              {item.name}{item.size ? ` (${item.size})` : ''}
+              {isLow && <span style={{ marginLeft: '0.5rem', color: '#dc2626', fontWeight: 600, fontSize: '0.8rem' }}>⚠ Low</span>}
+            </td>
+            <td style={{ padding: '0.5rem' }}>{item.category || ''}</td>
+            <td style={{ padding: '0.5rem' }}>{item.brand || ''}</td>
+            <td style={{ padding: '0.5rem' }}>{item.quantityOnHand ?? 0} {item.unit || ''}</td>
+            <td style={{ padding: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+              <button className="btn btn-sm btn-outline" onClick={() => setRestockModal({ item })}>Restock</button>
+              <button className="btn btn-sm btn-outline" onClick={() => setItemModal({ item })}>Edit</button>
+            </td>
+          </tr>
+        );
+      };
+
+      return (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ margin: 0 }}>Inventory</h2>
+            <button className="btn btn-primary" onClick={() => setItemModal({ item: null })}>+ Add Item</button>
+          </div>
+
+          {lowStock.length > 0 && (
+            <div style={{ padding: '0.75rem 1rem', borderRadius: 8, background: '#fff5f5', border: '2px solid #fecaca', color: '#dc2626', fontWeight: 600, marginBottom: '1rem' }}>
+              ⚠️ {lowStock.length} item{lowStock.length > 1 ? 's' : ''} low on stock
+            </div>
+          )}
+
+          {loading ? (
+            <div>Loading...</div>
+          ) : (
+            <React.Fragment>
+              <h3 style={{ marginTop: '1rem' }}>Shoes, Nails &amp; Consumables</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left' }}>
+                    <th style={{ padding: '0.5rem' }}>Name</th>
+                    <th style={{ padding: '0.5rem' }}>Category</th>
+                    <th style={{ padding: '0.5rem' }}>Brand</th>
+                    <th style={{ padding: '0.5rem' }}>On Hand</th>
+                    <th style={{ padding: '0.5rem' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consumables.length === 0 ? (
+                    <tr><td colSpan={5} style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>No consumable items yet.</td></tr>
+                  ) : consumables.map(item => renderRow(item, true))}
+                </tbody>
+              </table>
+
+              <h3 style={{ marginTop: '1.5rem' }}>Tools</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left' }}>
+                    <th style={{ padding: '0.5rem' }}>Name</th>
+                    <th style={{ padding: '0.5rem' }}>Category</th>
+                    <th style={{ padding: '0.5rem' }}>Brand</th>
+                    <th style={{ padding: '0.5rem' }}>On Hand</th>
+                    <th style={{ padding: '0.5rem' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tools.length === 0 ? (
+                    <tr><td colSpan={5} style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>No tools tracked yet.</td></tr>
+                  ) : tools.map(item => renderRow(item, false))}
+                </tbody>
+              </table>
+            </React.Fragment>
+          )}
+
+          {itemModal && (
+            <InventoryItemModal item={itemModal.item} userId={userId}
+              onClose={() => setItemModal(null)}
+              onSaved={() => loadItems()} />
+          )}
+
+          {restockModal && (
+            <InventoryRestockModal item={restockModal.item} userId={userId}
+              onClose={() => setRestockModal(null)}
+              onSaved={() => loadItems()} />
+          )}
+        </div>
+      );
+    }
+
+    function InventoryItemModal({ item, userId, onClose, onSaved }) {
+      const [name, setName] = useState(item?.name || '');
+      const [category, setCategory] = useState(item?.category || '');
+      const [brand, setBrand] = useState(item?.brand || '');
+      const [size, setSize] = useState(item?.size || '');
+      const [unit, setUnit] = useState(item?.unit || '');
+      const [quantityOnHand, setQuantityOnHand] = useState(String(item?.quantityOnHand ?? '0'));
+      const [reorderThreshold, setReorderThreshold] = useState(String(item?.reorderThreshold ?? '0'));
+      const [costPerUnit, setCostPerUnit] = useState(String(item?.costPerUnit ?? '0'));
+      const [isConsumable, setIsConsumable] = useState(item?.isConsumable !== false);
+      const [notes, setNotes] = useState(item?.notes || '');
+      const [saving, setSaving] = useState(false);
+
+      const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' };
+
+      const handleSave = async () => {
+        if (!name.trim()) return alert('Item name is required.');
+        setSaving(true);
+        try {
+          const payload = {
+            name: name.trim(), category: category.trim(), brand: brand.trim(), size: size.trim(),
+            unit: unit.trim(), quantityOnHand: Number(quantityOnHand) || 0,
+            reorderThreshold: Number(reorderThreshold) || 0, costPerUnit: Number(costPerUnit) || 0,
+            isConsumable: Boolean(isConsumable), isActive: true, notes: notes.trim(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          };
+          if (item?.id) {
+            await db.collection('inventoryItems').doc(item.id).update(payload);
+          } else {
+            await db.collection('inventoryItems').add({
+              ...payload, farrierId: userId, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+          onSaved();
+          onClose();
+        } catch (e) {
+          alert('Error saving item: ' + e.message);
+        }
+        setSaving(false);
+      };
+
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div className="card" style={{ maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0, color: 'var(--primary)' }}>{item?.id ? `✏️ Edit ${item.name || 'Item'}` : '➕ Add Item'}</h2>
+              <button className="btn btn-sm btn-outline" onClick={onClose}>✕ Close</button>
+            </div>
+
+            {[
+              { label: 'Name *', val: name, set: setName, ph: 'St. Croix Eventer Front 00' },
+              { label: 'Category', val: category, set: setCategory, ph: 'Shoes, Nails, Consumables, Tools' },
+              { label: 'Brand', val: brand, set: setBrand, ph: 'St. Croix' },
+              { label: 'Size', val: size, set: setSize, ph: '00' },
+              { label: 'Unit', val: unit, set: setUnit, ph: 'pair, box, each' },
+            ].map(f => (
+              <div className="form-group" key={f.label}>
+                <label>{f.label}</label>
+                <input type="text" value={f.val} placeholder={f.ph} onChange={e => f.set(e.target.value)} style={inputStyle} />
+              </div>
+            ))}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <div className="form-group">
+                <label>Quantity On Hand</label>
+                <input type="number" min="0" value={quantityOnHand} onChange={e => setQuantityOnHand(e.target.value)} style={inputStyle} />
+              </div>
+              <div className="form-group">
+                <label>Reorder Threshold</label>
+                <input type="number" min="0" value={reorderThreshold} onChange={e => setReorderThreshold(e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Cost Per Unit ($)</label>
+              <input type="number" min="0" step="0.01" value={costPerUnit} onChange={e => setCostPerUnit(e.target.value)} style={inputStyle} />
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                <input type="checkbox" checked={isConsumable} onChange={e => setIsConsumable(e.target.checked)} />
+                Consumable — deduct automatically when a service is invoiced, alert on low stock
+              </label>
+            </div>
+
+            <div className="form-group">
+              <label>Notes</label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <button className="btn btn-outline" onClick={onClose} style={{ flex: 1 }} disabled={saving}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} style={{ flex: 2 }} disabled={saving}>
+                {saving ? '⏳ Saving…' : '✅ Save Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function InventoryRestockModal({ item, userId, onClose, onSaved }) {
+      const [qty, setQty] = useState('1');
+      const [saving, setSaving] = useState(false);
+
+      const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box' };
+
+      const handleSave = async () => {
+        const n = Number(qty);
+        if (!isFinite(n) || n === 0) return alert('Enter a non-zero quantity (negative to remove stock).');
+        setSaving(true);
+        try {
+          await db.collection('inventoryItems').doc(item.id).update({
+            quantityOnHand: firebase.firestore.FieldValue.increment(n),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          await db.collection('inventoryTransactions').add({
+            farrierId: userId, itemId: item.id, qtyDelta: n,
+            type: n > 0 ? 'restock' : 'manual-adjust',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          onSaved();
+          onClose();
+        } catch (e) {
+          alert('Error updating stock: ' + e.message);
+        }
+        setSaving(false);
+      };
+
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div className="card" style={{ maxWidth: 360, width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ margin: 0, color: 'var(--primary)' }}>Restock {item.name}</h2>
+              <button className="btn btn-sm btn-outline" onClick={onClose}>✕</button>
+            </div>
+            <div className="form-group">
+              <label>Quantity to add (currently {item.quantityOnHand ?? 0} {item.unit || ''})</label>
+              <input type="number" value={qty} onChange={e => setQty(e.target.value)} style={inputStyle} autoFocus />
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Use a negative number to correct a miscount.</div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <button className="btn btn-outline" onClick={onClose} style={{ flex: 1 }} disabled={saving}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} style={{ flex: 2 }} disabled={saving}>
+                {saving ? '⏳ Saving…' : '✅ Update Stock'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     // ---- CSV helpers (Data Management) ----
     function normalizeHeader_(h) {
@@ -9039,13 +9364,14 @@ function ServicesView({ userId }) {
       );
     }
 
-    function DashboardView({ userId }) {
+    function DashboardView({ userId, setTab }) {
   const [stats, setStats] = useState({
     monthAppointments: 0,
     totalRevenue: 0,
     outstandingInvoices: 0,
     upcomingWeek: 0,
   });
+  const [lowStockCount, setLowStockCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -9109,6 +9435,21 @@ function ServicesView({ userId }) {
         // invoices collection may not exist yet - that's fine
       }
 
+      // ---- Inventory low-stock count (optional) ----
+      try {
+        const invItemSnap = await db.collection('inventoryItems')
+          .where('farrierId', '==', userId)
+          .where('isConsumable', '==', true)
+          .get();
+        const lowStock = invItemSnap.docs.filter(d => {
+          const item = d.data();
+          return Number(item.quantityOnHand || 0) < Number(item.reorderThreshold || 0);
+        });
+        setLowStockCount(lowStock.length);
+      } catch (e) {
+        // inventoryItems collection may not exist yet - that's fine
+      }
+
       setStats({
         monthAppointments,
         totalRevenue,
@@ -9132,6 +9473,13 @@ function ServicesView({ userId }) {
   return (
     <div>
       <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Dashboard Overview</h1>
+
+      {lowStockCount > 0 && (
+        <div onClick={() => setTab && setTab('inventory')}
+          style={{ padding: '0.75rem 1rem', borderRadius: 8, background: '#fff5f5', border: '2px solid #fecaca', color: '#dc2626', fontWeight: 600, marginBottom: '1.5rem', cursor: 'pointer' }}>
+          ⚠️ {lowStockCount} inventory item{lowStockCount > 1 ? 's' : ''} low on stock — tap to view
+        </div>
+      )}
 
       <div className="dashboard-grid">
         {kpis.map((kpi, idx) => (
@@ -12846,6 +13194,42 @@ useEffect(() => {
                 }).catch(() => {});
               }
             });
+
+            // Auto-deduct inventory consumed by each invoiced service — best-effort,
+            // never blocks invoice creation. Services referenced on this invoice are
+            // fetched once (not per line item) to resolve their consumedItems mapping.
+            // Note: this only runs on invoice creation, not when an existing invoice is
+            // edited — editing an invoice does not re-run or reverse deduction.
+            try {
+              const distinctServiceIds = [...new Set(cleanedItems.map(i => i.serviceId).filter(Boolean))];
+              if (distinctServiceIds.length) {
+                const serviceDocs = await Promise.all(
+                  distinctServiceIds.map(id => db.collection('services').doc(id).get().catch(() => null))
+                );
+                const consumedByServiceId = {};
+                serviceDocs.forEach(doc => {
+                  if (doc && doc.exists) consumedByServiceId[doc.id] = doc.data().consumedItems || [];
+                });
+
+                cleanedItems.forEach(item => {
+                  const consumed = consumedByServiceId[item.serviceId] || [];
+                  const lineQty = Number(item.qty || 1);
+                  consumed.forEach(ci => {
+                    if (!ci.itemId || !ci.qty) return;
+                    const deductQty = Number(ci.qty) * lineQty;
+                    db.collection('inventoryItems').doc(ci.itemId).update({
+                      quantityOnHand: firebase.firestore.FieldValue.increment(-deductQty),
+                      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    }).catch(() => {});
+                    db.collection('inventoryTransactions').add({
+                      farrierId: userId, itemId: ci.itemId, qtyDelta: -deductQty,
+                      type: 'auto-deduct', invoiceId: docRef.id, serviceId: item.serviceId,
+                      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    }).catch(() => {});
+                  });
+                });
+              }
+            } catch (e) { /* best-effort — never block invoice creation */ }
 
             // Write mileage log if miles entered
             if (milesDriven > 0) {
