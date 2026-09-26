@@ -6898,8 +6898,26 @@ function ServicesView({ userId }) {
         ? fdProducts.map((p, pi) => ({ p, pi })).filter(({ p }) => supplyCatalogProductMatches(p, q)).slice(0, 150)
         : fdProducts.map((p, pi) => ({ p, pi })).filter(({ p }) => fdTop(p) === openCat);
 
-      const renderSizes = (p, pi) => (
+      // Bulk selection: keys for every size of a product the farrier doesn't already own.
+      const productKeys = (p, pi) => p.v.map((v, vi) => owned.has(inventoryCatalogKey(p.t, v[0])) ? null : `fd:${pi}:${vi}`).filter(Boolean);
+      const allSelected = (keys) => keys.length > 0 && keys.every(k => selected.has(k));
+      const setKeys = (keys, on) => setSelected(prev => {
+        const next = new Set(prev);
+        keys.forEach(k => on ? next.add(k) : next.delete(k));
+        return next;
+      });
+      const searchKeys = q ? fdVisible.flatMap(({ p, pi }) => productKeys(p, pi)) : [];
+
+      const renderSizes = (p, pi) => {
+        const keys = productKeys(p, pi);
+        const all = allSelected(keys);
+        return (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', padding: '0.25rem 0 0.6rem 1.5rem' }}>
+          {keys.length > 1 && (
+            <button className="btn btn-sm btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }} onClick={() => setKeys(keys, !all)}>
+              {all ? 'Clear sizes' : 'All sizes'}
+            </button>
+          )}
           {p.v.map((v, vi) => {
             const key = `fd:${pi}:${vi}`;
             const isOwned = owned.has(inventoryCatalogKey(p.t, v[0]));
@@ -6912,7 +6930,8 @@ function ServicesView({ userId }) {
             );
           })}
         </div>
-      );
+        );
+      };
 
       const renderProduct = ({ p, pi }) => {
         const single = p.v.length === 1 && !p.v[0][0];
@@ -6932,6 +6951,10 @@ function ServicesView({ userId }) {
         return (
           <div key={pi}>
             <div onClick={() => setOpenProduct(isOpen ? null : pi)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0', cursor: 'pointer' }}>
+              <input type="checkbox" title="Select every size" checked={allSelected(productKeys(p, pi)) || productKeys(p, pi).length === 0}
+                disabled={productKeys(p, pi).length === 0}
+                onClick={e => e.stopPropagation()}
+                onChange={e => setKeys(productKeys(p, pi), e.target.checked)} />
               <span style={{ width: '1rem', color: 'var(--text-muted)' }}>{isOpen ? '▾' : '▸'}</span>
               <span style={{ flex: 1 }}>{p.t}{p.b ? <span style={{ color: 'var(--text-muted)' }}> — {p.b}</span> : null}</span>
               <span style={{ color: selCount ? 'var(--primary)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: selCount ? 700 : 400 }}>
@@ -7014,6 +7037,13 @@ function ServicesView({ userId }) {
                 ) : q ? (
                   <React.Fragment>
                     {fdVisible.length === 0 && <div style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>No products match "{search}".</div>}
+                    {searchKeys.length > 1 && (
+                      <div style={{ padding: '0.25rem 0 0.5rem' }}>
+                        <button className="btn btn-sm btn-outline" onClick={() => setKeys(searchKeys, !allSelected(searchKeys))}>
+                          {allSelected(searchKeys) ? `Clear all ${searchKeys.length} sizes shown` : `Select all ${searchKeys.length} sizes shown`}
+                        </button>
+                      </div>
+                    )}
                     {fdVisible.map(renderProduct)}
                     {fdVisible.length === 150 && <div style={{ padding: '0.5rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Showing the first 150 matches — refine your search.</div>}
                   </React.Fragment>

@@ -3271,6 +3271,28 @@ function catalogCheckRow(key, owned, label, sub) {
     </label>`;
 }
 
+// Bulk selection: keys for every size of a product the farrier doesn't already own.
+function catalogProductKeys(pi) {
+  const p = state.catalogFd.products[pi];
+  return p.v.map((v, vi) => state.catalogOwned.has(inventoryCatalogKey(p.t, v[0])) ? null : `fd:${pi}:${vi}`).filter(Boolean);
+}
+
+function catalogAllSelected(keys) {
+  return keys.length > 0 && keys.every(k => state.catalogSelected.has(k));
+}
+
+function setCatalogKeys(keys, on) {
+  keys.forEach(k => on ? state.catalogSelected.add(k) : state.catalogSelected.delete(k));
+  renderInventoryCatalog();
+}
+
+function selectCatalogProduct(pi, on) { setCatalogKeys(catalogProductKeys(pi), on); }
+
+function toggleCatalogSearchAll() {
+  const keys = state.catalogSearchKeys || [];
+  setCatalogKeys(keys, !catalogAllSelected(keys));
+}
+
 function renderFdProduct(p, pi) {
   const brand = p.b ? ` <span style="font-weight:400;color:var(--text-muted);">— ${escapeHtml(p.b)}</span>` : '';
   const price = (v) => v[2] ? '$' + Number(v[2]).toFixed(2) : '';
@@ -3280,16 +3302,21 @@ function renderFdProduct(p, pi) {
   }
   const selCount = p.v.filter((_, vi) => state.catalogSelected.has(`fd:${pi}:${vi}`)).length;
   const isOpen = state.catalogOpenProduct === pi;
+  const keys = catalogProductKeys(pi);
+  const all = catalogAllSelected(keys);
   let html = `
     <div class="horse-row" onclick="toggleCatalogProduct(${pi})">
-      <div style="width:20px; flex-shrink:0; text-align:center; color:var(--text-muted);">${isOpen ? '▾' : '▸'}</div>
+      <input type="checkbox" ${all || !keys.length ? 'checked' : ''} ${keys.length ? '' : 'disabled'} onclick="event.stopPropagation()" onchange="selectCatalogProduct(${pi}, this.checked)" style="width:20px;height:20px;flex-shrink:0;" aria-label="Select every size">
+      <div style="width:14px; flex-shrink:0; text-align:center; color:var(--text-muted);">${isOpen ? '▾' : '▸'}</div>
       <div style="flex:1; min-width:0;">
         <div class="customer-row-name">${escapeHtml(p.t)}${brand}</div>
         <div class="customer-row-sub" style="${selCount ? 'color:var(--blue);font-weight:700;' : ''}">${selCount ? selCount + ' selected' : p.v.length + ' sizes'}</div>
       </div>
     </div>`;
   if (isOpen) {
-    html += `<div style="display:flex; flex-wrap:wrap; gap:6px; padding:0 0 12px 12px;">` + p.v.map((v, vi) => {
+    html += `<div style="display:flex; flex-wrap:wrap; gap:6px; padding:0 0 12px 12px;">` +
+      (keys.length > 1 ? `<button onclick="selectCatalogProduct(${pi}, ${!all})" style="padding:8px 12px; border-radius:999px; background:none; border:2px solid var(--blue); color:var(--blue); font-size:0.85rem; font-weight:700; cursor:pointer;">${all ? 'Clear sizes' : 'All sizes'}</button>` : '') +
+      p.v.map((v, vi) => {
       const key = `fd:${pi}:${vi}`;
       const owned = state.catalogOwned.has(inventoryCatalogKey(p.t, v[0]));
       const on = owned || state.catalogSelected.has(key);
@@ -3315,7 +3342,12 @@ function renderInventoryCatalog() {
       html = '<div class="loading-wrap"><div class="spinner"></div></div>';
     } else if (q) {
       const matches = fd.products.map((p, pi) => ({ p, pi })).filter(({ p }) => supplyCatalogProductMatches(p, q)).slice(0, 100);
-      html = matches.map(({ p, pi }) => renderFdProduct(p, pi)).join('') ||
+      state.catalogSearchKeys = matches.flatMap(({ pi }) => catalogProductKeys(pi));
+      const n = state.catalogSearchKeys.length;
+      if (n > 1) {
+        html += `<button class="btn-secondary" style="margin-bottom:10px; padding:10px; font-size:0.88rem;" onclick="toggleCatalogSearchAll()">${catalogAllSelected(state.catalogSearchKeys) ? `Clear all ${n} sizes shown` : `Select all ${n} sizes shown`}</button>`;
+      }
+      html += matches.map(({ p, pi }) => renderFdProduct(p, pi)).join('') ||
         `<div class="empty-state"><div class="empty-state-text">No products match "${escapeHtml(q)}"</div></div>`;
       if (matches.length === 100) html += `<div class="customer-row-sub" style="padding:8px 4px;">Showing the first 100 matches — keep typing to narrow it down</div>`;
     } else {

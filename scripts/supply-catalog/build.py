@@ -61,10 +61,14 @@ def clean_size(v):
             if b and b.lower() != 'default': bits.append(b)
     return ' / '.join(bits) or 'Default'
 
+# Categories left out of the app entirely.
+EXCLUDED_TOPS = {'Apparel'}
+
 out, cats = [], collections.Counter()
 for r in R:
     path = category_of(r)
     top = path[0]
+    if top in EXCLUDED_TOPS: continue
     sub = path[1] if len(path) > 1 else ''
     tool = top in TOOL_TOPS and (top, sub) not in CONSUMABLE_SUBS
     variants = []
