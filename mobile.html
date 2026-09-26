@@ -997,11 +997,15 @@
     <div class="header-title">Add from Catalog</div>
   </div>
   <div style="padding:12px 16px 0; flex-shrink:0; background:var(--bg);">
+    <div class="row-btns" style="margin-bottom:10px;">
+      <button id="catalog-tab-fd" class="btn-primary" style="padding:10px;font-size:0.88rem;" onclick="setCatalogTab('fd')">Supply catalog</button>
+      <button id="catalog-tab-gen" class="btn-secondary" style="padding:10px;font-size:0.88rem;" onclick="setCatalogTab('gen')">General supplies</button>
+    </div>
     <div class="search-wrap" style="margin-bottom:8px;">
       <span class="search-icon">🔍</span>
-      <input class="search-input" id="catalog-search-input" type="search" placeholder="Search items…" oninput="renderInventoryCatalog()" autocomplete="off">
+      <input class="search-input" id="catalog-search-input" type="search" placeholder="Search name, brand or part #…" oninput="renderInventoryCatalog()" autocomplete="off">
     </div>
-    <button onclick="selectCommonCatalogItems()" style="background:none;border:none;color:var(--blue);font-weight:700;font-size:0.85rem;cursor:pointer;padding:4px 0 8px;">✓ Select common items</button>
+    <button id="catalog-common-btn" onclick="selectCommonCatalogItems()" style="display:none;background:none;border:none;color:var(--blue);font-weight:700;font-size:0.85rem;cursor:pointer;padding:4px 0 8px;">✓ Select common items</button>
   </div>
   <div class="scroll-body" style="padding-top:8px;">
     <div id="catalog-list"></div>
@@ -3176,7 +3180,14 @@ async function loadInventoryList() {
       .sort((a,b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
     document.getElementById('inventory-loading').style.display = 'none';
     if (!rows.length) {
-      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">No inventory items yet — tap Add from Catalog to pick from the standard farrier supply list, or + New to add your own</div></div>`;
+      list.innerHTML = `
+        <div class="card" style="border:2px solid #bfdbfe; background:#eff6ff;">
+          <div style="font-weight:700; font-size:1rem; margin-bottom:6px;">📋 Build your inventory from our supply catalog?</div>
+          <div style="font-size:0.88rem; color:var(--text-muted); margin-bottom:14px;">Tick the shoes, nails, pads and tools you carry — brand, size, part number and list price come filled in. You just count what's on the truck.</div>
+          <button class="btn-primary" onclick="openInventoryCatalog()">Browse catalog</button>
+          <div style="margin-top:8px;"></div>
+          <button class="btn-secondary" onclick="startNewInventoryItem()">I'll add my own</button>
+        </div>`;
       return;
     }
 
@@ -3210,56 +3221,156 @@ async function loadInventoryList() {
   }
 }
 
-// Master catalog picker (list lives in inventory-catalog.js, shared with desktop).
-// Items the farrier already has (matched by name) are shown checked-off and disabled,
-// so re-opening the catalog later never creates duplicates.
+// Catalog picker. Two sources, both defined in inventory-catalog.js (shared with desktop):
+//  - Supply catalog: real supplier products, one pick per size, fetched on open (the
+//    service worker keeps a copy so it also works offline once loaded).
+//  - General supplies: the generic consumables list, for things the supply catalog lacks.
+// Selection keys: 'fd:<productIdx>:<sizeIdx>' | 'gen:<idx>'. Items the farrier already
+// has (same name + size) show checked-off and disabled, so re-opening never duplicates.
 async function openInventoryCatalog() {
   state.catalogSelected = new Set();
   state.catalogOwned = new Set();
+  state.catalogTab = 'fd';
+  state.catalogOpenCat = null;
+  state.catalogOpenProduct = null;
+  state.catalogFdError = '';
   document.getElementById('catalog-search-input').value = '';
   goTo('screen-inventory-catalog');
-  document.getElementById('catalog-list').innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  setCatalogTab('fd');
   try {
     const snap = await db.collection('inventoryItems').where('farrierId', '==', state.user.uid).get();
-    state.catalogOwned = new Set(snap.docs.map(d => inventoryCatalogKey(d.data().name)));
+    state.catalogOwned = new Set(snap.docs.map(d => inventoryCatalogKey(d.data().name, d.data().size)));
   } catch(e) { /* offline with no cache — just don't grey anything out */ }
+  try {
+    state.catalogFd = await loadSupplyCatalog();
+  } catch(e) {
+    state.catalogFdError = e.message;
+  }
   renderInventoryCatalog();
+}
+
+function setCatalogTab(tab) {
+  state.catalogTab = tab;
+  document.getElementById('catalog-search-input').value = '';
+  document.getElementById('catalog-search-input').placeholder = tab === 'fd' ? 'Search name, brand or part #…' : 'Search items…';
+  document.getElementById('catalog-tab-fd').className = tab === 'fd' ? 'btn-primary' : 'btn-secondary';
+  document.getElementById('catalog-tab-gen').className = tab === 'gen' ? 'btn-primary' : 'btn-secondary';
+  document.getElementById('catalog-common-btn').style.display = tab === 'gen' ? 'block' : 'none';
+  renderInventoryCatalog();
+}
+
+function catalogCheckRow(key, owned, label, sub) {
+  const checked = owned || state.catalogSelected.has(key);
+  return `
+    <label class="horse-row" style="${owned ? 'opacity:0.5;' : ''}">
+      <input type="checkbox" ${checked ? 'checked' : ''} ${owned ? 'disabled' : ''} onchange="toggleCatalogKey('${key}', this.checked)" style="width:20px;height:20px;flex-shrink:0;">
+      <div style="flex:1; min-width:0;">
+        <div class="customer-row-name">${label}</div>
+        <div class="customer-row-sub">${owned ? 'Already in your inventory' : sub}</div>
+      </div>
+    </label>`;
+}
+
+function renderFdProduct(p, pi) {
+  const brand = p.b ? ` <span style="font-weight:400;color:var(--text-muted);">— ${escapeHtml(p.b)}</span>` : '';
+  const price = (v) => v[2] ? '$' + Number(v[2]).toFixed(2) : '';
+  if (p.v.length === 1 && !p.v[0][0]) {
+    return catalogCheckRow(`fd:${pi}:0`, state.catalogOwned.has(inventoryCatalogKey(p.t, '')),
+      escapeHtml(p.t) + brand, [price(p.v[0]), p.u !== 'each' ? 'per ' + escapeHtml(p.u) : ''].filter(Boolean).join(' · '));
+  }
+  const selCount = p.v.filter((_, vi) => state.catalogSelected.has(`fd:${pi}:${vi}`)).length;
+  const isOpen = state.catalogOpenProduct === pi;
+  let html = `
+    <div class="horse-row" onclick="toggleCatalogProduct(${pi})">
+      <div style="width:20px; flex-shrink:0; text-align:center; color:var(--text-muted);">${isOpen ? '▾' : '▸'}</div>
+      <div style="flex:1; min-width:0;">
+        <div class="customer-row-name">${escapeHtml(p.t)}${brand}</div>
+        <div class="customer-row-sub" style="${selCount ? 'color:var(--blue);font-weight:700;' : ''}">${selCount ? selCount + ' selected' : p.v.length + ' sizes'}</div>
+      </div>
+    </div>`;
+  if (isOpen) {
+    html += `<div style="display:flex; flex-wrap:wrap; gap:6px; padding:0 0 12px 12px;">` + p.v.map((v, vi) => {
+      const key = `fd:${pi}:${vi}`;
+      const owned = state.catalogOwned.has(inventoryCatalogKey(p.t, v[0]));
+      const on = owned || state.catalogSelected.has(key);
+      return `<label style="display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border-radius:999px; background:var(--surface); border:2px solid ${on ? 'var(--blue)' : 'var(--border)'}; font-size:0.85rem; font-weight:600; ${owned ? 'opacity:0.5;' : ''}">
+        <input type="checkbox" ${on ? 'checked' : ''} ${owned ? 'disabled' : ''} onchange="toggleCatalogKey('${key}', this.checked); renderInventoryCatalog();" style="margin:0;">
+        ${escapeHtml(v[0] || 'Standard')}${v[2] ? `<span style="font-weight:400;color:var(--text-muted);">${price(v)}</span>` : ''}
+      </label>`;
+    }).join('') + `</div>`;
+  }
+  return html;
 }
 
 function renderInventoryCatalog() {
   const q = document.getElementById('catalog-search-input').value.trim().toLowerCase();
-  const catalog = window.INVENTORY_CATALOG || [];
-  let html = '', lastCat = null;
-  catalog.forEach((entry, idx) => {
-    if (q && !entry.name.toLowerCase().includes(q) && !entry.category.toLowerCase().includes(q)) return;
-    if (entry.category !== lastCat) {
-      html += `<div class="section-label"${lastCat ? ' style="margin-top:14px;"' : ''}>${escapeHtml(entry.category)}</div>`;
-      lastCat = entry.category;
+  const el = document.getElementById('catalog-list');
+  let html = '';
+
+  if (state.catalogTab === 'fd') {
+    const fd = state.catalogFd;
+    if (state.catalogFdError && !fd) {
+      html = `<div class="empty-state"><div class="empty-state-text">Couldn't load the supply catalog — check your signal and try again</div></div>`;
+    } else if (!fd) {
+      html = '<div class="loading-wrap"><div class="spinner"></div></div>';
+    } else if (q) {
+      const matches = fd.products.map((p, pi) => ({ p, pi })).filter(({ p }) => supplyCatalogProductMatches(p, q)).slice(0, 100);
+      html = matches.map(({ p, pi }) => renderFdProduct(p, pi)).join('') ||
+        `<div class="empty-state"><div class="empty-state-text">No products match "${escapeHtml(q)}"</div></div>`;
+      if (matches.length === 100) html += `<div class="customer-row-sub" style="padding:8px 4px;">Showing the first 100 matches — keep typing to narrow it down</div>`;
+    } else {
+      const top = (p) => p.c.split(' > ')[0];
+      const cats = [...new Set(fd.products.map(top))];
+      cats.forEach(cat => {
+        const inCat = fd.products.map((p, pi) => ({ p, pi })).filter(({ p }) => top(p) === cat);
+        const isOpen = state.catalogOpenCat === cat;
+        html += `
+          <div class="horse-row" onclick="toggleCatalogCategory('${escapeHtml(cat).replace(/'/g, '&#39;')}')">
+            <div style="width:20px; flex-shrink:0; text-align:center; color:var(--text-muted);">${isOpen ? '▾' : '▸'}</div>
+            <div style="flex:1;"><div class="customer-row-name">${escapeHtml(cat)}</div></div>
+            <div class="customer-row-sub">${inCat.length}</div>
+          </div>`;
+        if (isOpen) html += `<div style="padding-left:12px;">${inCat.map(({ p, pi }) => renderFdProduct(p, pi)).join('')}</div>`;
+      });
+      html += `<div class="customer-row-sub" style="padding:10px 4px;">List prices as of ${escapeHtml(fd.retrieved)} — edit any item to enter your actual cost.</div>`;
     }
-    const owned = state.catalogOwned.has(inventoryCatalogKey(entry.name));
-    const checked = owned || state.catalogSelected.has(idx);
-    html += `
-      <label class="horse-row" style="${owned ? 'opacity:0.5;' : ''}">
-        <input type="checkbox" ${checked ? 'checked' : ''} ${owned ? 'disabled' : ''} onchange="toggleCatalogItem(${idx}, this.checked)" style="width:20px;height:20px;flex-shrink:0;">
-        <div style="flex:1; min-width:0;">
-          <div class="customer-row-name">${escapeHtml(entry.name)}</div>
-          <div class="customer-row-sub">${owned ? 'Already in your inventory' : 'per ' + escapeHtml(entry.unit)}</div>
-        </div>
-      </label>`;
-  });
-  document.getElementById('catalog-list').innerHTML = html ||
-    `<div class="empty-state"><div class="empty-state-text">No catalog items match "${escapeHtml(q)}" — use + New to add it yourself</div></div>`;
+  } else {
+    let lastCat = null;
+    (window.INVENTORY_CATALOG || []).forEach((entry, idx) => {
+      if (q && !entry.name.toLowerCase().includes(q) && !entry.category.toLowerCase().includes(q)) return;
+      if (entry.category !== lastCat) {
+        html += `<div class="section-label"${lastCat ? ' style="margin-top:14px;"' : ''}>${escapeHtml(entry.category)}</div>`;
+        lastCat = entry.category;
+      }
+      html += catalogCheckRow(`gen:${idx}`, state.catalogOwned.has(inventoryCatalogKey(entry.name, '')),
+        escapeHtml(entry.name), 'per ' + escapeHtml(entry.unit));
+    });
+    html = html || `<div class="empty-state"><div class="empty-state-text">No items match "${escapeHtml(q)}" — use + New to add it yourself</div></div>`;
+  }
+
+  el.innerHTML = html;
   updateCatalogAddButton();
 }
 
-function toggleCatalogItem(idx, on) {
-  if (on) state.catalogSelected.add(idx); else state.catalogSelected.delete(idx);
+function toggleCatalogCategory(cat) {
+  state.catalogOpenCat = state.catalogOpenCat === cat ? null : cat;
+  state.catalogOpenProduct = null;
+  renderInventoryCatalog();
+}
+
+function toggleCatalogProduct(pi) {
+  state.catalogOpenProduct = state.catalogOpenProduct === pi ? null : pi;
+  renderInventoryCatalog();
+}
+
+function toggleCatalogKey(key, on) {
+  if (on) state.catalogSelected.add(key); else state.catalogSelected.delete(key);
   updateCatalogAddButton();
 }
 
 function selectCommonCatalogItems() {
   (window.INVENTORY_CATALOG || []).forEach((entry, idx) => {
-    if (entry.common && !state.catalogOwned.has(inventoryCatalogKey(entry.name))) state.catalogSelected.add(idx);
+    if (entry.common && !state.catalogOwned.has(inventoryCatalogKey(entry.name, ''))) state.catalogSelected.add(`gen:${idx}`);
   });
   renderInventoryCatalog();
 }
@@ -3272,14 +3383,19 @@ function updateCatalogAddButton() {
 }
 
 function addSelectedCatalogItems() {
-  const catalog = window.INVENTORY_CATALOG || [];
-  const picks = [...state.catalogSelected].map(i => catalog[i]).filter(Boolean);
+  const generic = window.INVENTORY_CATALOG || [];
+  const fdProducts = state.catalogFd ? state.catalogFd.products : [];
+  const picks = [...state.catalogSelected].map(key => {
+    const [src, a, b] = key.split(':');
+    if (src === 'fd') return fdProducts[a] && inventoryItemFromSupplyCatalog(fdProducts[a], fdProducts[a].v[b]);
+    return generic[a] && inventoryItemFromCatalog(generic[a]);
+  }).filter(Boolean);
   if (!picks.length) return;
   // One batch = one queued write offline, and all-or-nothing online.
   const batch = db.batch();
-  picks.forEach(entry => {
+  picks.forEach(fields => {
     batch.set(db.collection('inventoryItems').doc(), {
-      ...inventoryItemFromCatalog(entry),
+      ...fields,
       farrierId: state.user.uid,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3287,7 +3403,7 @@ function addSelectedCatalogItems() {
   });
   performWrite(() => batch.commit());
   const suffix = netState.online ? '' : ' (will sync when back online)';
-  showToast(`Added ${picks.length} item${picks.length > 1 ? 's' : ''} — tap one to set quantity & cost${suffix}`, 'success');
+  showToast(`Added ${picks.length} item${picks.length > 1 ? 's' : ''} — tap one to set quantity${suffix}`, 'success');
   goBack();
   loadInventoryList();
 }

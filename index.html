@@ -6790,6 +6790,18 @@ function ServicesView({ userId }) {
             <div>Loading...</div>
           ) : (
             <React.Fragment>
+              {items.length === 0 && (
+                <div style={{ padding: '1.25rem', borderRadius: 12, background: 'var(--surface)', border: '2px solid var(--primary)', marginBottom: '1rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.35rem' }}>📋 Build your inventory from our supply catalog?</div>
+                  <div style={{ color: 'var(--text-muted)', marginBottom: '0.9rem' }}>
+                    Tick the shoes, nails, pads and tools you carry — brand, size, part number and list price come filled in. You just count what's on the truck.
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="btn btn-primary" onClick={() => setCatalogOpen(true)}>Browse catalog</button>
+                    <button className="btn btn-outline" onClick={() => setItemModal({ item: null })}>I'll add my own</button>
+                  </div>
+                </div>
+              )}
               <h3 style={{ marginTop: '1rem' }}>Shoes, Nails &amp; Consumables</h3>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -6803,7 +6815,7 @@ function ServicesView({ userId }) {
                 </thead>
                 <tbody>
                   {consumables.length === 0 ? (
-                    <tr><td colSpan={5} style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>No consumable items yet — use <strong>Add from Catalog</strong> to pick from the standard farrier supply list.</td></tr>
+                    <tr><td colSpan={5} style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>No consumable items yet.</td></tr>
                   ) : consumables.map(item => renderRow(item, true))}
                 </tbody>
               </table>
@@ -6849,50 +6861,110 @@ function ServicesView({ userId }) {
       );
     }
 
-    // Master catalog picker (list lives in inventory-catalog.js, shared with mobile).
-    // Items the farrier already has (matched by name) are shown checked-off and
-    // disabled, so re-opening the catalog later never creates duplicates.
+    // Catalog picker. Two sources, both defined in inventory-catalog.js (shared with mobile):
+    //  - Supply catalog: real supplier products, one pick per size, loaded on open.
+    //  - General supplies: the generic consumables list, for things the supply catalog lacks.
+    // Picks are copied into the farrier's inventoryItems (qty 0) in one batch. Items the
+    // farrier already has (same name + size) show checked-off and disabled, so
+    // re-opening the catalog never creates duplicates.
     function InventoryCatalogModal({ userId, existingItems, onClose, onSaved }) {
-      const catalog = window.INVENTORY_CATALOG || [];
-      const owned = new Set(existingItems.map(i => inventoryCatalogKey(i.name)));
-      const [selected, setSelected] = useState(() => new Set());
+      const generic = window.INVENTORY_CATALOG || [];
+      const owned = new Set(existingItems.map(i => inventoryCatalogKey(i.name, i.size)));
+      const [tab, setTab] = useState('fd');
+      const [fd, setFd] = useState(null);        // loaded catalog doc
+      const [fdError, setFdError] = useState('');
+      const [openCat, setOpenCat] = useState(null);
+      const [openProduct, setOpenProduct] = useState(null);
+      const [selected, setSelected] = useState(() => new Set()); // 'fd:<p>:<v>' | 'gen:<idx>'
       const [search, setSearch] = useState('');
       const [saving, setSaving] = useState(false);
 
-      const q = search.trim().toLowerCase();
-      const visible = catalog
-        .map((entry, idx) => ({ entry, idx }))
-        .filter(({ entry }) => !q || entry.name.toLowerCase().includes(q) || entry.category.toLowerCase().includes(q));
-      const categories = [...new Set(visible.map(v => v.entry.category))];
+      useEffect(() => {
+        loadSupplyCatalog().then(setFd).catch(e => setFdError(e.message));
+      }, []);
 
-      const toggle = (idx) => setSelected(prev => {
+      const q = search.trim().toLowerCase();
+      const toggleKey = (key) => setSelected(prev => {
         const next = new Set(prev);
-        next.has(idx) ? next.delete(idx) : next.add(idx);
+        next.has(key) ? next.delete(key) : next.add(key);
         return next;
       });
+
+      // ── Supply catalog tab ──
+      const fdProducts = fd ? fd.products : [];
+      const fdTop = (p) => p.c.split(' > ')[0];
+      const fdCategories = [...new Set(fdProducts.map(fdTop))];
+      const fdVisible = q
+        ? fdProducts.map((p, pi) => ({ p, pi })).filter(({ p }) => supplyCatalogProductMatches(p, q)).slice(0, 150)
+        : fdProducts.map((p, pi) => ({ p, pi })).filter(({ p }) => fdTop(p) === openCat);
+
+      const renderSizes = (p, pi) => (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', padding: '0.25rem 0 0.6rem 1.5rem' }}>
+          {p.v.map((v, vi) => {
+            const key = `fd:${pi}:${vi}`;
+            const isOwned = owned.has(inventoryCatalogKey(p.t, v[0]));
+            const on = isOwned || selected.has(key);
+            return (
+              <label key={vi} title={v[1] ? `Part # ${v[1]}` : ''} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.25rem 0.55rem', borderRadius: 999, border: `2px solid ${on ? 'var(--primary)' : 'var(--border)'}`, fontSize: '0.85rem', cursor: isOwned ? 'default' : 'pointer', opacity: isOwned ? 0.5 : 1 }}>
+                <input type="checkbox" checked={on} disabled={isOwned} onChange={() => toggleKey(key)} style={{ margin: 0 }} />
+                {v[0] || 'Standard'}{v[2] ? <span style={{ color: 'var(--text-muted)' }}> · ${Number(v[2]).toFixed(2)}</span> : null}
+              </label>
+            );
+          })}
+        </div>
+      );
+
+      const renderProduct = ({ p, pi }) => {
+        const single = p.v.length === 1 && !p.v[0][0];
+        const selCount = p.v.filter((_, vi) => selected.has(`fd:${pi}:${vi}`)).length;
+        if (single) {
+          const key = `fd:${pi}:0`;
+          const isOwned = owned.has(inventoryCatalogKey(p.t, ''));
+          return (
+            <label key={pi} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0', opacity: isOwned ? 0.5 : 1, cursor: isOwned ? 'default' : 'pointer' }}>
+              <input type="checkbox" checked={isOwned || selected.has(key)} disabled={isOwned} onChange={() => toggleKey(key)} />
+              <span style={{ flex: 1 }}>{p.t}{p.b ? <span style={{ color: 'var(--text-muted)' }}> — {p.b}</span> : null}</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : p.v[0][2] ? `$${Number(p.v[0][2]).toFixed(2)}` : ''}</span>
+            </label>
+          );
+        }
+        const isOpen = openProduct === pi;
+        return (
+          <div key={pi}>
+            <div onClick={() => setOpenProduct(isOpen ? null : pi)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0', cursor: 'pointer' }}>
+              <span style={{ width: '1rem', color: 'var(--text-muted)' }}>{isOpen ? '▾' : '▸'}</span>
+              <span style={{ flex: 1 }}>{p.t}{p.b ? <span style={{ color: 'var(--text-muted)' }}> — {p.b}</span> : null}</span>
+              <span style={{ color: selCount ? 'var(--primary)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: selCount ? 700 : 400 }}>
+                {selCount ? `${selCount} selected` : `${p.v.length} sizes`}
+              </span>
+            </div>
+            {isOpen && renderSizes(p, pi)}
+          </div>
+        );
+      };
+
+      // ── General supplies tab ──
+      const genVisible = generic.map((entry, idx) => ({ entry, idx }))
+        .filter(({ entry }) => !q || entry.name.toLowerCase().includes(q) || entry.category.toLowerCase().includes(q));
+      const genCategories = [...new Set(genVisible.map(v => v.entry.category))];
       const selectCommon = () => setSelected(prev => {
         const next = new Set(prev);
-        catalog.forEach((entry, idx) => { if (entry.common && !owned.has(inventoryCatalogKey(entry.name))) next.add(idx); });
+        generic.forEach((entry, idx) => { if (entry.common && !owned.has(inventoryCatalogKey(entry.name, ''))) next.add(`gen:${idx}`); });
         return next;
       });
-      const toggleCategory = (cat) => {
-        const idxs = visible.filter(v => v.entry.category === cat && !owned.has(inventoryCatalogKey(v.entry.name))).map(v => v.idx);
-        setSelected(prev => {
-          const next = new Set(prev);
-          const allOn = idxs.every(i => next.has(i));
-          idxs.forEach(i => allOn ? next.delete(i) : next.add(i));
-          return next;
-        });
-      };
 
       const handleAdd = async () => {
         if (!selected.size) return;
         setSaving(true);
         try {
           const batch = db.batch();
-          [...selected].forEach(idx => {
+          [...selected].forEach(key => {
+            const [src, a, b] = key.split(':');
+            const fields = src === 'fd'
+              ? inventoryItemFromSupplyCatalog(fdProducts[a], fdProducts[a].v[b])
+              : inventoryItemFromCatalog(generic[a]);
             batch.set(db.collection('inventoryItems').doc(), {
-              ...inventoryItemFromCatalog(catalog[idx]),
+              ...fields,
               farrierId: userId,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
               updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -6907,51 +6979,93 @@ function ServicesView({ userId }) {
         }
       };
 
+      const tabBtn = (id, label) => (
+        <button className={`btn btn-sm ${tab === id ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setTab(id); setSearch(''); }}>{label}</button>
+      );
+
       return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div className="card" style={{ maxWidth: 640, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div className="card" style={{ maxWidth: 720, width: '100%', height: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <h2 style={{ margin: 0, color: 'var(--primary)' }}>📋 Add from Catalog</h2>
               <button className="btn btn-sm btn-outline" onClick={onClose}>✕ Close</button>
             </div>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              {tabBtn('fd', 'Supply catalog')}
+              {tabBtn('gen', 'General supplies')}
+            </div>
             <p style={{ margin: '0 0 0.75rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              Tick the supplies you carry. They're added with a quantity of 0 — click Edit on each to set brand, size, cost and reorder level.
+              {tab === 'fd'
+                ? 'Pick the sizes you carry. Brand, size, part number and list price are filled in — click Edit afterwards to set quantity, reorder level, or your actual cost.'
+                : "For anything not in the supply catalog. They're added with a quantity of 0 — click Edit on each to fill in details."}
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-              <input type="search" value={search} placeholder="Search items…" onChange={e => setSearch(e.target.value)}
+              <input type="search" value={search} placeholder={tab === 'fd' ? 'Search name, brand or part #…' : 'Search items…'} onChange={e => setSearch(e.target.value)}
                 style={{ flex: 1, padding: '0.6rem 0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem' }} />
-              <button className="btn btn-sm btn-outline" onClick={selectCommon}>✓ Select common items</button>
+              {tab === 'gen' && <button className="btn btn-sm btn-outline" onClick={selectCommon}>✓ Select common items</button>}
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
-              {categories.length === 0 && (
-                <div style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>No catalog items match "{search}" — use + Add Item to add it yourself.</div>
-              )}
-              {categories.map(cat => (
-                <div key={cat} style={{ marginBottom: '0.75rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.5rem 0 0.25rem' }}>
-                    <strong>{cat}</strong>
-                    <button className="btn btn-sm btn-outline" style={{ padding: '0.15rem 0.5rem', fontSize: '0.75rem' }} onClick={() => toggleCategory(cat)}>Toggle all</button>
-                  </div>
-                  {visible.filter(v => v.entry.category === cat).map(({ entry, idx }) => {
-                    const isOwned = owned.has(inventoryCatalogKey(entry.name));
+              {tab === 'fd' && (
+                fdError ? (
+                  <div style={{ padding: '1rem 0', color: '#dc2626' }}>Couldn't load the supply catalog ({fdError}). Check your connection and reopen.</div>
+                ) : !fd ? (
+                  <div style={{ padding: '1rem 0' }}>Loading catalog…</div>
+                ) : q ? (
+                  <React.Fragment>
+                    {fdVisible.length === 0 && <div style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>No products match "{search}".</div>}
+                    {fdVisible.map(renderProduct)}
+                    {fdVisible.length === 150 && <div style={{ padding: '0.5rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Showing the first 150 matches — refine your search.</div>}
+                  </React.Fragment>
+                ) : (
+                  fdCategories.map(cat => {
+                    const count = fdProducts.filter(p => fdTop(p) === cat).length;
+                    const isOpen = openCat === cat;
                     return (
-                      <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0', opacity: isOwned ? 0.5 : 1, cursor: isOwned ? 'default' : 'pointer' }}>
-                        <input type="checkbox" checked={isOwned || selected.has(idx)} disabled={isOwned} onChange={() => toggle(idx)} />
-                        <span style={{ flex: 1 }}>{entry.name}</span>
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : `per ${entry.unit}`}</span>
-                      </label>
+                      <div key={cat} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <div onClick={() => { setOpenCat(isOpen ? null : cat); setOpenProduct(null); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', cursor: 'pointer', fontWeight: 700 }}>
+                          <span>{isOpen ? '▾' : '▸'} {cat}</span>
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.85rem' }}>{count} products</span>
+                        </div>
+                        {isOpen && <div style={{ paddingBottom: '0.5rem' }}>{fdVisible.map(renderProduct)}</div>}
+                      </div>
                     );
-                  })}
-                </div>
-              ))}
+                  })
+                )
+              )}
+
+              {tab === 'gen' && (
+                <React.Fragment>
+                  {genCategories.length === 0 && (
+                    <div style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>No items match "{search}" — use + Add Item to add it yourself.</div>
+                  )}
+                  {genCategories.map(cat => (
+                    <div key={cat} style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ margin: '0.5rem 0 0.25rem' }}><strong>{cat}</strong></div>
+                      {genVisible.filter(v => v.entry.category === cat).map(({ entry, idx }) => {
+                        const isOwned = owned.has(inventoryCatalogKey(entry.name, ''));
+                        return (
+                          <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0', opacity: isOwned ? 0.5 : 1, cursor: isOwned ? 'default' : 'pointer' }}>
+                            <input type="checkbox" checked={isOwned || selected.has(`gen:${idx}`)} disabled={isOwned} onChange={() => toggleKey(`gen:${idx}`)} />
+                            <span style={{ flex: 1 }}>{entry.name}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : `per ${entry.unit}`}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </React.Fragment>
+              )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
-              <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-              <button className="btn btn-primary" disabled={!selected.size || saving} onClick={handleAdd}>
-                {saving ? 'Adding…' : selected.size ? `Add ${selected.size} item${selected.size > 1 ? 's' : ''}` : 'Select items to add'}
-              </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{tab === 'fd' && fd ? `List prices as of ${fd.retrieved}` : ''}</span>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+                <button className="btn btn-primary" disabled={!selected.size || saving} onClick={handleAdd}>
+                  {saving ? 'Adding…' : selected.size ? `Add ${selected.size} item${selected.size > 1 ? 's' : ''}` : 'Select items to add'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

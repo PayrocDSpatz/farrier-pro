@@ -9,6 +9,8 @@
 // single default unit per item. `common: true` marks the items preselected by the
 // picker's "Select common items" shortcut.
 //
+// The supplier product catalog (loaded on demand) is further down.
+//
 // Mobile caches this file for offline use (see APP_SHELL in mobile-sw.js).
 window.INVENTORY_CATALOG = [
   // Horseshoes
@@ -160,8 +162,10 @@ window.INVENTORY_CATALOG = [
   { category: 'Marking & Miscellaneous', name: 'Anti-seize compound', unit: 'container' },
 ];
 
-// Case/spacing-insensitive key used to grey out catalog items the farrier already has.
-window.inventoryCatalogKey = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+// Case/spacing-insensitive name+size key used to grey out catalog items the farrier
+// already has (generic entries have no size, so they match on name alone).
+window.inventoryCatalogKey = (name, size) =>
+  [name, size].map(s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')).join('|');
 
 // Firestore fields for a new inventoryItems doc copied from a catalog entry. Callers add
 // farrierId + timestamps. Everything in this catalog is a consumable (low-stock alerts
@@ -171,3 +175,38 @@ window.inventoryItemFromCatalog = (entry) => ({
   quantityOnHand: 0, reorderThreshold: 0, costPerUnit: 0,
   isConsumable: true, isActive: true, notes: '', source: 'catalog',
 });
+
+// ── Supply catalog ──
+// supply-catalog.json holds public product facts from a farrier supply retailer
+// (built by scripts/supply-catalog/). The supplier is deliberately not named in the app
+// (names, brands, category paths, sizes, part numbers, list prices — no descriptions
+// or images). ~230 KB, so it's fetched only when the picker opens, then memoized.
+// Shape: { retrieved, products: [{ t: title, b: brand, c: 'Top > Sub', u: unit,
+//          tool?: 1, v: [[size, partNumber, listPrice], ...] }] }
+let supplyCatalogPromise = null;
+window.loadSupplyCatalog = () => {
+  if (!supplyCatalogPromise) {
+    supplyCatalogPromise = fetch('/supply-catalog.json')
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .catch(err => { supplyCatalogPromise = null; throw err; });
+  }
+  return supplyCatalogPromise;
+};
+
+// Case-insensitive match on name, brand, category or any part number.
+window.supplyCatalogProductMatches = (product, q) =>
+  !q || (product.t + ' ' + product.b + ' ' + product.c + ' ' + product.v.map(v => v[1]).join(' '))
+    .toLowerCase().includes(q);
+
+// Firestore fields for one supply-catalog size. The list price is only a starting
+// cost — farriers can edit it (many get trade pricing).
+window.inventoryItemFromSupplyCatalog = (product, variant) => {
+  const [size, partNumber, price] = variant;
+  return {
+    name: product.t, category: product.c.split(' > ')[0], brand: product.b || '', size: size || '',
+    unit: product.u || 'each', quantityOnHand: 0, reorderThreshold: 0, costPerUnit: Number(price) || 0,
+    isConsumable: !product.tool, isActive: true,
+    notes: partNumber ? `Part #${partNumber}` : '',
+    supplierSku: partNumber || '', source: 'supply-catalog',
+  };
+};
