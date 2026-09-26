@@ -23,6 +23,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+  <script src="/inventory-catalog.js"></script>
   
   <!-- Google API for Calendar -->
   <script src="https://apis.google.com/js/api.js"></script>
@@ -6732,6 +6733,7 @@ function ServicesView({ userId }) {
       const [loading, setLoading] = useState(true);
       const [itemModal, setItemModal] = useState(null); // { item } | null — null = closed, item: null = add
       const [restockModal, setRestockModal] = useState(null); // { item } | null
+      const [catalogOpen, setCatalogOpen] = useState(false);
 
       const loadItems = async () => {
         if (!db) return;
@@ -6772,7 +6774,10 @@ function ServicesView({ userId }) {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2 style={{ margin: 0 }}>Inventory</h2>
-            <button className="btn btn-primary" onClick={() => setItemModal({ item: null })}>+ Add Item</button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button className="btn btn-outline" onClick={() => setCatalogOpen(true)}>📋 Add from Catalog</button>
+              <button className="btn btn-primary" onClick={() => setItemModal({ item: null })}>+ Add Item</button>
+            </div>
           </div>
 
           {lowStock.length > 0 && (
@@ -6798,7 +6803,7 @@ function ServicesView({ userId }) {
                 </thead>
                 <tbody>
                   {consumables.length === 0 ? (
-                    <tr><td colSpan={5} style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>No consumable items yet.</td></tr>
+                    <tr><td colSpan={5} style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>No consumable items yet — use <strong>Add from Catalog</strong> to pick from the standard farrier supply list.</td></tr>
                   ) : consumables.map(item => renderRow(item, true))}
                 </tbody>
               </table>
@@ -6829,11 +6834,126 @@ function ServicesView({ userId }) {
               onSaved={() => loadItems()} />
           )}
 
+          {catalogOpen && (
+            <InventoryCatalogModal userId={userId} existingItems={items}
+              onClose={() => setCatalogOpen(false)}
+              onSaved={() => loadItems()} />
+          )}
+
           {restockModal && (
             <InventoryRestockModal item={restockModal.item} userId={userId}
               onClose={() => setRestockModal(null)}
               onSaved={() => loadItems()} />
           )}
+        </div>
+      );
+    }
+
+    // Master catalog picker (list lives in inventory-catalog.js, shared with mobile).
+    // Items the farrier already has (matched by name) are shown checked-off and
+    // disabled, so re-opening the catalog later never creates duplicates.
+    function InventoryCatalogModal({ userId, existingItems, onClose, onSaved }) {
+      const catalog = window.INVENTORY_CATALOG || [];
+      const owned = new Set(existingItems.map(i => inventoryCatalogKey(i.name)));
+      const [selected, setSelected] = useState(() => new Set());
+      const [search, setSearch] = useState('');
+      const [saving, setSaving] = useState(false);
+
+      const q = search.trim().toLowerCase();
+      const visible = catalog
+        .map((entry, idx) => ({ entry, idx }))
+        .filter(({ entry }) => !q || entry.name.toLowerCase().includes(q) || entry.category.toLowerCase().includes(q));
+      const categories = [...new Set(visible.map(v => v.entry.category))];
+
+      const toggle = (idx) => setSelected(prev => {
+        const next = new Set(prev);
+        next.has(idx) ? next.delete(idx) : next.add(idx);
+        return next;
+      });
+      const selectCommon = () => setSelected(prev => {
+        const next = new Set(prev);
+        catalog.forEach((entry, idx) => { if (entry.common && !owned.has(inventoryCatalogKey(entry.name))) next.add(idx); });
+        return next;
+      });
+      const toggleCategory = (cat) => {
+        const idxs = visible.filter(v => v.entry.category === cat && !owned.has(inventoryCatalogKey(v.entry.name))).map(v => v.idx);
+        setSelected(prev => {
+          const next = new Set(prev);
+          const allOn = idxs.every(i => next.has(i));
+          idxs.forEach(i => allOn ? next.delete(i) : next.add(i));
+          return next;
+        });
+      };
+
+      const handleAdd = async () => {
+        if (!selected.size) return;
+        setSaving(true);
+        try {
+          const batch = db.batch();
+          [...selected].forEach(idx => {
+            batch.set(db.collection('inventoryItems').doc(), {
+              ...inventoryItemFromCatalog(catalog[idx]),
+              farrierId: userId,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          });
+          await batch.commit();
+          onSaved();
+          onClose();
+        } catch (e) {
+          alert('Error adding items: ' + e.message);
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div className="card" style={{ maxWidth: 640, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ margin: 0, color: 'var(--primary)' }}>📋 Add from Catalog</h2>
+              <button className="btn btn-sm btn-outline" onClick={onClose}>✕ Close</button>
+            </div>
+            <p style={{ margin: '0 0 0.75rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              Tick the supplies you carry. They're added with a quantity of 0 — click Edit on each to set brand, size, cost and reorder level.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <input type="search" value={search} placeholder="Search items…" onChange={e => setSearch(e.target.value)}
+                style={{ flex: 1, padding: '0.6rem 0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem' }} />
+              <button className="btn btn-sm btn-outline" onClick={selectCommon}>✓ Select common items</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+              {categories.length === 0 && (
+                <div style={{ padding: '1rem 0', color: 'var(--text-muted)' }}>No catalog items match "{search}" — use + Add Item to add it yourself.</div>
+              )}
+              {categories.map(cat => (
+                <div key={cat} style={{ marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.5rem 0 0.25rem' }}>
+                    <strong>{cat}</strong>
+                    <button className="btn btn-sm btn-outline" style={{ padding: '0.15rem 0.5rem', fontSize: '0.75rem' }} onClick={() => toggleCategory(cat)}>Toggle all</button>
+                  </div>
+                  {visible.filter(v => v.entry.category === cat).map(({ entry, idx }) => {
+                    const isOwned = owned.has(inventoryCatalogKey(entry.name));
+                    return (
+                      <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0', opacity: isOwned ? 0.5 : 1, cursor: isOwned ? 'default' : 'pointer' }}>
+                        <input type="checkbox" checked={isOwned || selected.has(idx)} disabled={isOwned} onChange={() => toggle(idx)} />
+                        <span style={{ flex: 1 }}>{entry.name}</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : `per ${entry.unit}`}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
+              <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" disabled={!selected.size || saving} onClick={handleAdd}>
+                {saving ? 'Adding…' : selected.size ? `Add ${selected.size} item${selected.size > 1 ? 's' : ''}` : 'Select items to add'}
+              </button>
+            </div>
+          </div>
         </div>
       );
     }
