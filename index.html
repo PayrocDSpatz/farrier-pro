@@ -12408,7 +12408,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                         <button
                           className="btn btn-sm btn-outline"
                           onClick={() => { setSelectedInvoice(invoice); setShowRefundModal(true); }}
-                          title="Refund this card payment (password required)"
+                          title="Refund this card payment (manager password required)"
                         >
                           ↩️ Refund
                         </button>
@@ -12615,6 +12615,85 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       return Math.max(0, paid - (invoice.refundedAmount || 0));
     }
 
+    // Settings → Manager Password. Stored hashed on the server (farrierSecrets); guards refunds.
+    function ManagerPasswordSettings() {
+      const [isSet, setIsSet] = useState(null); // null = loading
+      const [current, setCurrent] = useState('');
+      const [next, setNext] = useState('');
+      const [confirm, setConfirm] = useState('');
+      const [saving, setSaving] = useState(false);
+      const [message, setMessage] = useState(null); // { ok, text }
+
+      const call = async (payload) => {
+        const res = await fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        return res.json();
+      };
+
+      useEffect(() => {
+        call({ action: 'manager_password_status' })
+          .then(r => setIsSet(r.success ? !!r.isSet : false))
+          .catch(() => setIsSet(false));
+      }, []);
+
+      const save = async () => {
+        setMessage(null);
+        if (next.length < 6) { setMessage({ ok: false, text: 'New manager password must be at least 6 characters.' }); return; }
+        if (next !== confirm) { setMessage({ ok: false, text: "New passwords don't match." }); return; }
+        if (isSet && !current) { setMessage({ ok: false, text: 'Enter your current manager password.' }); return; }
+        setSaving(true);
+        try {
+          const r = await call({ action: 'set_manager_password', currentPassword: current, newPassword: next });
+          if (r.success) {
+            setMessage({ ok: true, text: isSet ? '✅ Manager password changed.' : '✅ Manager password set.' });
+            setIsSet(true); setCurrent(''); setNext(''); setConfirm('');
+          } else {
+            setMessage({ ok: false, text: r.error || 'Could not save manager password.' });
+          }
+        } catch (e) {
+          setMessage({ ok: false, text: 'Could not save manager password.' });
+        }
+        setSaving(false);
+      };
+
+      return (
+        <div className="card" style={{marginTop: '1.5rem'}}>
+          <h2>🔒 Manager Password</h2>
+          <p style={{color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem'}}>
+            Required to issue refunds. Keep it separate from your login password so helpers using this device can't refund payments.
+          </p>
+          {isSet === null ? (
+            <p style={{color: 'var(--text-muted)'}}>Loading…</p>
+          ) : (
+            <>
+              <div style={{marginBottom: '1rem', fontWeight: 600, color: isSet ? '#16a34a' : '#d97706'}}>
+                {isSet ? '✅ Manager password is set' : '⚠️ No manager password yet — refunds are blocked until you set one'}
+              </div>
+              {isSet && (
+                <div className="form-group">
+                  <label>Current Manager Password</label>
+                  <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
+                </div>
+              )}
+              <div className="form-group">
+                <label>{isSet ? 'New Manager Password' : 'Manager Password'}</label>
+                <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" placeholder="At least 6 characters" />
+              </div>
+              <div className="form-group">
+                <label>Confirm {isSet ? 'New ' : ''}Manager Password</label>
+                <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password"
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !saving) save(); }} />
+              </div>
+              {message && <div style={{marginBottom: '1rem', color: message.ok ? '#16a34a' : '#dc2626'}}>{message.text}</div>}
+              <button className="btn btn-primary" onClick={save} disabled={saving}>
+                {saving ? 'Saving…' : isSet ? 'Change Manager Password' : 'Set Manager Password'}
+              </button>
+              {isSet && <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.75rem'}}>Forgot it? Contact FarriTech support to reset it.</div>}
+            </>
+          )}
+        </div>
+      );
+    }
+
     function RefundModal({ invoice, onClose, onRefunded }) {
       const refundable = invoiceRefundable(invoice);
       const [amount, setAmount] = useState(refundable.toFixed(2));
@@ -12626,10 +12705,10 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         const amt = parseFloat(amount);
         if (!amt || amt <= 0) { setError('Enter a refund amount.'); return; }
         if (amt > refundable + 0.001) { setError(`Refund can't be more than $${refundable.toFixed(2)}.`); return; }
-        if (!password) { setError('Enter the refund password.'); return; }
+        if (!password) { setError('Enter the manager password.'); return; }
         setProcessing(true); setError('');
         try {
-          // Server checks the refund password and uses this farrier's Stripe key
+          // Server checks the manager password and uses this farrier's Stripe key
           const res = await fetch('/api/stripe-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -12675,7 +12754,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 <input type="number" step="0.01" min="0.01" max={refundable} value={amount} onChange={(e) => setAmount(e.target.value)} />
               </div>
               <div className="form-group">
-                <label>Refund Password *</label>
+                <label>Manager Password *</label>
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter' && !processing) handleRefund(); }} />
               </div>
@@ -14549,6 +14628,8 @@ useEffect(() => {
               </button>
             </div>
           </div>
+
+          <ManagerPasswordSettings />
 
           {/* Stripe Payments Settings */}
           <div className="card" style={{marginTop: '1.5rem'}}>

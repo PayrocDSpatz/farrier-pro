@@ -13,9 +13,11 @@ export const config = { api: { bodyParser: false } };
 // farrier's key in the locked farrierSecrets collection (see _lib/firebase-rest.js).
 //
 // Who can call what:
-//   farrier (signed in)   → status, connect, disconnect, charge, refund, payment_link, deactivate_link
+//   farrier (signed in)   → status, connect, disconnect, charge, refund, payment_link, deactivate_link,
+//                           manager_password_status, set_manager_password
 //   customer (portal)     → customer_charge  (amount computed here from their own unpaid invoices)
 //   admin                 → migrate_all      (one-time: move legacy keys off public profiles)
+//                           reset_manager_password (clears a farrier's forgotten manager password)
 //   anyone                → confirm_session  (only marks paid after Stripe confirms the session)
 //   Stripe                → webhook          (signature required)
 
@@ -39,6 +41,18 @@ async function markInvoicePaid(invoiceId, details) {
     cardType: details.brand || '',
     ...(details.paidVia ? { paidVia: details.paidVia } : {}),
   });
+}
+
+// Manager password is stored as "scrypt$<salt>$<hash>" in farrierSecrets/{uid}.
+function hashManagerPassword(password) {
+  const salt = crypto.randomBytes(16);
+  return `scrypt$${salt.toString('hex')}$${crypto.scryptSync(String(password), salt, 32).toString('hex')}`;
+}
+function checkManagerPassword(password, stored) {
+  const [scheme, saltHex, hashHex] = String(stored || '').split('$');
+  if (scheme !== 'scrypt' || !saltHex || !hashHex) return false;
+  const actual = crypto.scryptSync(String(password || ''), Buffer.from(saltHex, 'hex'), 32);
+  return crypto.timingSafeEqual(actual, Buffer.from(hashHex, 'hex'));
 }
 
 async function cardDetails(stripe, paymentIntentId) {
@@ -191,6 +205,14 @@ export default async function handler(req, res) {
       });
     }
 
+    // ── Admin: clear a farrier's forgotten manager password so they can set a new one ──
+    if (action === 'reset_manager_password') {
+      if (!ADMIN_EMAILS.includes(caller.email)) return res.status(403).json({ success: false, error: 'Admins only.' });
+      if (!body.farrierId) return res.status(400).json({ success: false, error: 'Missing farrierId.' });
+      await patchDoc(`farrierSecrets/${body.farrierId}`, {}, ['managerPasswordHash']);
+      return res.status(200).json({ success: true });
+    }
+
     // Everything below acts on the signed-in farrier's own Stripe account.
     const farrierId = caller.uid;
 
@@ -208,6 +230,22 @@ export default async function handler(req, res) {
     if (action === 'status') {
       const key = await getStripeSecretKey(farrierId); // also migrates a legacy key off the profile
       return res.status(200).json({ success: true, connected: !!key, mode: key.startsWith('sk_live_') ? 'live' : key ? 'test' : '' });
+    }
+
+    // ── Manager password (Settings → Manager Password): guards refunds ──
+    if (action === 'manager_password_status') {
+      const secrets = await getDoc(`farrierSecrets/${farrierId}`);
+      return res.status(200).json({ success: true, isSet: !!secrets?.managerPasswordHash });
+    }
+    if (action === 'set_manager_password') {
+      const { currentPassword, newPassword } = body;
+      if (!newPassword || String(newPassword).length < 6) return res.status(400).json({ success: false, error: 'New manager password must be at least 6 characters.' });
+      const secrets = await getDoc(`farrierSecrets/${farrierId}`);
+      if (secrets?.managerPasswordHash && !checkManagerPassword(currentPassword, secrets.managerPasswordHash)) {
+        return res.status(403).json({ success: false, error: 'Current manager password is incorrect.' });
+      }
+      await patchDoc(`farrierSecrets/${farrierId}`, { managerPasswordHash: hashManagerPassword(newPassword), managerPasswordUpdatedAt: new Date() });
+      return res.status(200).json({ success: true });
     }
 
     const key = await getStripeSecretKey(farrierId);
@@ -243,12 +281,10 @@ export default async function handler(req, res) {
     if (action === 'refund') {
       const { transactionId, amount: refundAmount, refundPassword } = body;
       if (!transactionId) return res.status(400).json({ success: false, error: 'Missing transactionId.' });
-      // Refunds need the refund password (Vercel env REFUND_PASSWORD) — kept out of the page source.
-      const expected = process.env.REFUND_PASSWORD;
-      if (!expected) return res.status(500).json({ success: false, error: 'Refunds are not set up (REFUND_PASSWORD not configured).' });
-      const a = crypto.createHash('sha256').update(String(refundPassword || '')).digest();
-      const b = crypto.createHash('sha256').update(expected).digest();
-      if (!crypto.timingSafeEqual(a, b)) return res.status(403).json({ success: false, error: 'Incorrect refund password.' });
+      // Refunds need this farrier's manager password (set in Settings; stored hashed server-side).
+      const secrets = await getDoc(`farrierSecrets/${farrierId}`);
+      if (!secrets?.managerPasswordHash) return res.status(400).json({ success: false, error: 'Set a Manager Password in Settings before issuing refunds.' });
+      if (!checkManagerPassword(refundPassword, secrets.managerPasswordHash)) return res.status(403).json({ success: false, error: 'Incorrect manager password.' });
       const refund = await stripe.refunds.create({ payment_intent: transactionId, amount: refundAmount ? Math.round(parseFloat(refundAmount) * 100) : undefined });
       return res.status(200).json({ success: true, refundId: refund.id, amount: refund.amount / 100 });
     }
