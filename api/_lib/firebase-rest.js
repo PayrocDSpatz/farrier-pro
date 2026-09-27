@@ -73,7 +73,7 @@ export async function getDoc(path) {
   const { idToken } = await serverAuth();
   const r = await fetch(`${DOCS}/${path}`, { headers: { Authorization: `Bearer ${idToken}` } });
   if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`Firestore read ${path} failed: ${r.status} ${await r.text()}`);
+  if (!r.ok) throw new Error(`Firestore read ${path} failed: ${r.status} (server uid ${cached?.uid}) ${await r.text()}`);
   const d = await r.json();
   return Object.fromEntries(Object.entries(d.fields || {}).map(([k, v]) => [k, dec(v)]));
 }
@@ -86,7 +86,7 @@ export async function listDocs(collection, fieldMask = []) {
   do {
     const qs = [`pageSize=300`, ...fieldMask.map(f => `mask.fieldPaths=${encodeURIComponent(f)}`), pageToken ? `pageToken=${pageToken}` : ''].filter(Boolean).join('&');
     const r = await fetch(`${DOCS}/${collection}?${qs}`, { headers: { Authorization: `Bearer ${idToken}` } });
-    if (!r.ok) throw new Error(`Firestore list ${collection} failed: ${r.status} ${await r.text()}`);
+    if (!r.ok) throw new Error(`Firestore list ${collection} failed: ${r.status} (server uid ${cached?.uid}) ${await r.text()}`);
     const d = await r.json();
     for (const doc of d.documents || []) {
       out.push({ id: doc.name.split('/').pop(), ...Object.fromEntries(Object.entries(doc.fields || {}).map(([k, v]) => [k, dec(v)])) });
@@ -105,7 +105,7 @@ export async function patchDoc(path, fields = {}, deleteFields = []) {
     method: 'PATCH', headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`Firestore write ${path} failed: ${r.status} ${await r.text()}`);
+  if (!r.ok) throw new Error(`Firestore write ${path} failed: ${r.status} (server uid ${cached?.uid}) ${await r.text()}`);
   return true;
 }
 
