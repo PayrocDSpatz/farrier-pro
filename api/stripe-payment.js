@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import crypto from 'crypto';
 import { callerFromRequest, getDoc, patchDoc, listDocs, getStripeSecretKey, setStripeSecretKey, serverAuth } from './_lib/firebase-rest.js';
 
 // May run one-off maintenance actions (same list as the sponsorBanners rule).
@@ -240,10 +241,16 @@ export default async function handler(req, res) {
     }
 
     if (action === 'refund') {
-      const { transactionId, amount: refundAmount } = body;
+      const { transactionId, amount: refundAmount, refundPassword } = body;
       if (!transactionId) return res.status(400).json({ success: false, error: 'Missing transactionId.' });
+      // Refunds need the refund password (Vercel env REFUND_PASSWORD) — kept out of the page source.
+      const expected = process.env.REFUND_PASSWORD;
+      if (!expected) return res.status(500).json({ success: false, error: 'Refunds are not set up (REFUND_PASSWORD not configured).' });
+      const a = crypto.createHash('sha256').update(String(refundPassword || '')).digest();
+      const b = crypto.createHash('sha256').update(expected).digest();
+      if (!crypto.timingSafeEqual(a, b)) return res.status(403).json({ success: false, error: 'Incorrect refund password.' });
       const refund = await stripe.refunds.create({ payment_intent: transactionId, amount: refundAmount ? Math.round(parseFloat(refundAmount) * 100) : undefined });
-      return res.status(200).json({ success: true, refundId: refund.id });
+      return res.status(200).json({ success: true, refundId: refund.id, amount: refund.amount / 100 });
     }
 
     if (action === 'payment_link') {

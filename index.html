@@ -11931,6 +11931,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [selectedInvoice, setSelectedInvoice] = useState(null);
       const [loading, setLoading] = useState(false);
       const [showCancelModal, setShowCancelModal] = useState(false);
+      const [showRefundModal, setShowRefundModal] = useState(false);
       const [cancelPassword, setCancelPassword] = useState('');
       const [invoiceFilter, setInvoiceFilter] = useState('all'); // all, thisMonth, lastMonth, lastQuarter, ytd, paidOnly, openOnly, cancelledOnly, customRange
       const [customStartDate, setCustomStartDate] = useState('');
@@ -12335,6 +12336,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                           {invoice.transactionId && <> • Transaction: {invoice.transactionId}</>}
                           </>
                         )}
+                        {invoice.refundedAmount > 0 && (
+                          <><br/><span style={{color: '#dc2626'}}>Refunded: ${invoice.refundedAmount.toFixed(2)}</span></>
+                        )}
                         {invoice.paymentUrl && (
                           <><br/>Payment Link: <a href={invoice.paymentUrl} target="_blank" style={{color: 'var(--primary)'}}>View</a></>
                         )}
@@ -12343,7 +12347,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                     <div className="appointment-actions">
                       <span className={`badge badge-${
                         invoice.status === 'paid' ? 'success' : 
-                        invoice.status === 'cancelled' ? 'secondary' :
+                        invoice.status === 'cancelled' || invoice.status === 'refunded' ? 'secondary' :
                         invoice.status === 'partial' ? 'warning' :
                         'warning'
                       }`}>
@@ -12398,6 +12402,15 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                           title="Copy payment link"
                         >
                           🔗 Copy Link
+                        </button>
+                      )}
+                      {(invoice.status === 'paid' || invoice.status === 'partial') && invoiceStripePaymentId(invoice) && invoiceRefundable(invoice) > 0 && (
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={() => { setSelectedInvoice(invoice); setShowRefundModal(true); }}
+                          title="Refund this card payment (password required)"
+                        >
+                          ↩️ Refund
                         </button>
                       )}
                       {(invoice.status === 'outstanding' || invoice.status === 'partial') && (
@@ -12512,6 +12525,14 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             />
           )}
 
+          {showRefundModal && selectedInvoice && (
+            <RefundModal
+              invoice={selectedInvoice}
+              onClose={() => { setShowRefundModal(false); setSelectedInvoice(null); }}
+              onRefunded={() => { setShowRefundModal(false); setSelectedInvoice(null); loadInvoices(); }}
+            />
+          )}
+
           {showCancelModal && selectedInvoice && (
             <div className="modal-overlay" onClick={() => setShowCancelModal(false)}>
               <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth: '500px'}}>
@@ -12580,6 +12601,94 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               </div>
             </div>
           )}
+        </div>
+      );
+    }
+
+    // Card payment id on a paid invoice (in-app charge, payment link, or portal) — refunds need it.
+    function invoiceStripePaymentId(invoice) {
+      const id = invoice.transactionId || invoice.stripePaymentIntentId || '';
+      return String(id).startsWith('pi_') ? id : '';
+    }
+    function invoiceRefundable(invoice) {
+      const paid = invoice.paidAmount || (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0) || invoice.total || 0;
+      return Math.max(0, paid - (invoice.refundedAmount || 0));
+    }
+
+    function RefundModal({ invoice, onClose, onRefunded }) {
+      const refundable = invoiceRefundable(invoice);
+      const [amount, setAmount] = useState(refundable.toFixed(2));
+      const [password, setPassword] = useState('');
+      const [processing, setProcessing] = useState(false);
+      const [error, setError] = useState('');
+
+      const handleRefund = async () => {
+        const amt = parseFloat(amount);
+        if (!amt || amt <= 0) { setError('Enter a refund amount.'); return; }
+        if (amt > refundable + 0.001) { setError(`Refund can't be more than $${refundable.toFixed(2)}.`); return; }
+        if (!password) { setError('Enter the refund password.'); return; }
+        setProcessing(true); setError('');
+        try {
+          // Server checks the refund password and uses this farrier's Stripe key
+          const res = await fetch('/api/stripe-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'refund', transactionId: invoiceStripePaymentId(invoice), amount: amt, refundPassword: password })
+          });
+          const result = await res.json();
+          if (!result.success) { setError(result.error || 'Refund failed.'); setProcessing(false); return; }
+          const fresh = (await db.collection('invoices').doc(invoice.id).get()).data() || {};
+          const refunds = [...(fresh.refunds || []), { amount: amt, refundId: result.refundId, transactionId: invoiceStripePaymentId(invoice), date: new Date().toISOString() }];
+          const refundedAmount = refunds.reduce((s,r) => s + (r.amount||0), 0);
+          const fully = refundedAmount >= invoiceRefundable({ ...fresh, refundedAmount: 0 }) - 0.001;
+          await db.collection('invoices').doc(invoice.id).update({
+            refunds, refundedAmount,
+            ...(fully ? { status: 'refunded', refundedAt: firebase.firestore.FieldValue.serverTimestamp() } : {})
+          });
+          alert(`✅ Refunded $${amt.toFixed(2)}`);
+          onRefunded();
+        } catch (err) {
+          console.error('Refund error:', err);
+          setError('Refund failed. Please try again.');
+          setProcessing(false);
+        }
+      };
+
+      return (
+        <div className="modal-overlay" onClick={onClose}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth: '500px'}}>
+            <div className="modal-header">
+              <h2>↩️ Refund Payment</h2>
+              <button className="close-btn" onClick={onClose}>×</button>
+            </div>
+            <div style={{padding: '1.5rem'}}>
+              <div style={{padding: '1rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '1.5rem'}}>
+                <div style={{fontWeight: '600', marginBottom: '0.5rem'}}>Invoice: {invoice.invoiceNumber}</div>
+                <div style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>Customer: {invoice.customerName}</div>
+                <div style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>
+                  Refundable: ${refundable.toFixed(2)}
+                  {invoice.refundedAmount > 0 && <> • Already refunded: ${invoice.refundedAmount.toFixed(2)}</>}
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Refund Amount *</label>
+                <input type="number" step="0.01" min="0.01" max={refundable} value={amount} onChange={(e) => setAmount(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Refund Password *</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !processing) handleRefund(); }} />
+              </div>
+              <div style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>The money goes back to the customer's card through Stripe. This can't be undone.</div>
+              {error && <div style={{marginTop: '1rem', padding: '0.75rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b'}}>{error}</div>}
+              <div style={{display: 'flex', gap: '0.75rem', marginTop: '1.5rem'}}>
+                <button className="btn btn-outline" onClick={onClose} style={{flex: 1}} disabled={processing}>Nevermind</button>
+                <button className="btn" onClick={handleRefund} disabled={processing} style={{flex: 1, background: '#ef4444', color: 'white'}}>
+                  {processing ? 'Refunding…' : `Refund $${(parseFloat(amount) || 0).toFixed(2)}`}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }
