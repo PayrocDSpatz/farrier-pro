@@ -24,6 +24,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
   <script src="/inventory-catalog.js"></script>
+  <script src="/api-auth.js"></script>
   
   <!-- Google API for Calendar -->
   <script src="https://apis.google.com/js/api.js"></script>
@@ -2508,6 +2509,13 @@ async function ensureFarriTechfile_(uid, profile) {
               await db.collection('farriers').doc(farrierIdToUse).update({ email: u.email });
               profileData.email = u.email;
               console.log('✅ Backfilled missing email into farrier profile:', u.email);
+            }
+            // Older accounts kept the Stripe secret key on this (publicly readable) profile.
+            // Ask the server to move it into its locked secrets store; it deletes the copy here.
+            if (profileData.stripeSecretKey) {
+              fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) })
+                .catch(e => console.warn('Stripe key migration deferred:', e.message));
+              delete profileData.stripeSecretKey;
             }
             setUserProfile(profileData);
           }
@@ -12587,9 +12595,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const stripeRef = React.useRef(null);
       const cardRef = React.useRef(null);
 
+      // The secret key lives only on the server; a publishable key means Stripe is connected.
       const publishableKey = userProfile?.stripePublishableKey || '';
-      const secretKey = userProfile?.stripeSecretKey || '';
-      const hasStripe = publishableKey && secretKey;
+      const hasStripe = !!publishableKey;
 
       React.useEffect(() => {
         if (!hasStripe || !window.Stripe) return;
@@ -12633,7 +12641,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
 
           if (pmError) { setError(pmError.message); setProcessing(false); return; }
 
-          // Charge via our API using the farrier's secret key
+          // Charge via our API — the server uses this farrier's Stripe key (api-auth.js sends who we are)
           const res = await fetch('/api/stripe-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -12646,7 +12654,6 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               invoiceNumber: invoice.invoiceNumber,
               customerEmail: invoice.customerEmail || '',
               customerName: invoice.customerName || '',
-              stripeSecretKey: secretKey
             })
           });
 
@@ -13284,16 +13291,12 @@ useEffect(() => {
             let paymentUrl = editingInvoice.paymentUrl || '';
             if (editingInvoice.paymentUrl && totalChanged) {
               try {
-                let stripeKey = userProfile?.stripeSecretKey || '';
-                const freshProfile = await db.collection('users').doc(userId).get();
-                if (freshProfile.exists) stripeKey = freshProfile.data()?.stripeSecretKey || stripeKey;
-                if (stripeKey && total > 0) {
+                if (userProfile?.stripePublishableKey && total > 0) {
                   const plRes = await fetch('/api/stripe-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       action: 'payment_link',
-                      stripeSecretKey: stripeKey,
                       amount: total,
                       invoiceId: editingInvoice.id,
                       invoiceNumber: editingInvoice.invoiceNumber,
@@ -13516,27 +13519,16 @@ useEffect(() => {
               }
             }
 
-            // Generate Stripe Payment Link if farrier has Stripe connected
-            // Fetch fresh profile from Firestore to avoid stale state
+            // Generate Stripe Payment Link if farrier has Stripe connected (the server
+            // holds the secret key; a publishable key on the profile means connected)
             let paymentUrl = '';
-            let stripeKey = userProfile?.stripeSecretKey || '';
-            try {
-              const freshProfile = await db.collection('users').doc(userId).get();
-              if (freshProfile.exists) {
-                stripeKey = freshProfile.data()?.stripeSecretKey || stripeKey;
-              }
-            } catch (profileErr) {
-              console.warn('Could not refresh profile, using cached:', profileErr);
-            }
-            console.log('💳 Stripe key present:', !!stripeKey, '| prefix:', stripeKey.substring(0,10));
-            if (stripeKey && total > 0) {
+            if (userProfile?.stripePublishableKey && total > 0) {
               try {
                 const plRes = await fetch('/api/stripe-payment', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     action: 'payment_link',
-                    stripeSecretKey: stripeKey,
                     amount: total,
                     invoiceId: docRef.id,
                     invoiceNumber,
@@ -14041,7 +14033,8 @@ useEffect(() => {
 
       // Stripe settings
       const [stripePublishableKey, setStripePublishableKey] = useState(userProfile?.stripePublishableKey || '');
-      const [stripeSecretKey, setStripeSecretKey] = useState(userProfile?.stripeSecretKey || '');
+      // Only ever holds a key the farrier is typing in — saved keys stay on the server.
+      const [stripeSecretKey, setStripeSecretKey] = useState('');
       const [stripeValidating, setStripeValidating] = useState(false);
       const [stripeStatus, setStripeStatus] = useState(userProfile?.stripePublishableKey ? 'connected' : 'none');
       const [stripeAccountName, setStripeAccountName] = useState(userProfile?.stripeAccountName || '');
@@ -14485,11 +14478,12 @@ useEffect(() => {
                 type="password"
                 value={stripeSecretKey}
                 onChange={(e) => { setStripeSecretKey(e.target.value); setStripeStatus('none'); }}
-                placeholder="sk_live_..."
+                placeholder={stripeStatus === 'connected' ? '•••••••• saved securely — paste a new key to replace it' : 'sk_live_...'}
+                autoComplete="off"
                 style={{fontFamily: 'monospace', fontSize: '0.85rem'}}
               />
               <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
-                Find these at <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noreferrer" style={{color:'var(--primary)'}}>dashboard.stripe.com/apikeys</a>
+                Your secret key is stored on FarriTech's server only — it's never shown again or kept in your browser. Find these at <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noreferrer" style={{color:'var(--primary)'}}>dashboard.stripe.com/apikeys</a>
               </div>
             </div>
 
@@ -14502,21 +14496,21 @@ useEffect(() => {
                   if (!stripeSecretKey.startsWith('sk_')) { alert('Secret key must start with sk_'); return; }
                   setStripeValidating(true);
                   try {
+                    // The server validates the key with Stripe and stores it in its locked
+                    // secrets store; only the publishable key + account name go on the profile.
                     const res = await fetch('/api/stripe-payment', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action: 'validate', stripeSecretKey })
+                      body: JSON.stringify({ action: 'connect', stripeSecretKey })
                     });
                     const data = await res.json();
                     if (data.success) {
-                      // Store the encrypted key returned by the server, not the plaintext
-                      const keyToStore = stripeSecretKey;
                       await ensureFarriTechfile_(safeFarrierId, {
                         stripePublishableKey,
-                        stripeSecretKey: keyToStore,
                         stripeAccountName: data.accountName || ''
                       });
-                      setUserProfile(prev => ({ ...prev, stripePublishableKey, stripeSecretKey: keyToStore, stripeAccountName: data.accountName || '' }));
+                      setUserProfile(prev => ({ ...prev, stripePublishableKey, stripeAccountName: data.accountName || '' }));
+                      setStripeSecretKey('');
                       setStripeAccountName(data.accountName || '');
                       setStripeStatus('connected');
                     } else {
@@ -14536,8 +14530,14 @@ useEffect(() => {
                   className="btn btn-outline"
                   onClick={async () => {
                     if (!confirm('Remove your Stripe connection?')) return;
-                    await ensureFarriTechfile_(safeFarrierId, { stripePublishableKey: '', stripeSecretKey: '', stripeAccountName: '' });
-                    setUserProfile(prev => ({ ...prev, stripePublishableKey: '', stripeSecretKey: '', stripeAccountName: '' }));
+                    const res = await fetch('/api/stripe-payment', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'disconnect' })
+                    });
+                    if (!(await res.json()).success) { alert('Could not disconnect Stripe — please try again.'); return; }
+                    await ensureFarriTechfile_(safeFarrierId, { stripePublishableKey: '', stripeAccountName: '' });
+                    setUserProfile(prev => ({ ...prev, stripePublishableKey: '', stripeAccountName: '' }));
                     setStripePublishableKey('');
                     setStripeSecretKey('');
                     setStripeAccountName('');

@@ -1149,6 +1149,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 <script src="/inventory-catalog.js"></script>
+<script src="/api-auth.js"></script>
 
 <script>
 // ── FIREBASE INIT ──
@@ -1532,7 +1533,13 @@ async function loadUserProfile() {
     const snap = await db.collection('farriers').doc(state.user.uid).get();
     if (snap.exists) {
       state.userProfile = snap.data();
-      console.log('✅ Profile loaded, Stripe connected:', !!state.userProfile?.stripeSecretKey);
+      // Older accounts kept the Stripe secret key on this profile; have the server move it
+      // into its locked secrets store (it deletes the copy here) and drop our local copy.
+      if (state.userProfile.stripeSecretKey) {
+        if (netState.online) fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) }).catch(() => {});
+        delete state.userProfile.stripeSecretKey;
+      }
+      console.log('✅ Profile loaded, Stripe connected:', !!state.userProfile?.stripePublishableKey);
     } else {
       console.warn('⚠️ No profile found in farriers collection for', state.user.uid);
     }
@@ -1669,7 +1676,7 @@ async function loadDashboard() {
   // Show Stripe warning if not connected
   const stripeWarning = document.getElementById('stripe-warning');
   if (stripeWarning) {
-    stripeWarning.style.display = state.userProfile?.stripeSecretKey ? 'none' : 'flex';
+    stripeWarning.style.display = state.userProfile?.stripePublishableKey ? 'none' : 'flex';
   }
 
   renderOfflineTip();
@@ -2768,13 +2775,13 @@ async function updateExistingInvoice(inv, allItems, total) {
   let paymentUrl = inv.paymentUrl || '';
   const totalChanged = Math.abs((inv.total || 0) - total) > 0.001;
   if (netState.online && inv.paymentUrl && totalChanged) {
-    const stripeKey = state.userProfile?.stripeSecretKey || '';
-    if (stripeKey && total > 0) {
+    const stripeConnected = !!state.userProfile?.stripePublishableKey; // secret key lives on the server
+    if (stripeConnected && total > 0) {
       try {
         const plRes = await fetch('/api/stripe-payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'payment_link', stripeSecretKey: stripeKey, amount: total, invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, customerEmail: email, customerName: c.name, farrierId: state.user.uid }),
+          body: JSON.stringify({ action: 'payment_link', amount: total, invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, customerEmail: email, customerName: c.name, farrierId: state.user.uid }),
         });
         const plData = await plRes.json();
         if (plData.success && plData.paymentUrl) {
@@ -2890,15 +2897,15 @@ async function createInvoice() {
   // back online. Note: creating an invoice never sends a text or email on its own —
   // that only happens if the farrier explicitly taps Send Text / Send Email below.
   let paymentUrl = '';
-  const stripeKey = state.userProfile?.stripeSecretKey || '';
+  const stripeConnected = !!state.userProfile?.stripePublishableKey; // secret key lives on the server
   if (!netState.online) {
     console.warn('⚠️ Offline — skipping payment link; invoice will sync once back online.');
-  } else if (stripeKey && total > 0) {
+  } else if (stripeConnected && total > 0) {
     try {
       const plRes = await fetch('/api/stripe-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'payment_link', stripeSecretKey: stripeKey, amount: total, invoiceId: docRef.id, invoiceNumber, customerEmail: email, customerName: c.name, farrierId: state.user.uid }),
+        body: JSON.stringify({ action: 'payment_link', amount: total, invoiceId: docRef.id, invoiceNumber, customerEmail: email, customerName: c.name, farrierId: state.user.uid }),
       });
       const plData = await plRes.json();
       console.log('💳 Stripe response:', JSON.stringify(plData));
@@ -2914,8 +2921,8 @@ async function createInvoice() {
       console.error('❌ Stripe exception:', e);
       showToast('Stripe error: ' + e.message, 'error');
     }
-  } else if (!stripeKey) {
-    console.warn('⚠️ No Stripe key in profile');
+  } else if (!stripeConnected) {
+    console.warn('⚠️ Stripe not connected');
     showToast('Stripe not connected — no payment link', 'error');
   }
 
@@ -3557,7 +3564,9 @@ function loadSettingsScreen() {
   document.getElementById('set-sms-enabled').checked = Boolean(p.smsEnabled);
 
   document.getElementById('set-stripe-pk').value = p.stripePublishableKey || '';
-  document.getElementById('set-stripe-sk').value = p.stripeSecretKey || '';
+  // Saved secret keys stay on the server — the field only takes a new key to replace it.
+  document.getElementById('set-stripe-sk').value = '';
+  document.getElementById('set-stripe-sk').placeholder = p.stripePublishableKey ? '•••••••• saved securely — paste a new key to replace' : 'sk_live_...';
   renderStripeStatus(p.stripePublishableKey ? 'connected' : 'none', p.stripeAccountName || '');
 
   state.settingsAvailability = JSON.parse(JSON.stringify(p.availability || DEFAULT_AVAILABILITY));
@@ -3690,16 +3699,17 @@ async function validateAndSaveStripe() {
     const res = await fetch('/api/stripe-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'validate', stripeSecretKey: sk }),
+      body: JSON.stringify({ action: 'connect', stripeSecretKey: sk }), // server validates + stores it
     });
     const data = await res.json();
     if (data.success) {
       await db.collection('farriers').doc(state.user.uid).set({
         stripePublishableKey: pk,
-        stripeSecretKey: sk,
         stripeAccountName: data.accountName || '',
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      state.userProfile = { ...(state.userProfile || {}), stripePublishableKey: pk, stripeAccountName: data.accountName || '' };
+      document.getElementById('set-stripe-sk').value = '';
       renderStripeStatus('connected', data.accountName || '');
       showToast('Stripe connected!', 'success');
     } else {
@@ -3711,12 +3721,18 @@ async function validateAndSaveStripe() {
   btn.disabled = false; btn.textContent = '✓ Validate & Save';
 }
 
-function disconnectStripe() {
+async function disconnectStripe() {
   if (!confirm('Remove your Stripe connection? Pay Now links will stop working until you reconnect.')) return;
-  const suffix = netState.online ? '' : ' (will sync when back online)';
+  // The key has to be removed on the server, so this needs signal.
+  if (!netState.online) { showToast('Disconnecting Stripe requires an internet connection', 'error'); return; }
+  try {
+    const res = await fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'disconnect' }) });
+    if (!(await res.json()).success) throw new Error('disconnect failed');
+  } catch (e) { showToast('Could not disconnect Stripe — try again', 'error'); return; }
+  const suffix = '';
+  state.userProfile = { ...(state.userProfile || {}), stripePublishableKey: '', stripeAccountName: '' };
   performWrite(() => db.collection('farriers').doc(state.user.uid).set({
     stripePublishableKey: '',
-    stripeSecretKey: '',
     stripeAccountName: '',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   }, { merge: true }));
@@ -4866,7 +4882,6 @@ async function chargeCardViaStripe(inv) {
       invoiceNumber: inv.invoiceNumber,
       customerEmail: inv.customerEmail || '',
       customerName: inv.customerName || '',
-      stripeSecretKey: state.userProfile?.stripeSecretKey || ''
     })
   });
   const result = await res.json();

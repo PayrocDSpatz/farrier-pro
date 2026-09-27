@@ -1,11 +1,22 @@
 import Stripe from 'stripe';
+import { callerFromRequest, getDoc, patchDoc, listDocs, getStripeSecretKey, setStripeSecretKey, serverAuth } from './_lib/firebase-rest.js';
+
+// May run one-off maintenance actions (same list as the sponsorBanners rule).
+const ADMIN_EMAILS = ['david@dasconsulting.com', 'david@dasdigitalai.com'];
 
 // Disable body parser so we can read raw body for webhook signature verification
 export const config = { api: { bodyParser: false } };
 
-const PROJECT_ID = 'farrier-pro';
-const FIREBASE_API_KEY = 'AIzaSyAQ1LaWG9lE9j5h6X0T0YQKa_j04vJZHE4';
-const BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+// Stripe secret keys never travel through browsers. Callers prove who they are with a
+// Firebase ID token (Authorization: Bearer <token>) and the server looks up the right
+// farrier's key in the locked farrierSecrets collection (see _lib/firebase-rest.js).
+//
+// Who can call what:
+//   farrier (signed in)   → status, connect, disconnect, charge, refund, payment_link, deactivate_link
+//   customer (portal)     → customer_charge  (amount computed here from their own unpaid invoices)
+//   admin                 → migrate_all      (one-time: move legacy keys off public profiles)
+//   anyone                → confirm_session  (only marks paid after Stripe confirms the session)
+//   Stripe                → webhook          (signature required)
 
 async function getRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -16,189 +27,194 @@ async function getRawBody(req) {
   });
 }
 
-async function markInvoicePaid(invoiceId, paymentDetails) {
-  const url = `${BASE_URL}/invoices/${invoiceId}?key=${FIREBASE_API_KEY}&updateMask.fieldPaths=status&updateMask.fieldPaths=paidAt&updateMask.fieldPaths=paymentMethod&updateMask.fieldPaths=stripePaymentIntentId&updateMask.fieldPaths=cardLast4&updateMask.fieldPaths=cardType`;
-  const now = new Date().toISOString();
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fields: {
-        status: { stringValue: 'paid' },
-        paidAt: { timestampValue: now },
-        paymentMethod: { stringValue: paymentDetails.paymentMethod || 'card' },
-        stripePaymentIntentId: { stringValue: paymentDetails.paymentIntentId || '' },
-        cardLast4: { stringValue: paymentDetails.last4 || '' },
-        cardType: { stringValue: paymentDetails.brand || '' },
-      }
-    })
+async function markInvoicePaid(invoiceId, details) {
+  await patchDoc(`invoices/${invoiceId}`, {
+    status: 'paid',
+    paidAt: new Date(),
+    paymentMethod: 'card',
+    ...(details.paymentIntentId ? { stripePaymentIntentId: details.paymentIntentId, transactionId: details.paymentIntentId } : {}),
+    ...(details.sessionId ? { stripeSessionId: details.sessionId } : {}),
+    cardLast4: details.last4 || '',
+    cardType: details.brand || '',
+    ...(details.paidVia ? { paidVia: details.paidVia } : {}),
   });
-  if (!res.ok) throw new Error(`Firestore update failed: ${await res.text()}`);
-  return await res.json();
+}
+
+async function cardDetails(stripe, paymentIntentId) {
+  try {
+    const charges = await stripe.charges.list({ payment_intent: paymentIntentId, limit: 1 });
+    const card = charges.data[0]?.payment_method_details?.card;
+    const brand = card?.brand ? card.brand.charAt(0).toUpperCase() + card.brand.slice(1) : 'Card';
+    return { last4: card?.last4 || '', brand };
+  } catch (e) { return { last4: '', brand: 'Card' }; }
+}
+
+async function sendPaidSms(to, name, amount, invoiceNumber) {
+  if (!to) return;
+  try {
+    const { idToken } = await serverAuth();
+    await fetch('https://app.farritech.com/api/send-sms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ to, body: `Hi ${name || 'there'}, your payment of $${amount} for invoice #${invoiceNumber} has been received. Thank you! Reply STOP to opt out.` }),
+    });
+  } catch (e) { console.warn('Confirmation SMS error:', e.message); }
+}
+
+async function handleWebhook(req, res, rawBody) {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) return res.status(400).json({ error: 'Webhook not configured' });
+  let event;
+  try {
+    event = Stripe.webhooks.constructEvent(rawBody, req.headers['stripe-signature'], webhookSecret);
+  } catch (err) {
+    console.error('Rejected webhook with bad signature:', err.message);
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+  console.log('📥 Stripe webhook:', event.type);
+
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const invoiceId = session.metadata?.invoiceId || '';
+      if (invoiceId && session.payment_status === 'paid') {
+        await markInvoicePaid(invoiceId, { paymentIntentId: session.payment_intent || '', sessionId: session.id, paidVia: 'stripe_link' });
+        console.log('✅ Invoice', invoiceId, 'marked paid via checkout webhook');
+        await sendPaidSms(session.customer_details?.phone, session.customer_details?.name,
+          ((session.amount_total || 0) / 100).toFixed(2), session.metadata?.invoiceNumber || '');
+      }
+    }
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object;
+      const invoiceIds = (pi.metadata?.invoiceId || '').split(',').filter(Boolean);
+      for (const id of invoiceIds) {
+        await markInvoicePaid(id, { paymentIntentId: pi.id, paidVia: 'stripe_card' });
+      }
+    }
+    return res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('❌ Webhook error:', err);
+    return res.status(500).json({ error: err.message });
+  }
 }
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,stripe-signature');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,stripe-signature');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Always read raw body first
   const rawBody = await getRawBody(req);
-  const isWebhook = !!req.headers['stripe-signature'];
+  if (req.headers['stripe-signature']) return handleWebhook(req, res, rawBody);
 
-  // ── WEBHOOK PATH ──
-  if (isWebhook) {
-    const sig = req.headers['stripe-signature'];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    let event;
-    try {
-      if (webhookSecret && sig) {
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_WEBHOOK_VERIFY_KEY || 'sk_test_x');
-        event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-      } else {
-        event = JSON.parse(rawBody.toString());
-      }
-    } catch(err) {
-      console.error('Webhook parse error:', err.message);
-      event = JSON.parse(rawBody.toString());
-    }
-
-    console.log('📥 Stripe webhook:', event.type);
-
-    try {
-      if (event.type === 'checkout.session.completed') {
-        const session = event.data.object;
-        const metadata = session.metadata || {};
-        const invoiceId = metadata.invoiceId || '';
-        const invoiceNumber = metadata.invoiceNumber || '';
-        console.log('💳 Checkout completed — invoiceId:', invoiceId, 'status:', session.payment_status);
-
-        // Payment links store metadata on the link object, not in session.metadata
-        // Fall back to fetching the payment link to get invoiceId
-        let resolvedInvoiceId = invoiceId;
-        if (!resolvedInvoiceId && session.payment_link) {
-          try {
-            const farrierId = metadata.farrierId || '';
-            // Try to find invoice by payment link ID in Firestore
-            const invSearchRes = await fetch(
-              `${BASE_URL}/invoices?key=${FIREBASE_API_KEY}&pageSize=200`,
-            );
-            // We can't easily query by payment link without the farrier's key
-            // Instead, retrieve the payment link metadata from Stripe
-            // We need a Stripe key — try the farrier's key first, fall back to platform key
-            const platformKey = process.env.STRIPE_SECRET_KEY;
-            if (platformKey) {
-              const stripeP = new Stripe(platformKey);
-              try {
-                const pl = await stripeP.paymentLinks.retrieve(session.payment_link);
-                resolvedInvoiceId = pl.metadata?.invoiceId || '';
-                console.log('📎 Got invoiceId from payment link metadata:', resolvedInvoiceId);
-              } catch(e) { console.warn('Could not fetch payment link:', e.message); }
-            }
-          } catch(e) { console.warn('Payment link metadata lookup failed:', e.message); }
-        }
-
-        if (resolvedInvoiceId && session.payment_status === 'paid') {
-          const invoiceId = resolvedInvoiceId;
-          let last4 = '', brand = '', paymentIntentId = session.payment_intent || '';
-          if (paymentIntentId) {
-            // Try farrier's key first, then platform key
-            const keysToTry = [];
-            if (metadata.farrierId) {
-              try {
-                const profileRes = await fetch(`${BASE_URL}/farriers/${metadata.farrierId}?key=${FIREBASE_API_KEY}`);
-                if (profileRes.ok) {
-                  const profile = await profileRes.json();
-                  const farrierKey = profile.fields?.stripeSecretKey?.stringValue || '';
-                  if (farrierKey && farrierKey.startsWith('sk_')) keysToTry.push(farrierKey);
-                }
-              } catch(e) { console.warn('Could not fetch farrier profile:', e.message); }
-            }
-            const platformKey = process.env.STRIPE_SECRET_KEY;
-            if (platformKey && !keysToTry.includes(platformKey)) keysToTry.push(platformKey);
-
-            for (const key of keysToTry) {
-              try {
-                const stripe = new Stripe(key);
-                const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['charges'] });
-                const charge = pi.charges?.data?.[0];
-                last4 = charge?.payment_method_details?.card?.last4 || '';
-                brand = charge?.payment_method_details?.card?.brand || '';
-                if (brand) brand = brand.charAt(0).toUpperCase() + brand.slice(1);
-                if (last4) break; // got it, stop trying
-              } catch(e) { console.warn('Card detail lookup failed with key:', e.message); }
-            }
-          }
-
-          await markInvoicePaid(invoiceId, { paymentMethod: 'card', paymentIntentId, last4, brand });
-          console.log('✅ Invoice', invoiceId, 'marked as paid');
-
-          // Send confirmation SMS
-          const customerPhone = session.customer_details?.phone || '';
-          const customerName = session.customer_details?.name || 'Customer';
-          const amount = ((session.amount_total || 0) / 100).toFixed(2);
-          if (customerPhone) {
-            try {
-              await fetch('https://app.farritech.com/api/send-sms', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to: customerPhone, body: `Hi ${customerName}, your payment of $${amount} for invoice #${invoiceNumber} has been received. Thank you! Reply STOP to opt out.` })
-              });
-            } catch(e) { console.warn('Confirmation SMS error:', e); }
-          }
-        }
-      }
-
-      if (event.type === 'payment_intent.succeeded') {
-        const pi = event.data.object;
-        const invoiceId = pi.metadata?.invoiceId || '';
-        if (invoiceId) {
-          // Expand charges if not already expanded
-          let last4 = pi.charges?.data?.[0]?.payment_method_details?.card?.last4 || '';
-          let brand = pi.charges?.data?.[0]?.payment_method_details?.card?.brand || '';
-          if (!last4) {
-            try {
-              const platformKey = process.env.STRIPE_SECRET_KEY;
-              if (platformKey) {
-                const stripe = new Stripe(platformKey);
-                const fullPi = await stripe.paymentIntents.retrieve(pi.id, { expand: ['charges'] });
-                last4 = fullPi.charges?.data?.[0]?.payment_method_details?.card?.last4 || '';
-                brand = fullPi.charges?.data?.[0]?.payment_method_details?.card?.brand || '';
-              }
-            } catch(e) { console.warn('PI card detail lookup failed:', e.message); }
-          }
-          if (brand) brand = brand.charAt(0).toUpperCase() + brand.slice(1);
-          await markInvoicePaid(invoiceId, {
-            paymentMethod: 'card',
-            paymentIntentId: pi.id,
-            last4,
-            brand,
-          });
-          console.log('✅ Invoice', invoiceId, 'marked paid via payment_intent');
-        }
-      }
-
-      return res.status(200).json({ received: true });
-    } catch(err) {
-      console.error('❌ Webhook error:', err);
-      return res.status(500).json({ error: err.message });
-    }
-  }
-
-  // ── NORMAL PAYMENT ACTIONS PATH ──
   try {
-    const body = JSON.parse(rawBody.toString());
-    const { action, paymentMethodId, amount, currency = 'usd', farrierId, invoiceId, invoiceNumber, customerEmail, customerName, stripeSecretKey } = body || {};
+    const body = JSON.parse(rawBody.toString() || '{}');
+    const { action } = body;
 
-    if (!stripeSecretKey) return res.status(400).json({ success: false, error: 'No Stripe key configured. Please add your Stripe secret key in Settings → Stripe Payments.' });
-    if (!stripeSecretKey.startsWith('sk_')) return res.status(400).json({ success: false, error: 'Invalid Stripe secret key format. Key must start with sk_' });
+    // ── Public: confirm a payment-link checkout after the customer is redirected back ──
+    if (action === 'confirm_session') {
+      const { invoiceId, sessionId } = body;
+      if (!invoiceId || !sessionId) return res.status(400).json({ success: false, error: 'Missing invoiceId or sessionId.' });
+      const invoice = await getDoc(`invoices/${invoiceId}`);
+      if (!invoice) return res.status(404).json({ success: false, error: 'Invoice not found.' });
+      if (invoice.status === 'paid') return res.status(200).json({ success: true, alreadyPaid: true });
+      const key = await getStripeSecretKey(invoice.farrierId);
+      if (!key) return res.status(400).json({ success: false, error: 'Farrier payments not configured.' });
+      const stripe = new Stripe(key);
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      let linkedInvoiceId = session.metadata?.invoiceId || '';
+      if (!linkedInvoiceId && session.payment_link) {
+        const link = await stripe.paymentLinks.retrieve(session.payment_link);
+        linkedInvoiceId = link.metadata?.invoiceId || '';
+      }
+      if (session.payment_status !== 'paid' || linkedInvoiceId !== invoiceId) {
+        return res.status(400).json({ success: false, error: 'Payment not confirmed by Stripe.' });
+      }
+      const card = session.payment_intent ? await cardDetails(stripe, session.payment_intent) : {};
+      await markInvoicePaid(invoiceId, { paymentIntentId: session.payment_intent || '', sessionId, paidVia: 'stripe_link', ...card });
+      return res.status(200).json({ success: true });
+    }
 
-    const stripe = new Stripe(stripeSecretKey);
+    const caller = await callerFromRequest(req);
+    if (!caller) return res.status(401).json({ success: false, error: 'Please sign in again.' });
+
+    // ── Customer portal: pay one or more of your own unpaid invoices ──
+    if (action === 'customer_charge') {
+      const { invoiceIds = [], paymentMethodId } = body;
+      if (!paymentMethodId || !invoiceIds.length) return res.status(400).json({ success: false, error: 'Missing payment details.' });
+      const invoices = [];
+      for (const id of invoiceIds) {
+        const inv = await getDoc(`invoices/${id}`);
+        if (!inv || (inv.customerEmail || '').toLowerCase() !== caller.email) return res.status(403).json({ success: false, error: 'Invoice not found.' });
+        if (inv.status === 'paid') return res.status(400).json({ success: false, error: `Invoice ${inv.invoiceNumber || id} is already paid.` });
+        invoices.push({ id, ...inv });
+      }
+      const farrierId = invoices[0].farrierId;
+      if (invoices.some(i => i.farrierId !== farrierId)) return res.status(400).json({ success: false, error: 'Please pay each farrier separately.' });
+      const key = await getStripeSecretKey(farrierId);
+      if (!key) return res.status(400).json({ success: false, error: 'Payment not configured. Please contact your farrier.' });
+      const stripe = new Stripe(key);
+      const amountCents = Math.round(invoices.reduce((s, i) => s + (Number(i.total) || 0), 0) * 100);
+      if (amountCents <= 0) return res.status(400).json({ success: false, error: 'Nothing to pay.' });
+      const numbers = invoices.map(i => i.invoiceNumber).filter(Boolean).join(', ');
+      const pi = await stripe.paymentIntents.create({
+        amount: amountCents, currency: 'usd', payment_method: paymentMethodId, confirm: true,
+        automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+        description: `FarriTech Invoice #${numbers}`,
+        metadata: { farrierId, invoiceId: invoiceIds.join(','), invoiceNumber: numbers },
+        receipt_email: caller.email || undefined,
+      });
+      if (pi.status !== 'succeeded') return res.status(400).json({ success: false, error: `Payment status: ${pi.status}` });
+      const card = await cardDetails(stripe, pi.id);
+      for (const inv of invoices) {
+        await markInvoicePaid(inv.id, { paymentIntentId: pi.id, paidVia: invoices.length > 1 ? 'stripe_card_multi' : 'stripe_card', ...card });
+        if (inv.paymentLinkId) await stripe.paymentLinks.update(inv.paymentLinkId, { active: false }).catch(() => {});
+      }
+      return res.status(200).json({ success: true, transactionId: pi.id, amount: amountCents / 100, ...card });
+    }
+
+    // ── Admin, one-time: move every farrier's legacy key off the public profiles ──
+    // (Farriers who log in get migrated automatically via 'status'; this catches the rest.)
+    if (action === 'migrate_all') {
+      if (!ADMIN_EMAILS.includes(caller.email)) return res.status(403).json({ success: false, error: 'Admins only.' });
+      const farriers = await listDocs('farriers', ['stripeSecretKey', 'googleRefreshToken', 'googleAccessToken']);
+      let migrated = 0;
+      for (const f of farriers) {
+        if (f.stripeSecretKey) { await getStripeSecretKey(f.id); migrated++; }
+      }
+      return res.status(200).json({
+        success: true, farriers: farriers.length, stripeKeysMigrated: migrated,
+        withGoogleTokens: farriers.filter(f => f.googleRefreshToken || f.googleAccessToken).length,
+      });
+    }
+
+    // Everything below acts on the signed-in farrier's own Stripe account.
+    const farrierId = caller.uid;
+
+    if (action === 'connect' || action === 'validate') {
+      const { stripeSecretKey } = body;
+      if (!stripeSecretKey || !stripeSecretKey.startsWith('sk_')) return res.status(400).json({ success: false, error: 'Secret key must start with sk_' });
+      const account = await new Stripe(stripeSecretKey).accounts.retrieve();
+      await setStripeSecretKey(farrierId, stripeSecretKey);
+      return res.status(200).json({ success: true, accountName: account.settings?.dashboard?.display_name || account.email || 'Stripe Account' });
+    }
+    if (action === 'disconnect') {
+      await setStripeSecretKey(farrierId, '');
+      return res.status(200).json({ success: true });
+    }
+    if (action === 'status') {
+      const key = await getStripeSecretKey(farrierId); // also migrates a legacy key off the profile
+      return res.status(200).json({ success: true, connected: !!key, mode: key.startsWith('sk_live_') ? 'live' : key ? 'test' : '' });
+    }
+
+    const key = await getStripeSecretKey(farrierId);
+    if (!key) return res.status(400).json({ success: false, error: 'No Stripe account connected. Connect Stripe in Settings → Stripe Payments.' });
+    const stripe = new Stripe(key);
 
     if (action === 'charge') {
+      const { paymentMethodId, amount, currency = 'usd', invoiceId, invoiceNumber, customerEmail, customerName } = body;
       if (!paymentMethodId || !amount) return res.status(400).json({ success: false, error: 'Missing paymentMethodId or amount.' });
       const amountCents = Math.round(parseFloat(amount) * 100);
       if (!amountCents || amountCents <= 0) return res.status(400).json({ success: false, error: 'Invalid amount.' });
@@ -213,18 +229,12 @@ export default async function handler(req, res) {
         customer: customerId || undefined, confirm: true,
         automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
         description: `FarriTech Invoice #${invoiceNumber}`,
-        metadata: { farrierId, invoiceId, invoiceNumber },
+        metadata: { farrierId, invoiceId: invoiceId || '', invoiceNumber: invoiceNumber || '' },
         receipt_email: customerEmail || undefined,
       });
       if (pi.status === 'succeeded') {
-        let last4 = '', brand = 'Card';
-        try {
-          const charges = await stripe.charges.list({ payment_intent: pi.id, limit: 1 });
-          last4 = charges.data[0]?.payment_method_details?.card?.last4 || '';
-          brand = charges.data[0]?.payment_method_details?.card?.brand || 'Card';
-          brand = brand.charAt(0).toUpperCase() + brand.slice(1);
-        } catch(e) {}
-        return res.status(200).json({ success: true, transactionId: pi.id, last4, brand });
+        const card = await cardDetails(stripe, pi.id);
+        return res.status(200).json({ success: true, transactionId: pi.id, ...card });
       }
       return res.status(400).json({ success: false, error: `Payment status: ${pi.status}` });
     }
@@ -237,17 +247,18 @@ export default async function handler(req, res) {
     }
 
     if (action === 'payment_link') {
+      const { amount, invoiceId, invoiceNumber, customerEmail } = body;
       if (!amount || !invoiceId) return res.status(400).json({ success: false, error: 'Missing amount or invoiceId.' });
       const amountCents = Math.round(parseFloat(amount) * 100);
       if (!amountCents || amountCents <= 0) return res.status(400).json({ success: false, error: 'Invalid amount.' });
       const price = await stripe.prices.create({
         unit_amount: amountCents, currency: 'usd',
-        product_data: { name: `Invoice #${invoiceNumber || invoiceId}`, metadata: { farrierId: farrierId || '', invoiceId } },
+        product_data: { name: `Invoice #${invoiceNumber || invoiceId}`, metadata: { farrierId, invoiceId } },
       });
       const paymentLink = await stripe.paymentLinks.create({
         line_items: [{ price: price.id, quantity: 1 }],
         after_completion: { type: 'redirect', redirect: { url: `https://app.farritech.com/customer-portal.html?invoice_id=${invoiceId}&session_id={CHECKOUT_SESSION_ID}` } },
-        metadata: { farrierId: farrierId || '', invoiceId, invoiceNumber: invoiceNumber || '' },
+        metadata: { farrierId, invoiceId, invoiceNumber: invoiceNumber || '' },
         invoice_creation: { enabled: false },
         restrictions: { completed_sessions: { limit: 1 } },
         ...(customerEmail ? { customer_creation: 'always' } : {}),
@@ -262,13 +273,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    if (action === 'validate') {
-      const account = await stripe.accounts.retrieve();
-      return res.status(200).json({ success: true, accountName: account.settings?.dashboard?.display_name || account.email || 'Stripe Account' });
-    }
-
     return res.status(400).json({ success: false, error: 'Invalid action.' });
-  } catch(err) {
+  } catch (err) {
     console.error('stripe-payment error:', err);
     return res.status(400).json({ success: false, error: err?.raw?.message || err?.message || 'Payment processing failed' });
   }

@@ -1,14 +1,23 @@
 // Vercel serverless function for sending SMS via Twilio
 // api/send-sms.js
+//
+// Only signed-in farriers (or the server itself, e.g. payment confirmations) may send —
+// otherwise anyone could text any number on FarriTech's Twilio account.
+import { callerFromRequest, isFarrier } from './_lib/firebase-rest.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const caller = await callerFromRequest(req).catch(() => null);
+  if (!caller || !(await isFarrier(caller.uid).catch(() => false))) {
+    return res.status(401).json({ error: 'Not authorized' });
+  }
 
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;

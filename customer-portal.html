@@ -12,6 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="/api-auth.js"></script>
 
   <!-- React -->
   <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
@@ -1045,7 +1046,6 @@
       const [selectedInvoices, setSelectedInvoices] = useState({});
       const [showMultiPayModal, setShowMultiPayModal] = useState(false);
       const [farrierStripeKey, setFarrierStripeKey] = useState('');
-      const [farrierStripeSecret, setFarrierStripeSecret] = useState('');
       const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, ytd, unpaid, custom
       const [customStart, setCustomStart] = useState('');
       const [customEnd, setCustomEnd] = useState('');
@@ -1079,18 +1079,19 @@
         const sessionId = params.get('session_id');
         const invoiceId = params.get('invoice_id');
         if (sessionId && invoiceId && db) {
-          console.log('💳 Returned from Stripe payment — marking invoice paid:', invoiceId);
-          db.collection('invoices').doc(invoiceId).update({
-            status: 'paid',
-            paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-            paymentMethod: 'card',
-            stripeSessionId: sessionId,
-          }).then(() => {
-            console.log('✅ Invoice marked paid from portal redirect');
+          // The server confirms the checkout with Stripe before marking the invoice paid,
+          // so a made-up session_id in the URL can't mark anything paid.
+          console.log('💳 Returned from Stripe payment — confirming invoice:', invoiceId);
+          fetch('/api/stripe-payment', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'confirm_session', invoiceId, sessionId }),
+          }).then(r => r.json()).then(result => {
+            if (result.success) console.log('✅ Invoice confirmed paid');
+            else console.error('Payment not confirmed:', result.error);
             loadData();
             // Clean up URL
             window.history.replaceState({}, document.title, '/customer-portal.html');
-          }).catch(e => console.error('Failed to mark invoice paid:', e));
+          }).catch(e => console.error('Failed to confirm payment:', e));
         }
       }, []);
 
@@ -1126,7 +1127,6 @@
                     const fd = farrierDoc.data();
                     setFarrierBusinessName(fd.businessName || '');
                     setFarrierStripeKey(fd.stripePublishableKey || '');
-                    setFarrierStripeSecret(fd.stripeSecretKey || '');
                   }
                 } catch(e) {}
               }
@@ -1744,7 +1744,6 @@
             <PaymentModal
               invoice={selectedInvoice}
               stripePublishableKey={farrierStripeKey}
-              stripeSecretKey={farrierStripeSecret}
               onClose={() => { setShowPaymentModal(false); setSelectedInvoice(null); }}
               onSuccess={() => { setShowPaymentModal(false); setSelectedInvoice(null); loadData(); }}
             />
@@ -1754,7 +1753,6 @@
             <MultiPayModal
               invoices={Object.values(selectedInvoices).filter(Boolean)}
               stripePublishableKey={farrierStripeKey}
-              stripeSecretKey={farrierStripeSecret}
               onClose={() => setShowMultiPayModal(false)}
               onSuccess={() => { setShowMultiPayModal(false); setSelectedInvoices({}); loadData(); }}
             />
@@ -1840,7 +1838,7 @@
     }
 
     // Single invoice PaymentModal
-    function PaymentModal({ invoice, stripePublishableKey, stripeSecretKey, onClose, onSuccess }) {
+    function PaymentModal({ invoice, stripePublishableKey, onClose, onSuccess }) {
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
 
@@ -1851,33 +1849,16 @@
           const res = await fetch('/api/stripe-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            // The server charges the invoice's own total with the farrier's Stripe account,
+            // marks it paid and retires its payment link — the portal never sees a secret key.
             body: JSON.stringify({
-              action: 'charge',
-              stripeSecretKey,
+              action: 'customer_charge',
               paymentMethodId: paymentMethod.id,
-              amount: invoice.total,
-              customerEmail: invoice.customerEmail,
-              customerName: invoice.customerName,
-              invoiceId: invoice.id,
-              invoiceNumber: invoice.invoiceNumber,
-              farrierId: invoice.farrierId,
+              invoiceIds: [invoice.id],
             }),
           });
           const result = await res.json();
           if (result.success) {
-            await db.collection('invoices').doc(invoice.id).update({
-              status: 'paid',
-              paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-              transactionId: result.transactionId,
-              cardLast4: result.last4 || '',
-              cardType: result.brand || '',
-              paidVia: 'stripe_card',
-            });
-            // Deactivate the payment link so it can't be used again
-            if (invoice.paymentLinkId && stripeSecretKey) {
-              fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'deactivate_link', stripeSecretKey, paymentLinkId: invoice.paymentLinkId }) }).catch(() => {});
-            }
             alert('Payment successful! Thank you.');
             onSuccess();
           } else {
@@ -1914,7 +1895,7 @@
     }
 
     // Multi-invoice PaymentModal
-    function MultiPayModal({ invoices, stripePublishableKey, stripeSecretKey, onClose, onSuccess }) {
+    function MultiPayModal({ invoices, stripePublishableKey, onClose, onSuccess }) {
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
       const total = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
@@ -1928,29 +1909,13 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              action: 'charge',
-              stripeSecretKey,
+              action: 'customer_charge',
               paymentMethodId: paymentMethod.id,
-              amount: total,
-              customerEmail: invoices[0]?.customerEmail || '',
-              customerName: invoices[0]?.customerName || '',
-              invoiceId: invoices.map(i => i.id).join(','),
-              invoiceNumber: invoiceNumbers,
-              farrierId: invoices[0]?.farrierId || '',
+              invoiceIds: invoices.map(i => i.id),
             }),
           });
           const result = await res.json();
           if (result.success) {
-            await Promise.all(invoices.map(inv =>
-              db.collection('invoices').doc(inv.id).update({
-                status: 'paid',
-                paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-                transactionId: result.transactionId,
-                cardLast4: result.last4 || '',
-                cardType: result.brand || '',
-                paidVia: 'stripe_card_multi',
-              })
-            ));
             alert('Payment of $' + total.toFixed(2) + ' successful! ' + invoices.length + ' invoice' + (invoices.length > 1 ? 's' : '') + ' marked as paid.');
             onSuccess();
           } else {
@@ -2015,7 +1980,7 @@
           { id: 'b2', businessName: 'Prairie Ridge Equine Nutrition', imageUrl: '/public/banners/prairie-ridge.png', linkUrl: 'https://example.com', active: true, order: 1 },
           { id: 'b3', businessName: 'IronCraft Farrier Tools', imageUrl: '/public/banners/ironcraft.png', linkUrl: 'https://example.com', active: true, order: 2 },
         ],
-        farriers: [{ id: 'f1', businessName: "Davids Farrier Service", stripePublishableKey: '', stripeSecretKey: '' }],
+        farriers: [{ id: 'f1', businessName: "Davids Farrier Service", stripePublishableKey: '' }],
         customers: [],
       };
       db.collection = function (name) {
