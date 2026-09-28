@@ -136,6 +136,34 @@ export async function setStripeSecretKey(farrierId, key) {
   await patchDoc(`farriers/${farrierId}`, {}, ['stripeSecretKey']);
 }
 
+// ── Google Calendar ──
+// The refresh token lives in farrierSecrets/{uid}.googleRefreshToken; browsers only ever
+// get short-lived access tokens from api/google-calendar-auth.
+//
+// Legacy: tokens used to sit on the public farriers/{uid} profile. The first time the
+// server looks for a farrier's token it moves any refresh token here and deletes every
+// Google token field from the profile.
+const LEGACY_GOOGLE_FIELDS = ['googleAccessToken', 'googleRefreshToken', 'googleTokenExpiry'];
+
+export async function getGoogleRefreshToken(farrierId) {
+  if (!farrierId) return '';
+  const secrets = await getDoc(`farrierSecrets/${farrierId}`);
+  if (secrets?.googleRefreshToken) return secrets.googleRefreshToken;
+  const profile = await getDoc(`farriers/${farrierId}`);
+  if (!profile || !LEGACY_GOOGLE_FIELDS.some(f => profile[f])) return '';
+  const legacy = profile.googleRefreshToken || '';
+  if (legacy) await patchDoc(`farrierSecrets/${farrierId}`, { googleRefreshToken: legacy, googleMigratedAt: new Date() });
+  await patchDoc(`farriers/${farrierId}`, {}, LEGACY_GOOGLE_FIELDS);
+  return legacy;
+}
+
+export async function setGoogleRefreshToken(farrierId, token) {
+  if (token) await patchDoc(`farrierSecrets/${farrierId}`, { googleRefreshToken: token, googleUpdatedAt: new Date() });
+  else await patchDoc(`farrierSecrets/${farrierId}`, {}, ['googleRefreshToken']);
+  // Never leave a copy on the public profile.
+  await patchDoc(`farriers/${farrierId}`, {}, LEGACY_GOOGLE_FIELDS);
+}
+
 export async function isFarrier(uid) {
   if (!uid) return false;
   const { uid: serverUid } = await serverAuth();

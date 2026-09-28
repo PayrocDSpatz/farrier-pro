@@ -2127,7 +2127,35 @@ async function ensureFarriTechfile_(uid, profile) {
 
     // Google Calendar API Configuration
     const GOOGLE_CLIENT_ID = "458461432563-pkncm66du9pipuihdrbrhfrsuggo7loh.apps.googleusercontent.com";
-    const CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar";
+    const CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email";
+
+    // Short-lived Google Calendar access token for the signed-in farrier. The refresh
+    // token stays on the server (farrierSecrets); this asks api/google-calendar-auth for
+    // a fresh access token and keeps it in memory only. Returns null if not connected.
+    let calendarTokenCache = null; // { token, expiresAt }
+    const setCalendarToken = (token, expiresIn) => {
+      calendarTokenCache = token ? { token, expiresAt: Date.now() + (Number(expiresIn) || 3600) * 1000 } : null;
+    };
+    const getCalendarAccessToken = async () => {
+      if (calendarTokenCache && calendarTokenCache.expiresAt > Date.now() + 60000) return calendarTokenCache.token;
+      try {
+        const res = await fetch('/api/google-calendar-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'token' })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          console.warn('⚠️ Google Calendar token unavailable:', data.error);
+          return null;
+        }
+        setCalendarToken(data.accessToken, data.expiresIn);
+        return data.accessToken;
+      } catch (e) {
+        console.error('❌ Google Calendar token request failed:', e);
+        return null;
+      }
+    };
 
     // ── FIRST-TIME SETUP WIZARD ──
     // Shown right after signup (and to any pre-existing account that has never
@@ -3622,46 +3650,36 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
       const connectGoogleCalendar = async () => {
         try {
-          // TEMPORARY: Use old token client method until API is working
-          // This gives 1-hour tokens but at least it works
-          const tokenClient = google.accounts.oauth2.initTokenClient({
+          // Authorization-code popup: the server exchanges the code and keeps the
+          // refresh token, so the calendar stays connected without hourly reconnects.
+          const codeClient = google.accounts.oauth2.initCodeClient({
             client_id: GOOGLE_CLIENT_ID,
-            scope: 'https://www.googleapis.com/auth/calendar',
+            scope: CALENDAR_SCOPES,
+            ux_mode: 'popup',
+            select_account: true,
             callback: async (response) => {
-              if (response.access_token) {
-                // Save token to Firestore
-                if (db) {
-                  // Fetch the Google account email for display
-                  let calendarEmail = '';
-                  try {
-                    const meRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-                      headers: { 'Authorization': `Bearer ${response.access_token}` }
-                    });
-                    if (meRes.ok) {
-                      const meData = await meRes.json();
-                      calendarEmail = meData.email || '';
-                    }
-                  } catch(e) { console.warn('Could not fetch Google account email', e); }
-
-                  await db.collection('farriers').doc(farrierId).update({
-                    googleCalendarConnected: true,
-                    googleAccessToken: response.access_token,
-                    googleTokenExpiry: Date.now() + (3600 * 1000), // 1 hour
-                    googleCalendarEmail: calendarEmail
-                  });
-                  
-                  // Reload profile from Firestore
-                  const profileDoc = await db.collection('farriers').doc(farrierId).get();
-                  if (profileDoc.exists) {
-                    setUserProfile(profileDoc.data());
-                  }
-                  
-                  alert('✅ Google Calendar connected! (Note: You may need to reconnect in 1 hour until refresh tokens are set up)');
-                }
+              if (!response.code) {
+                if (response.error) alert('Google Calendar was not connected: ' + response.error);
+                return;
+              }
+              try {
+                const res = await fetch('/api/google-calendar-auth', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'connect', code: response.code })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Connection failed');
+                setCalendarToken(data.accessToken, data.expiresIn);
+                setUserProfile(prev => ({ ...prev, googleCalendarConnected: true, googleCalendarEmail: data.email || '' }));
+                alert('✅ Google Calendar connected!');
+              } catch (e) {
+                console.error('Error connecting Google Calendar:', e);
+                alert('❌ Could not connect Google Calendar: ' + e.message);
               }
             },
           });
-          tokenClient.requestAccessToken();
+          codeClient.requestCode();
         } catch (error) {
           console.error('Error connecting Google Calendar:', error);
           alert('Error connecting Google Calendar');
@@ -3671,23 +3689,16 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const disconnectGoogleCalendar = async () => {
         if (confirm('Are you sure you want to disconnect Google Calendar? Future appointments will not sync to your calendar.')) {
           try {
-            if (db) {
-              await db.collection('farriers').doc(farrierId).update({
-                googleCalendarConnected: false,
-                googleCalendarEmail: firebase.firestore.FieldValue.delete(),
-                googleAccessToken: firebase.firestore.FieldValue.delete(),
-                googleRefreshToken: firebase.firestore.FieldValue.delete(),
-                googleTokenExpiry: firebase.firestore.FieldValue.delete()
-              });
-              
-              // Reload profile from Firestore
-              const profileDoc = await db.collection('farriers').doc(farrierId).get();
-              if (profileDoc.exists) {
-                setUserProfile(profileDoc.data());
-              }
-              
-              alert('Google Calendar disconnected successfully!');
-            }
+            const res = await fetch('/api/google-calendar-auth', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'disconnect' })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'Disconnect failed');
+            setCalendarToken(null);
+            setUserProfile(prev => ({ ...prev, googleCalendarConnected: false, googleCalendarEmail: '' }));
+            alert('Google Calendar disconnected successfully!');
           } catch (error) {
             console.error('Error disconnecting:', error);
             alert('Error disconnecting Google Calendar');
@@ -10133,48 +10144,13 @@ function CalendarView({ userId }) {
 
       const sortedAppointments = getSortedAppointments();
 
-      // Auto-refresh Google OAuth token if expired, returns valid token or null
-      const getValidCalendarToken = async (up) => {
-        if (!up?.googleCalendarConnected || !up?.googleAccessToken) return null;
-        // Quick test to see if current token is valid
-        const testRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary', {
-          headers: { 'Authorization': `Bearer ${up.googleAccessToken}` }
-        }).catch(() => null);
-        if (testRes?.ok) return up.googleAccessToken;
-        // Token expired — try to refresh
-        console.log('🔄 Access token expired, attempting refresh...');
-        if (!up?.googleRefreshToken) {
-          console.warn('⚠️ No refresh token — user needs to reconnect Google Calendar');
-          return null;
-        }
-        try {
-          const refreshRes = await fetch('/api/google-calendar-auth?action=refresh', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: up.googleRefreshToken })
-          });
-          if (!refreshRes.ok) return null;
-          const refreshData = await refreshRes.json();
-          const newToken = refreshData.access_token;
-          if (!newToken) return null;
-          if (db && userId) {
-            await db.collection('farriers').doc(userId).update({ googleAccessToken: newToken });
-          }
-          console.log('✅ Token refreshed successfully');
-          return newToken;
-        } catch (e) {
-          console.error('❌ Token refresh failed:', e);
-          return null;
-        }
-      };
-
       const createCalendarEvent = async (appointment, userProfile) => {
         console.log('=== CREATE CALENDAR EVENT START ===');
         if (!userProfile?.googleCalendarConnected) {
           console.log('ℹ️ Google Calendar not connected — skipping sync');
           return false;
         }
-        const accessToken = await getValidCalendarToken(userProfile);
+        const accessToken = await getCalendarAccessToken();
         if (!accessToken) {
           console.warn('⚠️ Could not get valid calendar token — skipping calendar sync');
           return false;
@@ -10279,14 +10255,14 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           return true; // Not an error, just wasn't synced yet
         }
         
-        if (!userProfile?.googleCalendarConnected || !userProfile?.googleAccessToken) {
+        if (!userProfile?.googleCalendarConnected) {
           console.error('❌ Calendar not connected');
           return false;
         }
 
         try {
-          // Use existing access token (no refresh for now)
-          const accessToken = userProfile.googleAccessToken;
+          const accessToken = await getCalendarAccessToken();
+          if (!accessToken) return false;
           
           console.log('🗑️ Deleting event from Google Calendar:', appointment.googleEventId);
           
@@ -11495,7 +11471,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const removeHorseRow = (idx) => setHorseRows(rows => rows.filter((_, i) => i !== idx));
 
       const updateGoogleCalendarEvent = async (updatedAppointment) => {
-        if (!userProfile?.googleCalendarConnected || !userProfile?.googleAccessToken) {
+        if (!userProfile?.googleCalendarConnected) {
           console.log('⚠️ Google Calendar not connected, skipping calendar update');
           return true;
         }
@@ -11525,12 +11501,15 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             }
           };
 
+          const accessToken = await getCalendarAccessToken();
+          if (!accessToken) return true;
+
           const response = await fetch(
             `https://www.googleapis.com/calendar/v3/calendars/primary/events/${appointment.googleCalendarEventId}`,
             {
               method: 'PATCH',
               headers: {
-                'Authorization': `Bearer ${userProfile.googleAccessToken}`,
+                'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify(event)

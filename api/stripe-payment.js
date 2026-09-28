@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import crypto from 'crypto';
-import { callerFromRequest, getDoc, patchDoc, listDocs, getStripeSecretKey, setStripeSecretKey, serverAuth } from './_lib/firebase-rest.js';
+import { callerFromRequest, getDoc, patchDoc, listDocs, getStripeSecretKey, setStripeSecretKey, getGoogleRefreshToken, serverAuth } from './_lib/firebase-rest.js';
 
 // May run one-off maintenance actions (same list as the sponsorBanners rule).
 const ADMIN_EMAILS = ['david@dasconsulting.com', 'david@dasdigitalai.com'];
@@ -16,7 +16,7 @@ export const config = { api: { bodyParser: false } };
 //   farrier (signed in)   → status, connect, disconnect, charge, refund, payment_link, deactivate_link,
 //                           manager_password_status, set_manager_password
 //   customer (portal)     → customer_charge  (amount computed here from their own unpaid invoices)
-//   admin                 → migrate_all      (one-time: move legacy keys off public profiles)
+//   admin                 → migrate_all      (one-time: move legacy Stripe keys + Google tokens off public profiles)
 //                           reset_manager_password (clears a farrier's forgotten manager password)
 //   anyone                → confirm_session  (only marks paid after Stripe confirms the session)
 //   Stripe                → webhook          (signature required)
@@ -195,13 +195,13 @@ export default async function handler(req, res) {
     if (action === 'migrate_all') {
       if (!ADMIN_EMAILS.includes(caller.email)) return res.status(403).json({ success: false, error: 'Admins only.' });
       const farriers = await listDocs('farriers', ['stripeSecretKey', 'googleRefreshToken', 'googleAccessToken']);
-      let migrated = 0;
+      let migrated = 0, googleMigrated = 0;
       for (const f of farriers) {
         if (f.stripeSecretKey) { await getStripeSecretKey(f.id); migrated++; }
+        if (f.googleRefreshToken || f.googleAccessToken) { await getGoogleRefreshToken(f.id); googleMigrated++; }
       }
       return res.status(200).json({
-        success: true, farriers: farriers.length, stripeKeysMigrated: migrated,
-        withGoogleTokens: farriers.filter(f => f.googleRefreshToken || f.googleAccessToken).length,
+        success: true, farriers: farriers.length, stripeKeysMigrated: migrated, googleTokensMigrated: googleMigrated,
       });
     }
 
