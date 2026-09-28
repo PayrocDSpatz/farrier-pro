@@ -2157,6 +2157,111 @@ async function ensureFarriTechfile_(uid, profile) {
       }
     };
 
+    // Adds a confirmed appointment to the farrier's Google Calendar and stores the
+    // event id on the appointment (googleEventId). Silent on failure.
+    const createCalendarEvent = async (appointment, userProfile) => {
+      console.log('=== CREATE CALENDAR EVENT START ===');
+      if (!userProfile?.googleCalendarConnected) {
+        console.log('ℹ️ Google Calendar not connected — skipping sync');
+        return false;
+      }
+      const accessToken = await getCalendarAccessToken();
+      if (!accessToken) {
+        console.warn('⚠️ Could not get valid calendar token — skipping calendar sync');
+        return false;
+      }
+      try {
+        // Create calendar event
+        const eventStartTime = new Date(`${appointment.requestedDate}T${appointment.requestedTime}:00`);
+        const eventEndTime = new Date(eventStartTime.getTime() + 2 * 60 * 60 * 1000); // 2 hours later
+
+        console.log('📅 Event times:', {
+          start: eventStartTime.toISOString(),
+          end: eventEndTime.toISOString()
+        });
+
+        // Build services list
+        let servicesList = '';
+        if (appointment.services && appointment.services.length > 0) {
+          servicesList = appointment.services.map(s => `   • ${s}`).join('\n');
+        } else {
+          servicesList = '   (No services specified)';
+        }
+
+        const event = {
+          summary: `🐴 Farrier - ${appointment.customerName}${appointment.farmName ? ` (${appointment.farmName})` : ''}`,
+          description: `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 APPOINTMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👤 CUSTOMER INFORMATION:
+ Name: ${appointment.customerName}${appointment.farmName ? `\n   Farm/Business: ${appointment.farmName}` : ''}
+ Phone: ${appointment.phone}
+${appointment.email ? `   Email: ${appointment.email}` : ''}
+
+🔧 SERVICES REQUESTED:
+${servicesList}
+
+🐴 HORSES:
+${appointment.numberOfHorses ? `   Number of Horses: ${appointment.numberOfHorses}` : '   (Not specified)'}
+
+📍 LOCATION:
+${appointment.address ? `   ${appointment.address}\n   ${appointment.city}${appointment.state ? `, ${appointment.state}` : ''}${appointment.zip ? ` ${appointment.zip}` : ''}` : '   (No address provided)'}
+
+💬 SPECIAL REQUESTS/NOTES:
+${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏰ Scheduled: ${appointment.requestedDate} at ${appointment.requestedTime}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          location: appointment.address ? `${appointment.address}, ${appointment.city}${appointment.state ? `, ${appointment.state}` : ''}${appointment.zip ? ` ${appointment.zip}` : ''}` : '',
+          start: {
+            dateTime: eventStartTime.toISOString(),
+            timeZone: 'America/New_York'
+          },
+          end: {
+            dateTime: eventEndTime.toISOString(),
+            timeZone: 'America/New_York'
+          }
+        };
+
+        console.log('📤 Sending event to Google Calendar:', event);
+
+        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(event)
+        });
+
+        console.log('📥 Response status:', response.status);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('❌ Calendar API error:', errorData);
+          throw new Error(`Failed to create calendar event: ${errorData.error?.message || 'Unknown error'}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ Calendar event created successfully!', data);
+        
+        // Save event ID to appointment
+        if (db) {
+          await db.collection('appointments').doc(appointment.id).update({
+            googleEventId: data.id
+          });
+          console.log('✅ Saved event ID to appointment');
+        }
+
+        return true;
+      } catch (error) {
+        console.error('❌ Calendar error:', error);
+        return false; // Silent fail — appointment is already confirmed in Firebase
+      }
+    };
+
     // ── FIRST-TIME SETUP WIZARD ──
     // Shown right after signup (and to any pre-existing account that has never
     // been marked setupCompleted) so a farrier can't land on their QR code /
@@ -10144,109 +10249,6 @@ function CalendarView({ userId }) {
 
       const sortedAppointments = getSortedAppointments();
 
-      const createCalendarEvent = async (appointment, userProfile) => {
-        console.log('=== CREATE CALENDAR EVENT START ===');
-        if (!userProfile?.googleCalendarConnected) {
-          console.log('ℹ️ Google Calendar not connected — skipping sync');
-          return false;
-        }
-        const accessToken = await getCalendarAccessToken();
-        if (!accessToken) {
-          console.warn('⚠️ Could not get valid calendar token — skipping calendar sync');
-          return false;
-        }
-        try {
-          // Create calendar event
-          const eventStartTime = new Date(`${appointment.requestedDate}T${appointment.requestedTime}:00`);
-          const eventEndTime = new Date(eventStartTime.getTime() + 2 * 60 * 60 * 1000); // 2 hours later
-
-          console.log('📅 Event times:', {
-            start: eventStartTime.toISOString(),
-            end: eventEndTime.toISOString()
-          });
-
-          // Build services list
-          let servicesList = '';
-          if (appointment.services && appointment.services.length > 0) {
-            servicesList = appointment.services.map(s => `   • ${s}`).join('\n');
-          } else {
-            servicesList = '   (No services specified)';
-          }
-
-          const event = {
-            summary: `🐴 Farrier - ${appointment.customerName}${appointment.farmName ? ` (${appointment.farmName})` : ''}`,
-            description: `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 APPOINTMENT DETAILS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-👤 CUSTOMER INFORMATION:
-   Name: ${appointment.customerName}${appointment.farmName ? `\n   Farm/Business: ${appointment.farmName}` : ''}
-   Phone: ${appointment.phone}
-${appointment.email ? `   Email: ${appointment.email}` : ''}
-
-🔧 SERVICES REQUESTED:
-${servicesList}
-
-🐴 HORSES:
-${appointment.numberOfHorses ? `   Number of Horses: ${appointment.numberOfHorses}` : '   (Not specified)'}
-
-📍 LOCATION:
-${appointment.address ? `   ${appointment.address}\n   ${appointment.city}${appointment.state ? `, ${appointment.state}` : ''}${appointment.zip ? ` ${appointment.zip}` : ''}` : '   (No address provided)'}
-
-💬 SPECIAL REQUESTS/NOTES:
-${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⏰ Scheduled: ${appointment.requestedDate} at ${appointment.requestedTime}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-            location: appointment.address ? `${appointment.address}, ${appointment.city}${appointment.state ? `, ${appointment.state}` : ''}${appointment.zip ? ` ${appointment.zip}` : ''}` : '',
-            start: {
-              dateTime: eventStartTime.toISOString(),
-              timeZone: 'America/New_York'
-            },
-            end: {
-              dateTime: eventEndTime.toISOString(),
-              timeZone: 'America/New_York'
-            }
-          };
-
-          console.log('📤 Sending event to Google Calendar:', event);
-
-          const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(event)
-          });
-
-          console.log('📥 Response status:', response.status);
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('❌ Calendar API error:', errorData);
-            throw new Error(`Failed to create calendar event: ${errorData.error?.message || 'Unknown error'}`);
-          }
-
-          const data = await response.json();
-          console.log('✅ Calendar event created successfully!', data);
-          
-          // Save event ID to appointment
-          if (db) {
-            await db.collection('appointments').doc(appointment.id).update({
-              googleEventId: data.id
-            });
-            console.log('✅ Saved event ID to appointment');
-          }
-
-          return true;
-        } catch (error) {
-          console.error('❌ Calendar error:', error);
-          return false; // Silent fail — appointment is already confirmed in Firebase
-        }
-      };
-
       const deleteCalendarEvent = async (appointment, userProfile) => {
         console.log('🗑️ DELETE CALENDAR EVENT START');
         
@@ -10939,7 +10941,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           const horseIds = horseRequests.filter(r => r.horseId).map(r => r.horseId);
           const horseNames = horseRequests.filter(r => r.horseId).map(r => r.horseName);
 
-          await db.collection('appointments').add({
+          const newAppointment = {
             farrierId: userId,
             customerId: customer.id || '',
             customerName: customer.name,
@@ -10960,7 +10962,15 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
             status: 'confirmed',
             source: 'farrier_created',
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          });
+          };
+          const apptRef = await db.collection('appointments').add(newAppointment);
+
+          // Calendar sync — silent, non-blocking
+          if (userProfile?.googleCalendarConnected) {
+            createCalendarEvent({ id: apptRef.id, ...newAppointment }, userProfile).then(ok => {
+              console.log(ok ? '✅ Added to Google Calendar' : '⚠️ Calendar sync skipped');
+            });
+          }
 
           if (sendConfirmation && smsAvailable) {
             try {
@@ -11476,9 +11486,12 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           return true;
         }
 
-        if (!appointment.googleCalendarEventId) {
-          console.log('⚠️ No Google Calendar event ID, cannot update');
-          return true;
+        // Older appointments stored the id as googleCalendarEventId.
+        const eventId = appointment.googleEventId || appointment.googleCalendarEventId;
+        if (!eventId) {
+          if (updatedAppointment.status !== 'confirmed') return true;
+          console.log('ℹ️ Not in Google Calendar yet — adding it');
+          return createCalendarEvent(updatedAppointment, userProfile);
         }
 
         try {
@@ -11505,7 +11518,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
           if (!accessToken) return true;
 
           const response = await fetch(
-            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${appointment.googleCalendarEventId}`,
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
             {
               method: 'PATCH',
               headers: {
