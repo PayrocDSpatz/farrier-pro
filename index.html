@@ -11936,6 +11936,13 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
       const [invoiceFilter, setInvoiceFilter] = useState('all'); // all, thisMonth, lastMonth, lastQuarter, ytd, paidOnly, openOnly, cancelledOnly, customRange
       const [customStartDate, setCustomStartDate] = useState('');
       const [customEndDate, setCustomEndDate] = useState('');
+      const [openInvoiceMenu, setOpenInvoiceMenu] = useState(null);
+
+      useEffect(() => {
+        const handler = (e) => { if (!e.target.closest('.invoice-more-menu')) setOpenInvoiceMenu(null); };
+        document.addEventListener('click', handler);
+        return () => document.removeEventListener('click', handler);
+      }, []);
 
       useEffect(() => {
         if (!db) return;
@@ -12169,69 +12176,37 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               </button>
             </div>
 
-            {/* Filter Buttons */}
+            {/* Filter */}
             <div style={{
               display: 'flex',
               gap: '0.5rem',
               marginBottom: '1.5rem',
               flexWrap: 'wrap',
+              alignItems: 'center',
               paddingBottom: '1rem',
               borderBottom: '1px solid var(--border)'
             }}>
-              <button
-                onClick={() => setInvoiceFilter('all')}
-                className={`btn btn-sm ${invoiceFilter === 'all' ? 'btn-primary' : 'btn-outline'}`}
+              <label htmlFor="invoice-filter" style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Show:</label>
+              <select
+                id="invoice-filter"
+                value={invoiceFilter}
+                onChange={(e) => setInvoiceFilter(e.target.value)}
+                style={{ padding: '0.5rem', borderRadius: 8, border: '2px solid var(--border)', fontSize: '0.875rem' }}
               >
-                All Invoices
-              </button>
-              <button
-                onClick={() => setInvoiceFilter('thisMonth')}
-                className={`btn btn-sm ${invoiceFilter === 'thisMonth' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                This Month
-              </button>
-              <button
-                onClick={() => setInvoiceFilter('lastMonth')}
-                className={`btn btn-sm ${invoiceFilter === 'lastMonth' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                Last Month
-              </button>
-              <button
-                onClick={() => setInvoiceFilter('lastQuarter')}
-                className={`btn btn-sm ${invoiceFilter === 'lastQuarter' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                Last Quarter
-              </button>
-              <button
-                onClick={() => setInvoiceFilter('ytd')}
-                className={`btn btn-sm ${invoiceFilter === 'ytd' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                Year to Date
-              </button>
-              <button
-                onClick={() => setInvoiceFilter('paidOnly')}
-                className={`btn btn-sm ${invoiceFilter === 'paidOnly' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                ✅ Paid Only
-              </button>
-              <button
-                onClick={() => setInvoiceFilter('openOnly')}
-                className={`btn btn-sm ${invoiceFilter === 'openOnly' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                ⏳ Open Only
-              </button>
-              <button
-                onClick={() => setInvoiceFilter('cancelledOnly')}
-                className={`btn btn-sm ${invoiceFilter === 'cancelledOnly' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                🚫 Cancelled Only
-              </button>
-              <button
-                onClick={() => setInvoiceFilter('customRange')}
-                className={`btn btn-sm ${invoiceFilter === 'customRange' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                📅 Custom Range
-              </button>
+                <option value="all">All Invoices</option>
+                <optgroup label="Time frame">
+                  <option value="thisMonth">This Month</option>
+                  <option value="lastMonth">Last Month</option>
+                  <option value="lastQuarter">Last Quarter</option>
+                  <option value="ytd">Year to Date</option>
+                  <option value="customRange">Custom Range…</option>
+                </optgroup>
+                <optgroup label="Status">
+                  <option value="paidOnly">Paid Only</option>
+                  <option value="openOnly">Open Only</option>
+                  <option value="cancelledOnly">Cancelled Only</option>
+                </optgroup>
+              </select>
               {filteredInvoices.length > 0 && (
                 <button
                   onClick={exportToExcel}
@@ -12344,84 +12319,17 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                         )}
                       </div>
                     </div>
-                    <div className="appointment-actions">
+                    <div className="appointment-actions" style={{alignItems: 'center'}}>
                       <span className={`badge badge-${
-                        invoice.status === 'paid' ? 'success' : 
+                        invoice.status === 'paid' ? 'success' :
                         invoice.status === 'cancelled' || invoice.status === 'refunded' ? 'secondary' :
                         invoice.status === 'partial' ? 'warning' :
                         'warning'
                       }`}>
                         {invoice.status === 'partial' ? `partial ($${((invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0)).toFixed(2)} paid)` : invoice.status}
                       </span>
-                      <button
-                        className="btn btn-sm btn-outline"
-                        onClick={() => openInvoicePdf(invoice, userProfile, userProfile?.autoPrintPdf ?? true)}
-                        title="Open a professional PDF invoice (then print or save as PDF)"
-                      >
-                        🖨️ Print / PDF
-                      </button>
-                      <button
-                        className="btn btn-sm btn-outline"
-                        onClick={() => emailInvoiceLink(invoice, userProfile)}
-                        title="Email the invoice link"
-                      >
-                        ✉️ Email
-                      </button>
-                      {invoice.customerPhone && (
-                        <button
-                          className="btn btn-sm btn-outline"
-                          title="Send invoice via SMS"
-                          onClick={async () => {
-                            const bizName = userProfile?.businessName || 'Your Farrier';
-                            const payLink = invoice.paymentUrl || '';
-                            const msg = `Hi ${invoice.customerName}, you have invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''} Reply STOP to opt out.`;
-                            try {
-                              const res = await fetch('/api/send-sms', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ to: invoice.customerPhone, body: msg }),
-                              });
-                              const data = await res.json();
-                              if (data.success) {
-                                alert('✅ Invoice SMS sent to ' + invoice.customerPhone);
-                              } else {
-                                alert('❌ SMS failed: ' + (data.error || 'Unknown error'));
-                              }
-                            } catch (e) {
-                              alert('❌ SMS error: ' + e.message);
-                            }
-                          }}
-                        >
-                          📱 SMS
-                        </button>
-                      )}
-                      {invoice.paymentUrl && (
-                        <button
-                          className="btn btn-sm btn-outline"
-                          onClick={() => { navigator.clipboard?.writeText(String(invoice.paymentUrl)); alert("Payment link copied."); }}
-                          title="Copy payment link"
-                        >
-                          🔗 Copy Link
-                        </button>
-                      )}
-                      {(invoice.status === 'paid' || invoice.status === 'partial') && invoiceStripePaymentId(invoice) && invoiceRefundable(invoice) > 0 && (
-                        <button
-                          className="btn btn-sm btn-outline"
-                          onClick={() => { setSelectedInvoice(invoice); setShowRefundModal(true); }}
-                          title="Refund this card payment (manager password required)"
-                        >
-                          ↩️ Refund
-                        </button>
-                      )}
                       {(invoice.status === 'outstanding' || invoice.status === 'partial') && (
                         <>
-                          <button
-                            className="btn btn-sm btn-outline"
-                            onClick={() => setEditingInvoice(invoice)}
-                            title="Edit invoice"
-                          >
-                            ✏️ Edit
-                          </button>
                           <button
                             className="btn btn-sm btn-success"
                             onClick={() => {
@@ -12443,29 +12351,90 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                               💵 Record Payment
                             </button>
                           )}
-                          <button 
-                            className="btn btn-sm btn-danger"
-                            onClick={() => {
-                              setSelectedInvoice(invoice);
-                              setShowCancelModal(true);
-                            }}
-                            style={{background: '#ef4444'}}
-                          >
-                            🚫 Cancel
-                          </button>
                         </>
                       )}
-                      {invoice.status === 'outstanding' && invoice.paymentUrl && (
-                        <button 
-                          className="btn btn-sm btn-warning"
-                          onClick={() => {
-                            const message = `Hi ${invoice.customerName}! Your invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} is ready. Pay here: ${invoice.paymentUrl}`;
-                            alert(`SMS would be sent:\n\n${message}`);
-                          }}
+                      <button
+                        className="btn btn-sm btn-outline"
+                        onClick={() => openInvoicePdf(invoice, userProfile, userProfile?.autoPrintPdf ?? true)}
+                        title="Open a professional PDF invoice (then print or save as PDF)"
+                      >
+                        🖨️ Print / PDF
+                      </button>
+                      {(invoice.status === 'paid' || invoice.status === 'partial') && invoiceStripePaymentId(invoice) && invoiceRefundable(invoice) > 0 && (
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={() => { setSelectedInvoice(invoice); setShowRefundModal(true); }}
+                          title="Refund this card payment (manager password required)"
                         >
-                          📱 Send Reminder
+                          ↩️ Refund
                         </button>
                       )}
+                      <div className="invoice-more-menu" style={{position: 'relative'}}>
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={() => setOpenInvoiceMenu(openInvoiceMenu === invoice.id ? null : invoice.id)}
+                          title="More actions"
+                        >
+                          More ▾
+                        </button>
+                        {openInvoiceMenu === invoice.id && (() => {
+                          const itemStyle = {display: 'block', width: '100%', textAlign: 'left', padding: '0.6rem 1rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text)', whiteSpace: 'nowrap'};
+                          const item = (label, onClick, extra = {}) => (
+                            <button
+                              style={{...itemStyle, ...extra}}
+                              onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(70,197,255,0.12)'; }}
+                              onMouseOut={(e) => { e.currentTarget.style.background = 'none'; }}
+                              onClick={() => { setOpenInvoiceMenu(null); onClick(); }}
+                            >
+                              {label}
+                            </button>
+                          );
+                          const isOpen = invoice.status === 'outstanding' || invoice.status === 'partial';
+                          return (
+                            <div style={{
+                              position: 'absolute',
+                              right: 0,
+                              top: 'calc(100% + 4px)',
+                              background: 'var(--surface)',
+                              border: '1.5px solid rgba(70,197,255,0.35)',
+                              borderRadius: '10px',
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                              minWidth: '180px',
+                              zIndex: 200,
+                              overflow: 'hidden'
+                            }}>
+                              {isOpen && item('✏️ Edit', () => setEditingInvoice(invoice))}
+                              {item('✉️ Email', () => emailInvoiceLink(invoice, userProfile))}
+                              {invoice.customerPhone && item('📱 SMS', async () => {
+                                const bizName = userProfile?.businessName || 'Your Farrier';
+                                const payLink = invoice.paymentUrl || '';
+                                const msg = `Hi ${invoice.customerName}, you have invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''} Reply STOP to opt out.`;
+                                try {
+                                  const res = await fetch('/api/send-sms', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ to: invoice.customerPhone, body: msg }),
+                                  });
+                                  const data = await res.json();
+                                  if (data.success) {
+                                    alert('✅ Invoice SMS sent to ' + invoice.customerPhone);
+                                  } else {
+                                    alert('❌ SMS failed: ' + (data.error || 'Unknown error'));
+                                  }
+                                } catch (e) {
+                                  alert('❌ SMS error: ' + e.message);
+                                }
+                              })}
+                              {invoice.paymentUrl && item('🔗 Copy Link', () => { navigator.clipboard?.writeText(String(invoice.paymentUrl)); alert("Payment link copied."); })}
+                              {invoice.status === 'outstanding' && invoice.paymentUrl && item('📱 Send Reminder', () => {
+                                const message = `Hi ${invoice.customerName}! Your invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} is ready. Pay here: ${invoice.paymentUrl}`;
+                                alert(`SMS would be sent:\n\n${message}`);
+                              })}
+                              {isOpen && item('🚫 Cancel Invoice', () => { setSelectedInvoice(invoice); setShowCancelModal(true); }, {color: '#ef4444', borderTop: '1px solid var(--border)'})}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
                 ))}
