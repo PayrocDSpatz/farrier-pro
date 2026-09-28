@@ -10643,12 +10643,17 @@ function CalendarView({ userId }) {
                       }`}>
                         {apt.status === 'confirmed_by_customer' ? '✅ Confirmed by Customer' : (apt.status || 'pending')}
                       </span>
+                      {apt.customerConfirmed && apt.status !== 'confirmed_by_customer' && (
+                        <span className="badge badge-success" title={apt.customerConfirmedAt ? `Customer replied CONFIRM ${new Date(apt.customerConfirmedAt.toDate ? apt.customerConfirmedAt.toDate() : apt.customerConfirmedAt).toLocaleString()}` : 'Customer replied CONFIRM'}>
+                          ✅ Customer Confirmed
+                        </span>
+                      )}
                       {apt.invoiced && (
                         <span className="badge" style={{background: '#dcfce7', color: '#166534'}}>
                           ✓ Invoiced
                         </span>
                       )}
-                      {apt.status !== 'confirmed' && (
+                      {apt.status !== 'confirmed' && apt.status !== 'confirmed_by_customer' && (
                         <button 
                           className="btn btn-sm btn-success"
                           onClick={() => updateStatus(apt.id, 'confirmed')}

@@ -96,6 +96,23 @@ export async function listDocs(collection, fieldMask = []) {
   return out;
 }
 
+// Documents in `collection` whose `field` equals any of `values` (Firestore allows up to 30).
+// Returns [{ id, ...fields }].
+export async function queryIn(collection, field, values) {
+  const { idToken } = await serverAuth();
+  const structuredQuery = {
+    from: [{ collectionId: collection }],
+    where: { fieldFilter: { field: { fieldPath: field }, op: 'IN', value: { arrayValue: { values: values.slice(0, 30).map(enc) } } } },
+  };
+  const r = await fetch(`${DOCS}:runQuery`, {
+    method: 'POST', headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+  });
+  if (!r.ok) throw new Error(`Firestore query ${collection} failed: ${r.status} (server uid ${cached?.uid}) ${await r.text()}`);
+  return (await r.json()).filter(x => x.document).map(({ document: doc }) =>
+    ({ id: doc.name.split('/').pop(), ...Object.fromEntries(Object.entries(doc.fields || {}).map(([k, v]) => [k, dec(v)])) }));
+}
+
 // Writes only the given fields (merge). `deleteFields` removes fields. Creates the doc if missing.
 export async function patchDoc(path, fields = {}, deleteFields = []) {
   const { idToken } = await serverAuth();
