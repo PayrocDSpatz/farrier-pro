@@ -7,12 +7,16 @@
   ],
   "rewrites": [
     {
+      "source": "/api/stripe/webhook/:farrierId",
+      "destination": "/api/stripe-payment?webhookFarrier=:farrierId"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
     {
       "source": "/pay/:invoiceId",
-      "destination": "/api/pay?invoice=:invoiceId"
+      "destination": "/api/stripe-payment?payPage=1&invoice=:invoiceId"
     },
     {
       "source": "/mobile",

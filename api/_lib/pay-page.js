@@ -1,5 +1,6 @@
 // The customer-facing pay link: https://app.farritech.com/pay/{invoiceId}
-// (vercel.json rewrites /pay/:id to /api/pay?invoice=:id)
+// (vercel.json rewrites /pay/:id to /api/stripe-payment?payPage=1&invoice=:id — it runs
+// inside stripe-payment because the Hobby plan allows only 12 functions per deploy)
 //
 // Checkout Sessions expire after 24 hours, so customers never get one directly. This
 // link sends them to the invoice's open session if it's still good for the right
@@ -7,9 +8,9 @@
 // ?session_id=…, and we record the payment right away (the webhook does the same,
 // whichever comes first wins; both are idempotent).
 import Stripe from 'stripe';
-import '../lib/pricing.js';
-import { getDoc, getStripeSecretKey } from './_lib/firebase-rest.js';
-import { createCheckoutSession, recordCheckoutSession, escapeHtml } from './_lib/invoice-payments.js';
+import '../../lib/pricing.js';
+import { getDoc, getStripeSecretKey } from './firebase-rest.js';
+import { createCheckoutSession, recordCheckoutSession, escapeHtml } from './invoice-payments.js';
 
 const P = globalThis.FarriPricing;
 
@@ -29,7 +30,7 @@ function page(res, status, title, message, extra = '') {
 </style></head><body><div class="card"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p>${extra}<div class="foot">Powered by FarriTech</div></div></body></html>`);
 }
 
-export default async function handler(req, res) {
+export async function payPage(req, res) {
   const invoiceId = String(req.query?.invoice || '');
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(invoiceId)) return page(res, 404, 'Invoice not found', 'This payment link is not valid. Please contact your farrier.');
 

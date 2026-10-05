@@ -1,5 +1,5 @@
-// Invoice payments shared by api/stripe-payment.js, api/pay.js and the per-farrier
-// Stripe webhook (api/stripe/webhook/[farrierId].js).
+// Invoice payments shared by api/stripe-payment.js, the /pay page (_lib/pay-page.js) and the
+// per-farrier Stripe webhook (_lib/farrier-webhook.js).
 //
 // Every payment — Checkout (pay link), keyed card, cash/check/etc. — goes through
 // applyPayment(), which runs in a Firestore transaction so two payments can't both

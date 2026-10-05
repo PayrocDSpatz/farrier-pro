@@ -6,6 +6,8 @@ import {
   applyPayment, cardDetails, closeOnlinePayment, createCheckoutSession, recordCheckoutSession,
   removeWebhook, sendUpdatedPayLink, setupWebhook, PaymentError,
 } from './_lib/invoice-payments.js';
+import { payPage } from './_lib/pay-page.js';
+import { farrierWebhook } from './_lib/farrier-webhook.js';
 
 const P = globalThis.FarriPricing;
 const SECRET_KEY_RE = /^(sk|rk)_(live|test)_/;
@@ -28,7 +30,7 @@ export const config = { api: { bodyParser: false } };
 //                           reset_manager_password (clears a farrier's forgotten manager password)
 //   anyone                → confirm_session  (only marks paid after Stripe confirms the session)
 //   Stripe                → webhook          (legacy platform webhook, signature required; farriers'
-//                                               own accounts post to api/stripe/webhook/[farrierId].js)
+//                                               own accounts post to /api/stripe/webhook/{farrierId} → _lib/farrier-webhook.js)
 //
 // Amounts are always worked out here from the invoice (lib/pricing.js), never taken from
 // the browser — see api/_lib/invoice-payments.js for how payments are recorded.
@@ -129,9 +131,13 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,stripe-signature');
   if (req.method === 'OPTIONS') return res.status(200).end();
+  // Customer pay link (/pay/:invoiceId, see vercel.json)
+  if (req.method === 'GET' && req.query?.payPage) return payPage(req, res);
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const rawBody = await getRawBody(req);
+  // Farrier's own Stripe account (/api/stripe/webhook/:farrierId, see vercel.json)
+  if (req.query?.webhookFarrier) return farrierWebhook(req, res, rawBody, String(req.query.webhookFarrier));
   if (req.headers['stripe-signature']) return handleWebhook(req, res, rawBody);
 
   try {

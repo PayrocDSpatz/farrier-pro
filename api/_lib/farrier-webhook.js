@@ -1,23 +1,13 @@
 // Per-farrier Stripe webhook: /api/stripe/webhook/{farrierId}
+// (vercel.json rewrites it to /api/stripe-payment?webhookFarrier={farrierId} — it runs
+// inside stripe-payment because the Hobby plan allows only 12 functions per deploy)
 //
 // Each farrier's own Stripe account sends checkout.session.completed here. The endpoint
 // is created automatically when the farrier saves their keys (Settings → Stripe Payments);
 // its signing secret lives in farrierSecrets/{farrierId}.stripeWebhookSecret.
 import Stripe from 'stripe';
-import { getDoc, getStripeSecretKey, serverAuth } from '../../_lib/firebase-rest.js';
-import { recordCheckoutSession, APP_URL } from '../../_lib/invoice-payments.js';
-
-// Signature checks need the exact bytes Stripe sent.
-export const config = { api: { bodyParser: false } };
-
-function getRawBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', chunk => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-  });
-}
+import { getDoc, getStripeSecretKey, serverAuth } from './firebase-rest.js';
+import { recordCheckoutSession, APP_URL } from './invoice-payments.js';
 
 async function sendPaidSms(to, name, amountCents, invoiceNumber) {
   if (!to) return;
@@ -31,12 +21,10 @@ async function sendPaidSms(to, name, amountCents, invoiceNumber) {
   } catch (e) { console.warn('Confirmation SMS error:', e.message); }
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const farrierId = String(req.query?.farrierId || '');
+// rawBody: the exact bytes Stripe sent (signature checks need them).
+export async function farrierWebhook(req, res, rawBody, farrierId) {
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(farrierId)) return res.status(400).json({ error: 'Bad farrier id' });
 
-  const rawBody = await getRawBody(req);
   const secrets = await getDoc(`farrierSecrets/${farrierId}`).catch(() => null);
   if (!secrets?.stripeWebhookSecret) return res.status(400).json({ error: 'Webhook not configured' });
 
