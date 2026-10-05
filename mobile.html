@@ -1552,6 +1552,18 @@ async function loadUserProfile() {
         if (netState.online) fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) }).catch(() => {});
         delete state.userProfile.stripeSecretKey;
       }
+      // FarriTech Payments (Stripe Connect): pick up an approved Connect account (see index.html).
+      if (!state.userProfile.stripePublishableKey && netState.online) {
+        fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'connect_sync' }) })
+          .then(r => r.json())
+          .then(async r => {
+            if (!r.success || !r.linked) return;
+            const fields = { stripePublishableKey: r.publishableKey, stripeConnectAccountId: r.accountId, stripeAccountName: r.accountName || '' };
+            await db.collection('farriers').doc(state.user.uid).set({ ...fields, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            state.userProfile = { ...(state.userProfile || {}), ...fields };
+          })
+          .catch(e => console.warn('FarriTech Payments sync skipped:', e.message));
+      }
       console.log('✅ Profile loaded, Stripe connected:', !!state.userProfile?.stripePublishableKey);
     } else {
       console.warn('⚠️ No profile found in farriers collection for', state.user.uid);
@@ -3747,9 +3759,10 @@ async function validateAndSaveStripe() {
       await db.collection('farriers').doc(state.user.uid).set({
         stripePublishableKey: pk,
         stripeAccountName: data.accountName || '',
+        stripeConnectAccountId: '', // own key replaces FarriTech Payments
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
-      state.userProfile = { ...(state.userProfile || {}), stripePublishableKey: pk, stripeAccountName: data.accountName || '' };
+      state.userProfile = { ...(state.userProfile || {}), stripePublishableKey: pk, stripeAccountName: data.accountName || '', stripeConnectAccountId: '' };
       document.getElementById('set-stripe-sk').value = '';
       renderStripeStatus('connected', data.accountName || '');
       showToast('Stripe connected!', 'success');
@@ -3771,10 +3784,11 @@ async function disconnectStripe() {
     if (!(await res.json()).success) throw new Error('disconnect failed');
   } catch (e) { showToast('Could not disconnect Stripe — try again', 'error'); return; }
   const suffix = '';
-  state.userProfile = { ...(state.userProfile || {}), stripePublishableKey: '', stripeAccountName: '' };
+  state.userProfile = { ...(state.userProfile || {}), stripePublishableKey: '', stripeAccountName: '', stripeConnectAccountId: '' };
   performWrite(() => db.collection('farriers').doc(state.user.uid).set({
     stripePublishableKey: '',
     stripeAccountName: '',
+    stripeConnectAccountId: '',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   }, { merge: true }));
   document.getElementById('set-stripe-pk').value = '';
@@ -4907,7 +4921,9 @@ function initStripeElements() {
   if (!pubKey || !window.Stripe) return;
   if (_stripe && _stripeCard) return; // already mounted
 
-  _stripe = window.Stripe(pubKey);
+  // FarriTech Payments farriers use the platform key + their connected account.
+  const connectAcct = state.userProfile?.stripeConnectAccountId;
+  _stripe = window.Stripe(pubKey, connectAcct ? { stripeAccount: connectAcct } : undefined);
   const elements = _stripe.elements();
   _stripeCard = elements.create('card', {
     style: {

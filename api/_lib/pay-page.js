@@ -7,9 +7,9 @@
 // amount, otherwise makes a new one. Stripe sends them back here afterwards with
 // ?session_id=…, and we record the payment right away (the webhook does the same,
 // whichever comes first wins; both are idempotent).
-import Stripe from 'stripe';
 import '../../lib/pricing.js';
-import { getDoc, getStripeSecretKey } from './firebase-rest.js';
+import { getDoc } from './firebase-rest.js';
+import { farrierStripe, feeParams } from './connect-account.js';
 import { createCheckoutSession, recordCheckoutSession, escapeHtml } from './invoice-payments.js';
 
 const P = globalThis.FarriPricing;
@@ -38,12 +38,13 @@ export async function payPage(req, res) {
     const invoice = await getDoc(`invoices/${invoiceId}`);
     if (!invoice) return page(res, 404, 'Invoice not found', 'This payment link is not valid. Please contact your farrier.');
     const number = invoice.invoiceNumber || '';
-    const key = await getStripeSecretKey(invoice.farrierId);
+    // Own key or FarriTech Payments (Connect) — see connect-account.js.
+    const fs = await farrierStripe(invoice.farrierId);
 
     // Back from Stripe Checkout
     const sessionId = String(req.query?.session_id || '');
-    if (sessionId && key) {
-      const stripe = new Stripe(key);
+    if (sessionId && fs) {
+      const { stripe } = fs;
       const session = await stripe.checkout.sessions.retrieve(sessionId).catch(() => null);
       if (session && session.metadata?.invoiceId === invoiceId && session.payment_status === 'paid') {
         await recordCheckoutSession(stripe, invoice.farrierId, session);
@@ -53,9 +54,9 @@ export async function payPage(req, res) {
 
     if (invoice.status === 'paid') return page(res, 200, 'Invoice paid', `Invoice #${number} has already been paid. Thank you!`);
     if (invoice.status === 'cancelled') return page(res, 200, 'Invoice cancelled', `Invoice #${number} was cancelled. Please contact your farrier with any questions.`);
-    if (!key) return page(res, 200, 'Online payment unavailable', 'Your farrier is not set up for online payments right now. Please contact them to pay.');
+    if (!fs) return page(res, 200, 'Online payment unavailable', 'Your farrier is not set up for online payments right now. Please contact them to pay.');
 
-    const stripe = new Stripe(key);
+    const { stripe, connect } = fs;
     const expected = P.getChargeCents(invoice, 'card_link');
     if (expected <= 0) return page(res, 200, 'Nothing owed', `There's no balance due on Invoice #${number}.`);
 
@@ -75,7 +76,7 @@ export async function payPage(req, res) {
       }
     }
 
-    const { session } = await createCheckoutSession(stripe, invoiceId, invoice);
+    const { session } = await createCheckoutSession(stripe, invoiceId, invoice, connect ? cents => feeParams(connect, cents) : null);
     res.setHeader('Cache-Control', 'no-store');
     return res.redirect(303, session.url);
   } catch (err) {

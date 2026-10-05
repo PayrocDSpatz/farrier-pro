@@ -9,7 +9,7 @@ import Stripe from 'stripe';
 import { getDoc, getStripeSecretKey, serverAuth } from './firebase-rest.js';
 import { recordCheckoutSession, APP_URL } from './invoice-payments.js';
 
-async function sendPaidSms(to, name, amountCents, invoiceNumber) {
+export async function sendPaidSms(to, name, amountCents, invoiceNumber) {
   if (!to) return;
   try {
     const { idToken } = await serverAuth();

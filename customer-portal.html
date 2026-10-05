@@ -1047,6 +1047,8 @@
       const [selectedInvoices, setSelectedInvoices] = useState({});
       const [showMultiPayModal, setShowMultiPayModal] = useState(false);
       const [farrierStripeKey, setFarrierStripeKey] = useState('');
+      // Set when the farrier uses FarriTech Payments (Stripe Connect) instead of their own key.
+      const [farrierStripeAccount, setFarrierStripeAccount] = useState('');
       const [dateFilter, setDateFilter] = useState('all'); // all, thisMonth, lastMonth, ytd, unpaid, custom
       const [customStart, setCustomStart] = useState('');
       const [customEnd, setCustomEnd] = useState('');
@@ -1128,6 +1130,7 @@
                     const fd = farrierDoc.data();
                     setFarrierBusinessName(fd.businessName || '');
                     setFarrierStripeKey(fd.stripePublishableKey || '');
+                    setFarrierStripeAccount(fd.stripeConnectAccountId || '');
                   }
                 } catch(e) {}
               }
@@ -1745,6 +1748,7 @@
             <PaymentModal
               invoice={selectedInvoice}
               stripePublishableKey={farrierStripeKey}
+              stripeAccount={farrierStripeAccount}
               onClose={() => { setShowPaymentModal(false); setSelectedInvoice(null); }}
               onSuccess={() => { setShowPaymentModal(false); setSelectedInvoice(null); loadData(); }}
             />
@@ -1754,6 +1758,7 @@
             <MultiPayModal
               invoices={Object.values(selectedInvoices).filter(Boolean)}
               stripePublishableKey={farrierStripeKey}
+              stripeAccount={farrierStripeAccount}
               onClose={() => setShowMultiPayModal(false)}
               onSuccess={() => { setShowMultiPayModal(false); setSelectedInvoices({}); loadData(); }}
             />
@@ -1786,7 +1791,7 @@
     }
 
     // Shared Stripe card form
-    function StripeCardForm({ stripePublishableKey, onToken, processing }) {
+    function StripeCardForm({ stripePublishableKey, stripeAccount, onToken, processing }) {
       const cardRef = React.useRef(null);
       const [cardElement, setCardElement] = React.useState(null);
       const [stripe, setStripe] = React.useState(null);
@@ -1794,7 +1799,7 @@
 
       React.useEffect(() => {
         if (!stripePublishableKey || !window.Stripe) return;
-        const s = window.Stripe(stripePublishableKey);
+        const s = window.Stripe(stripePublishableKey, stripeAccount ? { stripeAccount } : undefined);
         setStripe(s);
         const elements = s.elements();
         const card = elements.create('card', {
@@ -1809,7 +1814,7 @@
           if (cardRef.current) { card.mount(cardRef.current); setCardElement(card); }
         }, 100);
         return () => { try { card.unmount(); } catch(e) {} };
-      }, [stripePublishableKey]);
+      }, [stripePublishableKey, stripeAccount]);
 
       const handleSubmit = async (e) => {
         e.preventDefault();
@@ -1839,7 +1844,7 @@
     }
 
     // Single invoice PaymentModal
-    function PaymentModal({ invoice, stripePublishableKey, onClose, onSuccess }) {
+    function PaymentModal({ invoice, stripePublishableKey, stripeAccount, onClose, onSuccess }) {
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
 
@@ -1886,7 +1891,7 @@
             </div>
             {error && <div className="alert alert-error" style={{marginBottom: '1rem'}}>{error}</div>}
             {stripePublishableKey ? (
-              <StripeCardForm stripePublishableKey={stripePublishableKey} onToken={handleToken} processing={processing} />
+              <StripeCardForm stripePublishableKey={stripePublishableKey} stripeAccount={stripeAccount} onToken={handleToken} processing={processing} />
             ) : (
               <div style={{textAlign: 'center', color: 'var(--text-muted)', padding: '2rem'}}>Payment not configured. Please contact your farrier.</div>
             )}
@@ -1897,7 +1902,7 @@
     }
 
     // Multi-invoice PaymentModal
-    function MultiPayModal({ invoices, stripePublishableKey, onClose, onSuccess }) {
+    function MultiPayModal({ invoices, stripePublishableKey, stripeAccount, onClose, onSuccess }) {
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
       const total = invoices.reduce((sum, inv) => sum + FarriPricing.getChargeCents(inv, 'card_link'), 0) / 100;
@@ -1955,7 +1960,7 @@
             </div>
             {error && <div className="alert alert-error" style={{marginBottom: '1rem'}}>{error}</div>}
             {stripePublishableKey ? (
-              <StripeCardForm stripePublishableKey={stripePublishableKey} onToken={handleToken} processing={processing} />
+              <StripeCardForm stripePublishableKey={stripePublishableKey} stripeAccount={stripeAccount} onToken={handleToken} processing={processing} />
             ) : (
               <div style={{textAlign: 'center', color: 'var(--text-muted)', padding: '2rem'}}>Payment not configured. Please contact your farrier.</div>
             )}

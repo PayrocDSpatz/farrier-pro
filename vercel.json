@@ -11,6 +11,10 @@
       "destination": "/api/stripe-payment?webhookFarrier=:farrierId"
     },
     {
+      "source": "/api/stripe/connect-events",
+      "destination": "/api/stripe-payment?connectEvents=1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

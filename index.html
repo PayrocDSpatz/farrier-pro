@@ -2662,6 +2662,20 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 .catch(e => console.warn('Stripe key migration deferred:', e.message));
               delete profileData.stripeSecretKey;
             }
+            // FarriTech Payments (Stripe Connect): no Stripe yet → ask the server whether a Connect
+            // account this farrier set up from www.farritech.com has been approved. If so, save the
+            // platform publishable key + account ID here so card payments switch on.
+            if (!profileData.stripePublishableKey) {
+              fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'connect_sync' }) })
+                .then(r => r.json())
+                .then(async r => {
+                  if (!r.success || !r.linked) return;
+                  const fields = { stripePublishableKey: r.publishableKey, stripeConnectAccountId: r.accountId, stripeAccountName: r.accountName || '' };
+                  await db.collection('farriers').doc(farrierIdToUse).set({ ...fields, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                  setUserProfile(prev => (prev ? { ...prev, ...fields } : prev));
+                })
+                .catch(e => console.warn('FarriTech Payments sync skipped:', e.message));
+            }
             setUserProfile(profileData);
           }
 } else {
@@ -12828,7 +12842,8 @@ function CalendarView({ userId }) {
 
       React.useEffect(() => {
         if (!hasStripe || !window.Stripe) return;
-        const stripe = window.Stripe(publishableKey);
+        // FarriTech Payments farriers use the platform key + their connected account.
+        const stripe = window.Stripe(publishableKey, userProfile?.stripeConnectAccountId ? { stripeAccount: userProfile.stripeConnectAccountId } : undefined);
         stripeRef.current = stripe;
         const elements = stripe.elements();
         const card = elements.create('card', {
@@ -14744,9 +14759,10 @@ useEffect(() => {
                     if (data.success) {
                       await ensureFarriTechfile_(safeFarrierId, {
                         stripePublishableKey,
-                        stripeAccountName: data.accountName || ''
+                        stripeAccountName: data.accountName || '',
+                        stripeConnectAccountId: '' // own key replaces FarriTech Payments
                       });
-                      setUserProfile(prev => ({ ...prev, stripePublishableKey, stripeAccountName: data.accountName || '' }));
+                      setUserProfile(prev => ({ ...prev, stripePublishableKey, stripeAccountName: data.accountName || '', stripeConnectAccountId: '' }));
                       setStripeSecretKey('');
                       setStripeAccountName(data.accountName || '');
                       setStripeStatus('connected');
@@ -14776,8 +14792,8 @@ useEffect(() => {
                       body: JSON.stringify({ action: 'disconnect' })
                     });
                     if (!(await res.json()).success) { alert('Could not disconnect Stripe — please try again.'); return; }
-                    await ensureFarriTechfile_(safeFarrierId, { stripePublishableKey: '', stripeAccountName: '' });
-                    setUserProfile(prev => ({ ...prev, stripePublishableKey: '', stripeAccountName: '' }));
+                    await ensureFarriTechfile_(safeFarrierId, { stripePublishableKey: '', stripeAccountName: '', stripeConnectAccountId: '' });
+                    setUserProfile(prev => ({ ...prev, stripePublishableKey: '', stripeAccountName: '', stripeConnectAccountId: '' }));
                     setStripePublishableKey('');
                     setStripeSecretKey('');
                     setStripeAccountName('');

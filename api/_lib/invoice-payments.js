@@ -128,7 +128,9 @@ export async function closeOnlinePayment(stripe, invoice) {
 
 // Creates a Checkout Session for what's still owed on the invoice (card price unless
 // waived) and saves it on the invoice. Expires the previous session first.
-export async function createCheckoutSession(stripe, invoiceId, invoice) {
+// feeFor(chargeCents) → extra payment_intent_data (FarriTech's fee on Connect payments);
+// own-key farriers don't pass it, so their sessions are exactly as before.
+export async function createCheckoutSession(stripe, invoiceId, invoice, feeFor = null) {
   const cashCents = P.balanceCents(invoice);
   if (cashCents <= 0) throw new PaymentError('Nothing is owed on this invoice.');
   const chargeCents = P.getChargeCents(invoice, 'card_link', cashCents);
@@ -160,7 +162,7 @@ export async function createCheckoutSession(stripe, invoiceId, invoice) {
       },
     }],
     metadata,
-    payment_intent_data: { description: `FarriTech Invoice #${number}`, metadata },
+    payment_intent_data: { description: `FarriTech Invoice #${number}`, metadata, ...(feeFor ? await feeFor(chargeCents) : {}) },
     ...(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? { customer_email: email } : {}),
     success_url: `${payUrlFor(invoiceId)}?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${payUrlFor(invoiceId)}?canceled=1`,
