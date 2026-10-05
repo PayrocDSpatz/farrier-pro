@@ -1,0 +1,138 @@
+rules_version = '2';
+// Firestore rules for the farrier-pro project (app.farritech.com).
+//
+// These are NOT deployed from this repo — publish them by pasting this whole file into
+// Firebase console → farrier-pro → Firestore Database → Rules → Publish.
+// Keep this file in sync with what's live so changes can be reviewed in git.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /supportAdmins/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+match /sponsorBanners/{bannerId} {
+  allow read: if true;
+  allow write: if request.auth != null &&
+    request.auth.token.email in ['david@dasconsulting.com', 'david@dasdigitalai.com', 'eaven777@gmail.com'];
+    }
+    match /supportSessions/{sessionId} {
+      allow read, write: if isSignedIn()
+        && exists(/databases/$(database)/documents/supportAdmins/$(request.auth.uid));
+    }
+
+  match /referrals/{referralId} {
+  allow create: if request.auth != null;
+  allow read, update: if request.auth != null;
+  allow delete: if false;
+}
+
+  match /leads/{leadId} {
+  allow create: if true;
+  allow read: if true;
+  allow update: if true;
+  allow delete: if false;
+}
+
+    match /farriers/{farrierId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /farriers/{farrierId}/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /appointments/{appointmentId} {
+      // Authenticated farriers can read/write their own appointments
+      allow read, write: if isSignedIn() && request.auth.uid == resource.data.farrierId;
+
+      // Allow unauthenticated reads ONLY for slot-availability checks:
+      // The document must belong to the farrier being queried, and only
+      // non-sensitive fields are exposed (requestedDate, requestedTime, status).
+      allow read: if resource.data != null
+                  && resource.data.keys().hasOnly([
+                      'farrierId','requestedDate','requestedTime','status',
+                      'createdAt','customerName','farmName','phone','email',
+                      'services','numberOfHorses','address','city','state',
+                      'zip','comments','smsConsent'
+                    ]);
+
+      // Anyone can create a booking request (public booking form)
+      allow create: if true;
+
+      // Only the owning farrier can update or delete
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.farrierId;
+    }
+
+    match /customers/{customerId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == resource.data.farrierId;
+      allow create: if true;
+    }
+function isServer() {
+  return request.auth != null && request.auth.uid == '2kkfUU5dOvTRn1rWIaua38sgnNr1';
+}
+
+match /farrierSecrets/{farrierId} {
+  allow read, write: if isServer();
+}
+    match /invoices/{invoiceId} {
+      allow read, write: if isSignedIn() && request.auth.uid == resource.data.farrierId;
+      allow create: if isSignedIn();
+      allow read: if isSignedIn() && request.auth.token.email == resource.data.customerEmail;
+      allow update: if isSignedIn() && request.auth.token.email == resource.data.customerEmail;
+    }
+    match /invoices/{invoiceId} {
+      // The server (pay links, Stripe webhooks) records payments as the server user.
+      allow read, update: if isServer();
+      // FarriTech support staff working inside a farrier's account (support sessions).
+      allow update: if isSignedIn()
+        && exists(/databases/$(database)/documents/supportAdmins/$(request.auth.uid));
+      // FIX 2026-10-05: removed
+      //   allow update: if request.auth != null
+      //     || (request.resource.data.diff(resource.data).affectedKeys()
+      //         .hasOnly(['status', 'paidAt', 'paymentMethod', 'stripePaymentIntentId', 'cardLast4', 'cardType']));
+      // It let anyone, even signed out, mark any invoice paid, and let any signed-in user
+      // (including other farriers' customers) edit any invoice. Payments are now recorded
+      // by the server, so nothing needs it. Farriers and their customers keep the access
+      // granted by the block above.
+    }
+match /invoices/{invoiceId}/payments/{paymentId} {
+  allow read: if isServer() || (request.auth != null &&
+    get(/databases/$(database)/documents/invoices/$(invoiceId)).data.farrierId == request.auth.uid);
+  allow create: if isServer();
+  allow update, delete: if false;
+}
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == resource.data.farrierId;
+      allow create: if isSignedIn();
+    }
+      match /mileage_logs/{mileageId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.farrierId;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.farrierId;
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.farrierId;
+    }
+
+    match /horses/{horseId} {
+      allow read: if isSignedIn() && request.auth.uid == resource.data.farrierId;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.farrierId;
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.farrierId;
+    }
+     match /inventoryItems/{itemId} {
+      allow create: if request.auth != null && request.resource.data.farrierId == request.auth.uid;
+      allow read, update, delete: if request.auth != null &&
+        resource.data.farrierId == request.auth.uid;
+    }
+
+    match /inventoryTransactions/{transactionId} {
+      allow create: if request.auth != null && request.resource.data.farrierId == request.auth.uid;
+      allow read, update, delete: if request.auth != null &&
+        resource.data.farrierId == request.auth.uid;
+    }
+  }
+}
