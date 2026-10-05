@@ -633,7 +633,8 @@
     <div class="card" style="text-align:center; padding:28px 20px;">
       <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600; margin-bottom:6px;" id="pay-invoice-num"></div>
       <div style="font-size:0.85rem; color:var(--text-muted);" id="pay-customer-name"></div>
-      <div style="font-size:2.8rem; font-weight:800; color:var(--blue); margin:12px 0;" id="pay-amount"></div>
+      <div style="font-size:2.8rem; font-weight:800; color:var(--blue); margin:12px 0 4px;" id="pay-amount"></div>
+      <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:12px;" id="pay-dual-price"></div>
       <button id="pay-edit-invoice-btn" onclick="startEditInvoice(state.currentInvoice)" style="background:none; border:2px solid var(--border); border-radius:8px; padding:8px 16px; font-weight:700; font-size:0.85rem; color:var(--text-muted); cursor:pointer;">✏️ Edit Invoice</button>
     </div>
 
@@ -1092,12 +1093,23 @@
     </div>
 
     <div class="card" style="margin-top:14px;">
+      <div class="card-title">🏷️ Card Price</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Dual pricing: card payments cost a little more than cash or check. Invoices show both, e.g. "Card price $154.50 / Cash or check $150.00". Changes apply to new invoices only.</div>
+      <label style="display:flex; align-items:center; gap:10px; font-size:0.9rem; font-weight:600; cursor:pointer;">
+        <input type="checkbox" id="set-card-pricing" style="width:18px;height:18px;flex-shrink:0;">
+        Charge a card price
+      </label>
+      <div class="field" style="margin-top:10px;"><label>Card price is this much more than cash (0–5%)</label><input type="number" id="set-card-price-rate" min="0" max="5" step="0.1" inputmode="decimal" placeholder="3"></div>
+      <button class="btn-secondary" onclick="saveCardPricing()">Save Card Price</button>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
       <div class="card-title">💳 Stripe Payments</div>
       <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Connect Stripe to accept card payments on invoices. Your keys are stored securely.</div>
       <div id="stripe-status-banner" style="display:none;"></div>
       <div class="field"><label>Publishable Key <span style="font-weight:400; color:var(--text-muted);">(starts with pk_)</span></label><input type="text" id="set-stripe-pk" placeholder="pk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
-      <div class="field"><label>Secret Key <span style="font-weight:400; color:var(--text-muted);">(starts with sk_ or rk_)</span></label><input type="password" id="set-stripe-sk" placeholder="sk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
-      <div style="font-size:0.75rem; color:var(--text-muted); margin:-6px 0 12px;">Find these at dashboard.stripe.com/apikeys</div>
+      <div class="field"><label>Secret Key <span style="font-weight:400; color:var(--text-muted);">(starts with rk_ or sk_)</span></label><input type="password" id="set-stripe-sk" placeholder="rk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
+      <div style="font-size:0.75rem; color:var(--text-muted); margin:-6px 0 12px;">Find these at dashboard.stripe.com/apikeys. A restricted key needs Write access to PaymentIntents, Checkout Sessions, Customers, PaymentMethods, Refunds and Webhook Endpoints.</div>
       <button class="btn-primary" id="stripe-validate-btn" onclick="validateAndSaveStripe()">✓ Validate & Save</button>
       <div style="margin-top:8px;"></div>
       <button class="btn-secondary" id="stripe-disconnect-btn" onclick="disconnectStripe()" style="display:none;">Disconnect Stripe</button>
@@ -1150,6 +1162,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 <script src="/inventory-catalog.js"></script>
 <script src="/api-auth.js"></script>
+<script src="/lib/pricing.js"></script>
 
 <script>
 // ── FIREBASE INIT ──
@@ -2774,20 +2787,21 @@ async function updateExistingInvoice(inv, allItems, total) {
 
   let paymentUrl = inv.paymentUrl || '';
   const totalChanged = Math.abs((inv.total || 0) - total) > 0.001;
+  const saved = performWrite(() => db.collection('invoices').doc(inv.id).update(updates));
   if (netState.online && inv.paymentUrl && totalChanged) {
     const stripeConnected = !!state.userProfile?.stripePublishableKey; // secret key lives on the server
     if (stripeConnected && total > 0) {
       try {
+        // The server re-prices from the saved invoice and closes the old checkout.
+        await Promise.race([saved, new Promise((_, reject) => setTimeout(() => reject(new Error('save still pending')), 10000))]);
         const plRes = await fetch('/api/stripe-payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'payment_link', amount: total, invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, customerEmail: email, customerName: c.name, farrierId: state.user.uid }),
+          body: JSON.stringify({ action: 'payment_link', invoiceId: inv.id }),
         });
         const plData = await plRes.json();
         if (plData.success && plData.paymentUrl) {
           paymentUrl = plData.paymentUrl;
-          updates.paymentUrl = paymentUrl;
-          updates.paymentLinkId = plData.paymentLinkId || '';
         } else {
           console.error('❌ Payment link regeneration failed:', plData.error);
         }
@@ -2799,8 +2813,6 @@ async function updateExistingInvoice(inv, allItems, total) {
     console.warn('⚠️ Offline — existing payment link amount will be stale until this syncs and is re-edited online.');
   }
 
-  performWrite(() => db.collection('invoices').doc(inv.id).update(updates));
-
   allItems.filter(i => i.horseId).forEach(i => {
     performWrite(() => db.collection('horses').doc(i.horseId).update({
       lastServiceId: i.serviceId || '',
@@ -2810,7 +2822,7 @@ async function updateExistingInvoice(inv, allItems, total) {
     }));
   });
 
-  return { id: inv.id, invoiceNumber: inv.invoiceNumber, total, paymentUrl, status: 'outstanding', items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: phone, customerEmail: email, milesDriven: miles, notes };
+  return { id: inv.id, invoiceNumber: inv.invoiceNumber, total, paymentUrl, status: 'outstanding', cardPriceRate: inv.cardPriceRate, cardFeeWaived: inv.cardFeeWaived, payments: inv.payments, paidAmount: inv.paidAmount, items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: phone, customerEmail: email, milesDriven: miles, notes };
 }
 
 // Reads the (editable) Mobile Number / Email fields on the invoice review screen —
@@ -2841,7 +2853,7 @@ async function createInvoice() {
   // hang the UI) waiting for the server to ack it; it queues and syncs like any
   // other offline write.
   const docRef = db.collection('invoices').doc();
-  performWrite(() => docRef.set({
+  const saved = performWrite(() => docRef.set({
     farrierId: state.user.uid,
     customerName: c.name,
     customerFarmName: c.farmName || '',
@@ -2851,6 +2863,7 @@ async function createInvoice() {
     total,
     invoiceNumber,
     status: 'outstanding',
+    cardPriceRate: FarriPricing.farrierCardPriceRate(state.userProfile),
     milesDriven: parseInt(document.getElementById('svc-miles')?.value) || 0,
     notes: document.getElementById('svc-notes')?.value.trim() || '',
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2902,16 +2915,17 @@ async function createInvoice() {
     console.warn('⚠️ Offline — skipping payment link; invoice will sync once back online.');
   } else if (stripeConnected && total > 0) {
     try {
+      // The server prices the link from the saved invoice, so wait for the save to land.
+      await Promise.race([saved, new Promise((_, reject) => setTimeout(() => reject(new Error('Invoice is still saving — try Pay Link again in a moment')), 10000))]);
       const plRes = await fetch('/api/stripe-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'payment_link', amount: total, invoiceId: docRef.id, invoiceNumber, customerEmail: email, customerName: c.name, farrierId: state.user.uid }),
+        body: JSON.stringify({ action: 'payment_link', invoiceId: docRef.id }),
       });
       const plData = await plRes.json();
       console.log('💳 Stripe response:', JSON.stringify(plData));
       if (plData.success && plData.paymentUrl) {
-        paymentUrl = plData.paymentUrl;
-        performWrite(() => docRef.update({ paymentUrl, paymentLinkId: plData.paymentLinkId || '' }));
+        paymentUrl = plData.paymentUrl; // the server saved it on the invoice
         console.log('✅ Payment link:', paymentUrl);
       } else {
         console.error('❌ Payment link failed:', plData.error);
@@ -2926,7 +2940,7 @@ async function createInvoice() {
     showToast('Stripe not connected — no payment link', 'error');
   }
 
-  return { id: docRef.id, invoiceNumber, total, paymentUrl, status: 'outstanding', items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: phone, customerEmail: email, milesDriven: miles, notes: document.getElementById('svc-notes')?.value.trim() || '' };
+  return { id: docRef.id, invoiceNumber, total, paymentUrl, status: 'outstanding', cardPriceRate: FarriPricing.farrierCardPriceRate(state.userProfile), items: allItems, customerName: c.name, customerFarmName: c.farmName||'', customerPhone: phone, customerEmail: email, milesDriven: miles, notes: document.getElementById('svc-notes')?.value.trim() || '' };
 }
 
 async function saveInvoiceOnly() {
@@ -3562,12 +3576,21 @@ function loadSettingsScreen() {
   document.getElementById('set-auto-print').checked = p.autoPrintPdf ?? true;
   document.getElementById('set-manual-pay').checked = p.allowManualPayments ?? true;
   document.getElementById('set-sms-enabled').checked = Boolean(p.smsEnabled);
+  document.getElementById('set-card-pricing').checked = p.cardPricingEnabled !== false;
+  document.getElementById('set-card-price-rate').value = String(Math.round((p.cardPriceRate ?? FarriPricing.DEFAULT_CARD_PRICE_RATE) * 10000) / 100);
 
   document.getElementById('set-stripe-pk').value = p.stripePublishableKey || '';
   // Saved secret keys stay on the server — the field only takes a new key to replace it.
   document.getElementById('set-stripe-sk').value = '';
-  document.getElementById('set-stripe-sk').placeholder = p.stripePublishableKey ? '•••••••• saved securely — paste a new key to replace' : 'sk_live_...';
+  document.getElementById('set-stripe-sk').placeholder = p.stripePublishableKey ? '•••••••• saved securely — paste a new key to replace' : 'rk_live_...';
   renderStripeStatus(p.stripePublishableKey ? 'connected' : 'none', p.stripeAccountName || '');
+  // Connected before webhooks were set up automatically? Ask for one more save.
+  if (p.stripePublishableKey && netState.online) {
+    fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) })
+      .then(r => r.json())
+      .then(r => { if (r.success && r.connected && !r.webhookConfigured) renderStripeStatus('error', '', "Invoices paid online aren't being marked paid automatically yet. Paste your secret key and tap Validate & Save again to finish setup."); })
+      .catch(() => {});
+  }
 
   state.settingsAvailability = JSON.parse(JSON.stringify(p.availability || DEFAULT_AVAILABILITY));
   renderAvailabilityDays();
@@ -3647,6 +3670,21 @@ function saveSettingsProfile() {
   showSettingsSaved(suffix);
 }
 
+function saveCardPricing() {
+  const enabled = document.getElementById('set-card-pricing').checked;
+  const percent = parseFloat(document.getElementById('set-card-price-rate').value);
+  if (enabled && !(percent >= 0 && percent <= 5)) { showToast('Card price must be between 0% and 5%', 'error'); return; }
+  const rate = Number.isFinite(percent) ? Math.round(percent * 100) / 10000 : FarriPricing.DEFAULT_CARD_PRICE_RATE;
+  const suffix = netState.online ? '' : ' (will sync when back online)';
+  state.userProfile = { ...(state.userProfile || {}), cardPricingEnabled: enabled, cardPriceRate: rate };
+  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+    cardPricingEnabled: enabled,
+    cardPriceRate: rate,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true }));
+  showToast('Card price saved' + suffix, 'success');
+}
+
 function saveSmsSetting() {
   const smsEnabled = document.getElementById('set-sms-enabled').checked;
   const suffix = netState.online ? '' : ' (will sync when back online)';
@@ -3666,7 +3704,7 @@ function saveAvailability() {
   showSettingsSaved(suffix);
 }
 
-function renderStripeStatus(status, accountName) {
+function renderStripeStatus(status, accountName, message) {
   const el = document.getElementById('stripe-status-banner');
   const disconnectBtn = document.getElementById('stripe-disconnect-btn');
   if (status === 'connected') {
@@ -3677,7 +3715,7 @@ function renderStripeStatus(status, accountName) {
   } else if (status === 'error') {
     el.style.display = 'block';
     el.style.cssText = 'display:block; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:10px 12px; margin-bottom:12px; color:#dc2626; font-weight:600; font-size:0.88rem;';
-    el.innerHTML = '❌ Invalid keys — please check and try again.';
+    el.innerHTML = '❌ ' + escapeHtml(message || 'Invalid keys — please check and try again.');
     disconnectBtn.style.display = 'none';
   } else {
     el.style.display = 'none';
@@ -3689,8 +3727,11 @@ async function validateAndSaveStripe() {
   const pk = document.getElementById('set-stripe-pk').value.trim();
   const sk = document.getElementById('set-stripe-sk').value.trim();
   if (!pk || !sk) { showToast('Enter both keys', 'error'); return; }
-  if (!pk.startsWith('pk_')) { showToast('Publishable key must start with pk_', 'error'); return; }
-  if (!/^(sk|rk)_/.test(sk)) { showToast('Secret key must start with sk_ or rk_', 'error'); return; }
+  const pkMode = (/^pk_(live|test)_/.exec(pk) || [])[1];
+  const skMode = (/^(?:sk|rk)_(live|test)_/.exec(sk) || [])[1];
+  if (!pkMode) { showToast('Publishable key must start with pk_live_ or pk_test_', 'error'); return; }
+  if (!skMode) { showToast('Secret key must start with rk_live_, rk_test_, sk_live_ or sk_test_', 'error'); return; }
+  if (pkMode !== skMode) { showToast('Both keys must be live keys, or both test keys', 'error'); return; }
   if (!netState.online) { showToast('Connecting Stripe requires an internet connection', 'error'); return; }
 
   const btn = document.getElementById('stripe-validate-btn');
@@ -3713,7 +3754,7 @@ async function validateAndSaveStripe() {
       renderStripeStatus('connected', data.accountName || '');
       showToast('Stripe connected!', 'success');
     } else {
-      renderStripeStatus('error', '');
+      renderStripeStatus('error', '', data.error);
     }
   } catch(e) {
     renderStripeStatus('error', '');
@@ -3745,6 +3786,7 @@ async function disconnectStripe() {
 // ── INVOICE EMAIL BUILDER ──
 function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
   const total = (inv.total || 0).toFixed(2);
+  const prices = FarriPricing.dualPrices(inv);
   const items = (inv.items || []).map(i =>
     `<tr><td style="padding:6px 8px;font-size:14px;color:#374151;">${i.description||i.name||''}${i.horseName ? ` (${i.horseName})` : ''}</td><td style="padding:6px 8px;font-size:14px;color:#374151;text-align:right;">$${(i.amount||i.price||0).toFixed(2)}</td></tr>`
   ).join('');
@@ -3762,12 +3804,13 @@ function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
         <tr><td style="padding:4px 0;color:#6b7280;width:140px;">Invoice #</td><td><strong>${inv.invoiceNumber}</strong></td></tr>
         <tr><td style="padding:4px 0;color:#6b7280;">Customer</td><td>${inv.customerName}</td></tr>
         <tr><td style="padding:4px 0;color:#6b7280;">Total</td><td><strong>$${total}</strong></td></tr>
+        ${prices.card !== null ? `<tr><td style="padding:4px 0;color:#6b7280;">Price</td><td>Card price <strong>${FarriPricing.money(prices.card)}</strong> / Cash or check <strong>${FarriPricing.money(prices.cash)}</strong></td></tr>` : ''}
       </table>
       ${items ? `<table style="width:100%;border-collapse:collapse;border-top:1px solid #e2e8f0;margin-top:12px;"><tbody>${items}</tbody></table>` : ''}
     </div>
     ${payUrl ? `<div style="text-align:center;margin:28px 0;">
       <a href="${payUrl}" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 36px;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;display:inline-block;">
-        💳 Pay Invoice — $${total}
+        💳 Pay Invoice — ${prices.card !== null ? FarriPricing.money(prices.card) : FarriPricing.money(prices.cash)}
       </a>
     </div>` : ''}
     <p style="color:#6b7280;font-size:13px;">Questions? Contact your farrier directly.</p>
@@ -3784,7 +3827,9 @@ function openInvoicePayment(inv) {
   state.selectedPayMethod = null;
   document.getElementById('pay-invoice-num').textContent = '#' + (inv.invoiceNumber || '');
   document.getElementById('pay-customer-name').textContent = inv.customerName || '';
-  document.getElementById('pay-amount').textContent = '$' + (inv.total||0).toFixed(2);
+  const prices = FarriPricing.dualPrices(inv);
+  document.getElementById('pay-amount').textContent = FarriPricing.money(prices.cash);
+  document.getElementById('pay-dual-price').textContent = prices.card !== null ? FarriPricing.dualPriceText(inv) : '';
   document.getElementById('pay-edit-invoice-btn').style.display = inv.status === 'outstanding' ? 'inline-block' : 'none';
   document.getElementById('check-fields').style.display = 'none';
   document.getElementById('card-fields').style.display = 'none';
@@ -3828,7 +3873,10 @@ function selectPayMethod(method, el) {
   }
   const btn = document.getElementById('confirm-pay-btn');
   btn.disabled = false;
-  btn.textContent = method === 'link' ? '📲 Send Payment Link' : '✓ Confirm Payment';
+  const inv = state.currentInvoice;
+  btn.textContent = method === 'link' ? '📲 Send Payment Link'
+    : method === 'card' ? `✓ Charge ${FarriPricing.money(FarriPricing.getChargeCents(inv, 'card_keyed'))}`
+    : `✓ Record ${FarriPricing.money(FarriPricing.getChargeCents(inv, method))} ${method === 'check' ? 'Check' : 'Cash'}`;
 }
 
 async function confirmPayment() {
@@ -3866,7 +3914,7 @@ async function confirmPayment() {
       if (sendSms && inv.customerPhone) {
         await fetch('/api/send-sms', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${(inv.total||0).toFixed(2)} is ready. Pay here: ${payUrl} Reply STOP to opt out.` })
+          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for ${FarriPricing.dualPriceText(inv)} is ready. Pay here: ${payUrl} Reply STOP to opt out.` })
         });
         sent.push('SMS');
       } else if (sendSms && !inv.customerPhone) {
@@ -3898,26 +3946,52 @@ async function confirmPayment() {
       }
       showSuccess('Link Sent!', `Payment link sent via ${sent.join(' & ')} to ${inv.customerName}`);
     } else if (method === 'card') {
-      const ok = await chargeCardViaStripe(inv);
-      if (!ok) {
+      const charged = await chargeCardViaStripe(inv);
+      if (!charged) {
         document.getElementById('confirm-pay-btn').disabled = false;
         document.getElementById('pay-saving').style.display = 'none';
         return;
       }
-      showSuccess('Payment Charged!', `$${(inv.total||0).toFixed(2)} collected via card`);
+      showSuccess('Payment Charged!', `$${Number(charged.amount).toFixed(2)} collected via card`);
     } else {
-      // Cash or check — mark as paid. These don't need the network (unlike Card/Pay
-      // Link), so they queue via performWrite instead of blocking on server ack.
-      const updateData = {
-        status: 'paid',
-        paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-        paymentMethod: method,
-      };
-      if (method === 'check') {
-        updateData.checkNumber = document.getElementById('check-number')?.value.trim() || '';
+      // Cash or check for the balance at the cash price. Online, the server records it and
+      // closes any open pay link so the customer can't also pay online. Offline, it's written
+      // straight to the invoice and syncs later (the pay link can't be closed until then).
+      const checkNumber = method === 'check' ? (document.getElementById('check-number')?.value.trim() || '') : '';
+      const amountCents = FarriPricing.getChargeCents(inv, method);
+      if (netState.online) {
+        const res = await fetch('/api/stripe-payment', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'record_payment', invoiceId: inv.id, method, amount: amountCents / 100, reference: checkNumber }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          showToast(data.error || 'Could not record payment', 'error');
+          document.getElementById('confirm-pay-btn').disabled = false;
+          document.getElementById('pay-saving').style.display = 'none';
+          return;
+        }
+      } else {
+        const payment = {
+          amount: amountCents / 100, creditAmount: amountCents / 100, method,
+          memo: checkNumber || (method === 'check' ? 'Check' : 'Cash'), date: new Date().toISOString(),
+        };
+        const payments = [...(inv.payments || []), payment];
+        const paidAmount = payments.reduce((t, p) => t + (p.amount || 0), 0);
+        const updateData = {
+          status: 'paid',
+          paidAt: firebase.firestore.FieldValue.serverTimestamp(),
+          paymentMethod: method,
+          payments,
+          paidAmount,
+          amountPaidCents: Math.round(paidAmount * 100),
+          balanceDue: 0,
+          priceApplied: 'cash',
+        };
+        if (method === 'check') updateData.checkNumber = checkNumber;
+        performWrite(() => db.collection('invoices').doc(inv.id).update(updateData));
       }
-      performWrite(() => db.collection('invoices').doc(inv.id).update(updateData));
-      showSuccess('Payment Recorded!', `$${(inv.total||0).toFixed(2)} collected via ${method}` + (netState.online ? '' : ' (will sync when back online)'));
+      showSuccess('Payment Recorded!', `${FarriPricing.money(amountCents)} collected via ${method}` + (netState.online ? '' : ' (will sync when back online)'));
     }
   } catch(e) {
     showToast('Error: ' + e.message, 'error');
@@ -4870,69 +4944,24 @@ async function chargeCardViaStripe(inv) {
     errEl.textContent = error.message; errEl.style.display = 'block';
     return false;
   }
+  // The server charges the card price for the balance and records the payment on the
+  // invoice in the same request, so there's nothing left for the phone to write.
   const res = await fetch('/api/stripe-payment', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'charge',
-      paymentMethodId: paymentMethod.id,
-      amount: inv.total,
-      farrierId: state.user.uid,
-      invoiceId: inv.id,
-      invoiceNumber: inv.invoiceNumber,
-      customerEmail: inv.customerEmail || '',
-      customerName: inv.customerName || '',
-    })
+    body: JSON.stringify({ action: 'charge', paymentMethodId: paymentMethod.id, invoiceId: inv.id })
   });
   const result = await res.json();
   if (!result.success) {
     showToast(result.error || 'Card declined', 'error'); return false;
   }
-
-  // The card is now charged — record that fact locally *before* touching Firestore.
-  // If the app dies or the connection drops between here and the write below, the
-  // customer would otherwise be charged with no record of it; reconcilePendingCardPayments()
-  // replays this list on next boot/reconnect and is safe to run twice (keyed by transactionId).
-  addPendingCardReconciliation({
-    invoiceId: inv.id, transactionId: result.transactionId,
-    amount: inv.total, last4: result.last4 || '', brand: result.brand || '',
-  });
-
-  // Update Firestore — same pattern as desktop
-  try {
-    const freshDoc = await db.collection('invoices').doc(inv.id).get();
-    const freshData = freshDoc.exists ? freshDoc.data() : {};
-    const existing = freshData.payments || [];
-    const newPayment = {
-      amount: inv.total,
-      method: 'credit_card',
-      memo: result.last4 ? `${result.brand || 'Card'} ending ${result.last4}` : 'Credit card',
-      date: new Date().toISOString(),
-      transactionId: result.transactionId
-    };
-    const allPayments = [...existing, newPayment];
-    const totalPaid = allPayments.reduce((s, p) => s + (p.amount || 0), 0);
-    const newStatus = totalPaid >= inv.total ? 'paid' : 'partial';
-    await db.collection('invoices').doc(inv.id).update({
-      status: newStatus,
-      payments: allPayments,
-      paidAmount: totalPaid,
-      balanceDue: Math.max(0, inv.total - totalPaid),
-      paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null),
-      transactionId: result.transactionId,
-      paymentMethod: 'card',
-      cardLast4: result.last4 || '',
-      cardBrand: result.brand || ''
-    });
-    removePendingCardReconciliation(result.transactionId);
-  } catch (e) {
-    console.warn('Card charged but Firestore write failed — will reconcile on next sync:', e);
-  }
-  return true;
+  return result;
 }
 
 // ── CARD PAYMENT RECONCILIATION ──
-// A charged-but-unrecorded invoice (app killed between the Stripe charge and the
+// The server now records keyed card payments itself, in the same request as the charge;
+// nothing adds to this list any more. It stays so entries saved by older versions of the
+// app still get recorded. A charged-but-unrecorded invoice (app killed between the Stripe charge and the
 // Firestore write) is worse than a merely-late write, so it gets its own small
 // localStorage-backed safety net, independent of the generic offline write queue.
 const PENDING_CARD_KEY = 'farritech_pendingCardReconciliations';

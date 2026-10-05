@@ -1,0 +1,69 @@
+// Per-farrier Stripe webhook: /api/stripe/webhook/{farrierId}
+//
+// Each farrier's own Stripe account sends checkout.session.completed here. The endpoint
+// is created automatically when the farrier saves their keys (Settings → Stripe Payments);
+// its signing secret lives in farrierSecrets/{farrierId}.stripeWebhookSecret.
+import Stripe from 'stripe';
+import { getDoc, getStripeSecretKey, serverAuth } from '../../_lib/firebase-rest.js';
+import { recordCheckoutSession, APP_URL } from '../../_lib/invoice-payments.js';
+
+// Signature checks need the exact bytes Stripe sent.
+export const config = { api: { bodyParser: false } };
+
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+async function sendPaidSms(to, name, amountCents, invoiceNumber) {
+  if (!to) return;
+  try {
+    const { idToken } = await serverAuth();
+    await fetch(`${APP_URL}/api/send-sms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ to, body: `Hi ${name || 'there'}, your payment of $${(amountCents / 100).toFixed(2)} for invoice #${invoiceNumber} has been received. Thank you! Reply STOP to opt out.` }),
+    });
+  } catch (e) { console.warn('Confirmation SMS error:', e.message); }
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const farrierId = String(req.query?.farrierId || '');
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(farrierId)) return res.status(400).json({ error: 'Bad farrier id' });
+
+  const rawBody = await getRawBody(req);
+  const secrets = await getDoc(`farrierSecrets/${farrierId}`).catch(() => null);
+  if (!secrets?.stripeWebhookSecret) return res.status(400).json({ error: 'Webhook not configured' });
+
+  let event;
+  try {
+    event = Stripe.webhooks.constructEvent(rawBody, req.headers['stripe-signature'], secrets.stripeWebhookSecret);
+  } catch (err) {
+    console.error(`Rejected webhook for ${farrierId} with bad signature:`, err.message);
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+
+  if (event.type !== 'checkout.session.completed') return res.status(200).json({ received: true });
+
+  try {
+    const key = await getStripeSecretKey(farrierId);
+    if (!key) return res.status(400).json({ error: 'Farrier has no Stripe key' });
+    const stripe = new Stripe(key);
+    const session = event.data.object;
+    const result = await recordCheckoutSession(stripe, farrierId, session);
+    console.log(`📥 checkout.session.completed ${session.id} for ${farrierId}:`, JSON.stringify({ invoiceId: result.invoiceId, status: result.status, ignored: result.ignored, duplicate: result.duplicate, alreadyPaid: result.alreadyPaid }));
+    if (result.status && !result.duplicate && !result.alreadyPaid) {
+      await sendPaidSms(session.customer_details?.phone, session.customer_details?.name, session.amount_total || 0, result.invoice?.invoiceNumber || '');
+    }
+    return res.status(200).json({ received: true });
+  } catch (err) {
+    // 500 makes Stripe retry later; recording is idempotent per session.
+    console.error(`❌ Webhook error for ${farrierId}:`, err);
+    return res.status(500).json({ error: err.message });
+  }
+}

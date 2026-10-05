@@ -126,6 +126,60 @@ export async function patchDoc(path, fields = {}, deleteFields = []) {
   return true;
 }
 
+// ── Transactions ──
+// runTransaction(async tx => { const inv = await tx.get('invoices/x'); tx.patch('invoices/x', {...}); })
+// Reads inside go through the transaction; writes are committed together at the end, and
+// the whole thing is retried if Firestore aborts it because something changed underneath.
+// tx.create() fails the commit if the document already exists.
+const DOC_NAME = `projects/${PROJECT_ID}/databases/(default)/documents`;
+export async function runTransaction(fn, attempts = 4) {
+  for (let attempt = 1; ; attempt++) {
+    const { idToken } = await serverAuth();
+    const headers = { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' };
+    const begin = await fetch(`${DOCS}:beginTransaction`, { method: 'POST', headers, body: '{}' });
+    if (!begin.ok) throw new Error(`Firestore beginTransaction failed: ${begin.status} ${await begin.text()}`);
+    const { transaction } = await begin.json();
+    const writes = [];
+    const tx = {
+      async get(path) {
+        const r = await fetch(`${DOCS}/${path}?transaction=${encodeURIComponent(transaction)}`, { headers });
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error(`Firestore read ${path} failed: ${r.status} (server uid ${cached?.uid}) ${await r.text()}`);
+        const d = await r.json();
+        return Object.fromEntries(Object.entries(d.fields || {}).map(([k, v]) => [k, dec(v)]));
+      },
+      patch(path, fields) {
+        writes.push({
+          update: { name: `${DOC_NAME}/${path}`, fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, enc(v)])) },
+          updateMask: { fieldPaths: Object.keys(fields).map(f => /^[A-Za-z_][A-Za-z0-9_]*$/.test(f) ? f : `\`${f}\``) },
+        });
+      },
+      create(path, fields) {
+        writes.push({
+          update: { name: `${DOC_NAME}/${path}`, fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, enc(v)])) },
+          currentDocument: { exists: false },
+        });
+      },
+    };
+    let result;
+    try {
+      result = await fn(tx);
+    } catch (e) {
+      await fetch(`${DOCS}:rollback`, { method: 'POST', headers, body: JSON.stringify({ transaction }) }).catch(() => {});
+      throw e;
+    }
+    if (!writes.length) {
+      await fetch(`${DOCS}:rollback`, { method: 'POST', headers, body: JSON.stringify({ transaction }) }).catch(() => {});
+      return result;
+    }
+    const commit = await fetch(`${DOCS}:commit`, { method: 'POST', headers, body: JSON.stringify({ writes, transaction }) });
+    if (commit.ok) return result;
+    const text = await commit.text();
+    if (commit.status === 409 && attempt < attempts) continue; // ABORTED: contention, retry
+    throw new Error(`Firestore commit failed: ${commit.status} (server uid ${cached?.uid}) ${text}`);
+  }
+}
+
 // ── Payment secrets ──
 // farrierSecrets/{uid} is denied to every browser by the rules; only the server user
 // can read or write it. Shaped to hold other processors (e.g. Stax) alongside Stripe.

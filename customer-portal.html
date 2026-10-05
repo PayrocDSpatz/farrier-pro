@@ -13,6 +13,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="/api-auth.js"></script>
+  <script src="/lib/pricing.js"></script>
 
   <!-- React -->
   <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
@@ -1762,7 +1763,7 @@
           {(() => {
             const selected = Object.values(selectedInvoices).filter(Boolean);
             if (selected.length === 0) return null;
-            const total = selected.reduce((sum, inv) => sum + (inv.total || 0), 0);
+            const total = selected.reduce((sum, inv) => sum + FarriPricing.getChargeCents(inv, 'card_link'), 0) / 100;
             return (
               <div style={{position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--primary)', color: '#fff', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1000, boxShadow: '0 -4px 20px rgba(0,0,0,0.2)'}}>
                 <div>
@@ -1879,7 +1880,8 @@
             </div>
             <div style={{background: 'var(--background)', padding: '1.25rem', borderRadius: '10px', marginBottom: '1.5rem'}}>
               <div style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.25rem'}}>{invoice.invoiceNumber}</div>
-              <div style={{fontSize: '2.2rem', fontWeight: 800, color: 'var(--primary)', fontFamily: "'Outfit', sans-serif"}}>${invoice.total?.toFixed(2)}</div>
+              <div style={{fontSize: '2.2rem', fontWeight: 800, color: 'var(--primary)', fontFamily: "'Outfit', sans-serif"}}>{FarriPricing.money(FarriPricing.getChargeCents(invoice, 'card_link'))}</div>
+              {FarriPricing.dualPrices(invoice).card !== null && <div style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>{FarriPricing.dualPriceText(invoice)}</div>}
               {invoice.customerName && <div style={{fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>{invoice.customerName}</div>}
             </div>
             {error && <div className="alert alert-error" style={{marginBottom: '1rem'}}>{error}</div>}
@@ -1898,7 +1900,7 @@
     function MultiPayModal({ invoices, stripePublishableKey, onClose, onSuccess }) {
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
-      const total = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+      const total = invoices.reduce((sum, inv) => sum + FarriPricing.getChargeCents(inv, 'card_link'), 0) / 100;
       const invoiceNumbers = invoices.map(i => i.invoiceNumber).join(', ');
 
       const handleToken = async (paymentMethod) => {
@@ -1943,11 +1945,11 @@
               {invoices.map(inv => (
                 <div key={inv.id} style={{display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)'}}>
                   <span style={{color: 'var(--text-muted)'}}>{inv.invoiceNumber}</span>
-                  <span style={{fontWeight: 600}}>${inv.total?.toFixed(2)}</span>
+                  <span style={{fontWeight: 600}}>{FarriPricing.money(FarriPricing.getChargeCents(inv, 'card_link'))}</span>
                 </div>
               ))}
               <div style={{display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', fontWeight: 700, fontSize: '1rem'}}>
-                <span>Total</span>
+                <span>{invoices.some(i => FarriPricing.dualPrices(i).card !== null) ? 'Total (card price)' : 'Total'}</span>
                 <span style={{color: 'var(--primary)'}}>${total.toFixed(2)}</span>
               </div>
             </div>

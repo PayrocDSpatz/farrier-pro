@@ -1,6 +1,14 @@
 import Stripe from 'stripe';
 import crypto from 'crypto';
+import '../lib/pricing.js';
 import { callerFromRequest, getDoc, patchDoc, listDocs, getStripeSecretKey, setStripeSecretKey, getGoogleRefreshToken, serverAuth } from './_lib/firebase-rest.js';
+import {
+  applyPayment, cardDetails, closeOnlinePayment, createCheckoutSession, recordCheckoutSession,
+  removeWebhook, sendUpdatedPayLink, setupWebhook, PaymentError,
+} from './_lib/invoice-payments.js';
+
+const P = globalThis.FarriPricing;
+const SECRET_KEY_RE = /^(sk|rk)_(live|test)_/;
 
 // May run one-off maintenance actions (same list as the sponsorBanners rule).
 const ADMIN_EMAILS = ['david@dasconsulting.com', 'david@dasdigitalai.com'];
@@ -14,12 +22,16 @@ export const config = { api: { bodyParser: false } };
 //
 // Who can call what:
 //   farrier (signed in)   → status, connect, disconnect, charge, refund, payment_link, deactivate_link,
-//                           manager_password_status, set_manager_password
+//                           record_payment, waive_card_price, manager_password_status, set_manager_password
 //   customer (portal)     → customer_charge  (amount computed here from their own unpaid invoices)
 //   admin                 → migrate_all      (one-time: move legacy Stripe keys + Google tokens off public profiles)
 //                           reset_manager_password (clears a farrier's forgotten manager password)
 //   anyone                → confirm_session  (only marks paid after Stripe confirms the session)
-//   Stripe                → webhook          (signature required)
+//   Stripe                → webhook          (legacy platform webhook, signature required; farriers'
+//                                               own accounts post to api/stripe/webhook/[farrierId].js)
+//
+// Amounts are always worked out here from the invoice (lib/pricing.js), never taken from
+// the browser — see api/_lib/invoice-payments.js for how payments are recorded.
 
 async function getRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -28,6 +40,13 @@ async function getRawBody(req) {
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
+}
+
+async function ownInvoice(invoiceId, farrierId) {
+  if (!invoiceId) throw new PaymentError('Missing invoiceId.');
+  const invoice = await getDoc(`invoices/${invoiceId}`);
+  if (!invoice || invoice.farrierId !== farrierId) throw new PaymentError('Invoice not found.', 404);
+  return invoice;
 }
 
 async function markInvoicePaid(invoiceId, details) {
@@ -53,15 +72,6 @@ function checkManagerPassword(password, stored) {
   if (scheme !== 'scrypt' || !saltHex || !hashHex) return false;
   const actual = crypto.scryptSync(String(password || ''), Buffer.from(saltHex, 'hex'), 32);
   return crypto.timingSafeEqual(actual, Buffer.from(hashHex, 'hex'));
-}
-
-async function cardDetails(stripe, paymentIntentId) {
-  try {
-    const charges = await stripe.charges.list({ payment_intent: paymentIntentId, limit: 1 });
-    const card = charges.data[0]?.payment_method_details?.card;
-    const brand = card?.brand ? card.brand.charAt(0).toUpperCase() + card.brand.slice(1) : 'Card';
-    return { last4: card?.last4 || '', brand };
-  } catch (e) { return { last4: '', brand: 'Card' }; }
 }
 
 async function sendPaidSms(to, name, amount, invoiceNumber) {
@@ -139,16 +149,8 @@ export default async function handler(req, res) {
       if (!key) return res.status(400).json({ success: false, error: 'Farrier payments not configured.' });
       const stripe = new Stripe(key);
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      let linkedInvoiceId = session.metadata?.invoiceId || '';
-      if (!linkedInvoiceId && session.payment_link) {
-        const link = await stripe.paymentLinks.retrieve(session.payment_link);
-        linkedInvoiceId = link.metadata?.invoiceId || '';
-      }
-      if (session.payment_status !== 'paid' || linkedInvoiceId !== invoiceId) {
-        return res.status(400).json({ success: false, error: 'Payment not confirmed by Stripe.' });
-      }
-      const card = session.payment_intent ? await cardDetails(stripe, session.payment_intent) : {};
-      await markInvoicePaid(invoiceId, { paymentIntentId: session.payment_intent || '', sessionId, paidVia: 'stripe_link', ...card });
+      const result = await recordCheckoutSession(stripe, invoice.farrierId, session);
+      if (result.invoiceId !== invoiceId) return res.status(400).json({ success: false, error: 'Payment not confirmed by Stripe.' });
       return res.status(200).json({ success: true });
     }
 
@@ -171,7 +173,8 @@ export default async function handler(req, res) {
       const key = await getStripeSecretKey(farrierId);
       if (!key) return res.status(400).json({ success: false, error: 'Payment not configured. Please contact your farrier.' });
       const stripe = new Stripe(key);
-      const amountCents = Math.round(invoices.reduce((s, i) => s + (Number(i.total) || 0), 0) * 100);
+      for (const inv of invoices) { inv.cashCents = P.balanceCents(inv); inv.chargeCents = P.getChargeCents(inv, 'card_link', inv.cashCents); }
+      const amountCents = invoices.reduce((s, i) => s + i.chargeCents, 0);
       if (amountCents <= 0) return res.status(400).json({ success: false, error: 'Nothing to pay.' });
       const numbers = invoices.map(i => i.invoiceNumber).filter(Boolean).join(', ');
       const pi = await stripe.paymentIntents.create({
@@ -184,8 +187,13 @@ export default async function handler(req, res) {
       if (pi.status !== 'succeeded') return res.status(400).json({ success: false, error: `Payment status: ${pi.status}` });
       const card = await cardDetails(stripe, pi.id);
       for (const inv of invoices) {
-        await markInvoicePaid(inv.id, { paymentIntentId: pi.id, paidVia: invoices.length > 1 ? 'stripe_card_multi' : 'stripe_card', ...card });
-        if (inv.paymentLinkId) await stripe.paymentLinks.update(inv.paymentLinkId, { active: false }).catch(() => {});
+        await applyPayment(inv.id, {
+          paymentId: invoices.length > 1 ? `${pi.id}_${inv.id}` : pi.id, method: 'card_link',
+          amountCents: inv.chargeCents, creditCents: inv.cashCents, source: 'stripe',
+          paymentIntentId: pi.id, last4: card.last4, brand: card.brand,
+          paidVia: invoices.length > 1 ? 'stripe_card_multi' : 'stripe_card', recordedBy: caller.email,
+        });
+        await closeOnlinePayment(stripe, inv);
       }
       return res.status(200).json({ success: true, transactionId: pi.id, amount: amountCents / 100, ...card });
     }
@@ -218,7 +226,7 @@ export default async function handler(req, res) {
 
     if (action === 'connect' || action === 'validate') {
       const { stripeSecretKey } = body;
-      if (!stripeSecretKey || !/^(sk|rk)_/.test(stripeSecretKey)) return res.status(400).json({ success: false, error: 'Secret key must start with sk_ or rk_' });
+      if (!stripeSecretKey || !SECRET_KEY_RE.test(stripeSecretKey)) return res.status(400).json({ success: false, error: 'Secret key must start with sk_live_, sk_test_, rk_live_ or rk_test_' });
       const stripe = new Stripe(stripeSecretKey);
       let accountName = 'Stripe Account';
       try {
@@ -230,16 +238,41 @@ export default async function handler(req, res) {
         if (e.type !== 'StripePermissionError') throw e;
         await stripe.paymentIntents.list({ limit: 1 });
       }
+      // Each farrier's Stripe account has to tell us when an invoice is paid online.
+      await setupWebhook(stripe, farrierId);
       await setStripeSecretKey(farrierId, stripeSecretKey);
       return res.status(200).json({ success: true, accountName });
     }
     if (action === 'disconnect') {
+      const oldKey = await getStripeSecretKey(farrierId);
+      await removeWebhook(oldKey ? new Stripe(oldKey) : null, farrierId);
       await setStripeSecretKey(farrierId, '');
       return res.status(200).json({ success: true });
     }
     if (action === 'status') {
       const key = await getStripeSecretKey(farrierId); // also migrates a legacy key off the profile
-      return res.status(200).json({ success: true, connected: !!key, mode: /^(sk|rk)_live_/.test(key) ? 'live' : key ? 'test' : '' });
+      const secrets = key ? await getDoc(`farrierSecrets/${farrierId}`) : null;
+      return res.status(200).json({ success: true, connected: !!key, mode: /^(sk|rk)_live_/.test(key) ? 'live' : key ? 'test' : '', webhookConfigured: !!secrets?.stripeWebhookSecret });
+    }
+
+    // ── Record a payment taken outside FarriTech (cash, check, ACH, Zelle, Venmo, card terminal, other) ──
+    // Works without Stripe connected; if there is an open online checkout it gets closed so
+    // the customer can't pay twice.
+    if (action === 'record_payment') {
+      const { invoiceId, method, amount, reference = '', datePaid } = body;
+      if (!P.MANUAL_METHODS[method]) return res.status(400).json({ success: false, error: 'Pick a payment method.' });
+      const invoice = await ownInvoice(invoiceId, farrierId);
+      const amountCents = P.toCents(amount);
+      if (amountCents <= 0) return res.status(400).json({ success: false, error: 'Enter a valid amount.' });
+      const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(String(datePaid || '')) ? `${datePaid}T17:00:00Z` : datePaid;
+      const paidDate = dateStr && !isNaN(new Date(dateStr)) ? new Date(dateStr) : null;
+      const result = await applyPayment(invoiceId, {
+        method, amountCents,
+        reference: String(reference).slice(0, 120), recordedBy: caller.email || caller.uid, paidDate,
+      });
+      const key = await getStripeSecretKey(farrierId);
+      if (key) await closeOnlinePayment(new Stripe(key), invoice);
+      return res.status(200).json({ success: true, status: result.status, balance: (result.balanceCents || 0) / 100 });
     }
 
     // ── Manager password (Settings → Manager Password): guards refunds ──
@@ -262,11 +295,21 @@ export default async function handler(req, res) {
     if (!key) return res.status(400).json({ success: false, error: 'No Stripe account connected. Connect Stripe in Settings → Stripe Payments.' });
     const stripe = new Stripe(key);
 
+    // Keyed card payment. `applyAmount` is how much of the (cash-price) balance to pay off —
+    // omit it to pay the whole balance. The card price is added here, then the payment is
+    // recorded on the invoice before we answer, so the browser never has to write it.
     if (action === 'charge') {
-      const { paymentMethodId, amount, currency = 'usd', invoiceId, invoiceNumber, customerEmail, customerName } = body;
-      if (!paymentMethodId || !amount) return res.status(400).json({ success: false, error: 'Missing paymentMethodId or amount.' });
-      const amountCents = Math.round(parseFloat(amount) * 100);
-      if (!amountCents || amountCents <= 0) return res.status(400).json({ success: false, error: 'Invalid amount.' });
+      const { paymentMethodId, invoiceId, applyAmount } = body;
+      if (!paymentMethodId || !invoiceId) return res.status(400).json({ success: false, error: 'Missing paymentMethodId or invoiceId.' });
+      const invoice = await ownInvoice(invoiceId, farrierId);
+      if (invoice.status === 'paid' || invoice.status === 'cancelled') return res.status(400).json({ success: false, error: `This invoice is ${invoice.status}.` });
+      const balance = P.balanceCents(invoice);
+      const cashCents = applyAmount ? Math.min(P.toCents(applyAmount), balance) : balance;
+      if (cashCents <= 0) return res.status(400).json({ success: false, error: 'Nothing is owed on this invoice.' });
+      const amountCents = P.getChargeCents(invoice, 'card_keyed', cashCents);
+      const priceType = amountCents !== cashCents ? 'card' : 'cash';
+      const invoiceNumber = invoice.invoiceNumber || '';
+      const customerEmail = invoice.customerEmail || '', customerName = invoice.customerName || '';
       let customerId;
       if (customerEmail) {
         const existing = await stripe.customers.list({ email: customerEmail, limit: 1 });
@@ -274,18 +317,21 @@ export default async function handler(req, res) {
       }
       if (customerId) await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
       const pi = await stripe.paymentIntents.create({
-        amount: amountCents, currency, payment_method: paymentMethodId,
+        amount: amountCents, currency: 'usd', payment_method: paymentMethodId,
         customer: customerId || undefined, confirm: true,
         automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
         description: `FarriTech Invoice #${invoiceNumber}`,
-        metadata: { farrierId, invoiceId: invoiceId || '', invoiceNumber: invoiceNumber || '' },
+        metadata: { farrierId, invoiceId, invoiceNumber, method: 'card_keyed', priceType, baseCents: String(cashCents), cardCents: String(amountCents) },
         receipt_email: customerEmail || undefined,
       });
-      if (pi.status === 'succeeded') {
-        const card = await cardDetails(stripe, pi.id);
-        return res.status(200).json({ success: true, transactionId: pi.id, ...card });
-      }
-      return res.status(400).json({ success: false, error: `Payment status: ${pi.status}` });
+      if (pi.status !== 'succeeded') return res.status(400).json({ success: false, error: `Payment status: ${pi.status}` });
+      const card = await cardDetails(stripe, pi.id);
+      const result = await applyPayment(invoiceId, {
+        paymentId: pi.id, method: 'card_keyed', amountCents, creditCents: cashCents, source: 'stripe',
+        paymentIntentId: pi.id, last4: card.last4, brand: card.brand, paidVia: 'stripe_card', recordedBy: caller.email || caller.uid,
+      });
+      await closeOnlinePayment(stripe, invoice);
+      return res.status(200).json({ success: true, transactionId: pi.id, amount: amountCents / 100, status: result.status, ...card });
     }
 
     if (action === 'refund') {
@@ -299,24 +345,37 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, refundId: refund.id, amount: refund.amount / 100 });
     }
 
+    // Online pay link for an invoice: a Checkout Session for the balance (card price unless
+    // waived) behind the permanent https://app.farritech.com/pay/{invoiceId} link.
     if (action === 'payment_link') {
-      const { amount, invoiceId, invoiceNumber, customerEmail } = body;
-      if (!amount || !invoiceId) return res.status(400).json({ success: false, error: 'Missing amount or invoiceId.' });
-      const amountCents = Math.round(parseFloat(amount) * 100);
-      if (!amountCents || amountCents <= 0) return res.status(400).json({ success: false, error: 'Invalid amount.' });
-      const price = await stripe.prices.create({
-        unit_amount: amountCents, currency: 'usd',
-        product_data: { name: `Invoice #${invoiceNumber || invoiceId}`, metadata: { farrierId, invoiceId } },
-      });
-      const paymentLink = await stripe.paymentLinks.create({
-        line_items: [{ price: price.id, quantity: 1 }],
-        after_completion: { type: 'redirect', redirect: { url: `https://app.farritech.com/customer-portal.html?invoice_id=${invoiceId}&session_id={CHECKOUT_SESSION_ID}` } },
-        metadata: { farrierId, invoiceId, invoiceNumber: invoiceNumber || '' },
-        invoice_creation: { enabled: false },
-        restrictions: { completed_sessions: { limit: 1 } },
-        ...(customerEmail ? { customer_creation: 'always' } : {}),
-      });
-      return res.status(200).json({ success: true, paymentUrl: paymentLink.url, paymentLinkId: paymentLink.id });
+      const { invoiceId } = body;
+      const invoice = await ownInvoice(invoiceId, farrierId);
+      if (invoice.status === 'paid' || invoice.status === 'cancelled') return res.status(400).json({ success: false, error: `This invoice is ${invoice.status}.` });
+      const { paymentUrl, chargeCents, cashCents, session } = await createCheckoutSession(stripe, invoiceId, invoice);
+      return res.status(200).json({ success: true, paymentUrl, checkoutSessionId: session.id, amount: chargeCents / 100, cashAmount: cashCents / 100 });
+    }
+
+    // "Waive card price & resend" (waive: true) and "Undo waiver" (waive: false).
+    if (action === 'waive_card_price') {
+      const { invoiceId, waive = true } = body;
+      const invoice = await ownInvoice(invoiceId, farrierId);
+      if (invoice.status === 'paid' || invoice.status === 'cancelled') return res.status(400).json({ success: false, error: `This invoice is ${invoice.status}.` });
+      if (invoice.checkoutSessionId) {
+        const current = await stripe.checkout.sessions.retrieve(invoice.checkoutSessionId).catch(() => null);
+        if (current?.status === 'complete') {
+          if (current.payment_status === 'paid') await recordCheckoutSession(stripe, farrierId, current);
+          return res.status(409).json({ success: false, error: 'Customer already paid by card.' });
+        }
+      }
+      const changes = waive
+        ? { cardFeeWaived: true, cardFeeWaivedBy: caller.email || caller.uid, cardFeeWaivedAt: new Date() }
+        : { cardFeeWaived: false, cardFeeWaivedBy: '', cardFeeWaivedAt: null };
+      await patchDoc(`invoices/${invoiceId}`, changes);
+      const updated = { ...invoice, ...changes };
+      // createCheckoutSession expires the open session before making the new one.
+      const { paymentUrl, chargeCents } = await createCheckoutSession(stripe, invoiceId, updated);
+      const sentVia = await sendUpdatedPayLink(updated, invoiceId, chargeCents);
+      return res.status(200).json({ success: true, paymentUrl, amount: chargeCents / 100, sentVia });
     }
 
     if (action === 'deactivate_link') {
@@ -329,6 +388,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, error: 'Invalid action.' });
   } catch (err) {
     console.error('stripe-payment error:', err);
+    if (err instanceof PaymentError) return res.status(err.status).json({ success: false, error: err.message });
     return res.status(400).json({ success: false, error: err?.raw?.message || err?.message || 'Payment processing failed' });
   }
 }

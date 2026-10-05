@@ -25,6 +25,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
   <script src="/inventory-catalog.js"></script>
   <script src="/api-auth.js"></script>
+  <script src="/lib/pricing.js"></script>
   
   <!-- Google API for Calendar -->
   <script src="https://apis.google.com/js/api.js"></script>
@@ -1628,7 +1629,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         const invDate = formatDate_(invoice.createdAt) || formatDate_(new Date());
         // Calculate real status from payments
         const _paidSoFar = invoice.paidAmount || (invoice.payments||[]).reduce((s,p)=>s+(p.amount||0),0);
-        const _balDue = Math.max(0, (invoice.total||0) - _paidSoFar);
+        const _balDue = invoice.status === 'paid' ? 0 : FarriPricing.balanceCents({ ...invoice, status: 'outstanding' }) / 100;
         const invStatus = _balDue <= 0 && _paidSoFar > 0 ? 'paid' : (_paidSoFar > 0 ? 'partial' : safeText_(invoice.status || 'outstanding'));
 
         doc.setFont("helvetica", "bold");
@@ -1758,6 +1759,15 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         doc.text("TOTAL", pageW - 140, y, { align: "right" });
         doc.text(total, pageW - 48, y, { align: "right" });
 
+        // Dual pricing: show both prices for what's owed
+        const _prices = FarriPricing.dualPrices(invoice);
+        if (_prices.card !== null) {
+          y += 18;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(10);
+          doc.text(`Card price ${FarriPricing.money(_prices.card)}  /  Cash or check ${FarriPricing.money(_prices.cash)}`, pageW - 48, y, { align: "right" });
+        }
+
         // Clickable "Pay Now" link — the QR code above only helps if the reader can
         // scan it with a second device; this covers the common case of someone
         // reading the emailed/attached PDF on the same screen they'd pay from.
@@ -1782,7 +1792,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         // Payment History
         const payments = Array.isArray(invoice.payments) ? invoice.payments : [];
         const paidAmount = invoice.paidAmount || payments.reduce((s,p) => s + (p.amount||0), 0);
-        const balanceDue = Math.max(0, (invoice.total || 0) - paidAmount);
+        const balanceDue = invoice.status === 'paid' ? 0 : FarriPricing.balanceCents({ ...invoice, status: 'outstanding' }) / 100;
 
         // Build effective payments list — prefer payments[] array,
         // but fall back to top-level paidAt/cardLast4 for Stripe online payments
@@ -1901,8 +1911,9 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         const firstName = customerName.split(" ")[0] || "there";
         const total = Number(invoice.total || 0).toFixed(2);
         const paidSoFar = invoice.paidAmount || (invoice.payments||[]).reduce((s,p)=>s+(p.amount||0),0);
-        const balanceDue = Math.max(0, (invoice.total||0) - paidSoFar).toFixed(2);
+        const balanceDue = (invoice.status === 'paid' ? 0 : FarriPricing.balanceCents({ ...invoice, status: 'outstanding' }) / 100).toFixed(2);
         const isPaid = parseFloat(balanceDue) <= 0;
+        const prices = FarriPricing.dualPrices(invoice);
 
         // Portal pay link — direct to customer portal (they log in and see this invoice)
         const portalUrl = `${window.location.origin}/customer-portal.html`;
@@ -1940,6 +1951,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         <tr><td style="padding:4px 0;color:#6b7280;">Total</td><td><strong>$${total}</strong></td></tr>
         ${paidSoFar > 0 ? `<tr><td style="padding:4px 0;color:#6b7280;">Paid</td><td style="color:#10b981;"><strong>$${Number(paidSoFar).toFixed(2)}</strong></td></tr>` : ""}
         <tr><td style="padding:4px 0;color:#6b7280;">Balance Due</td><td><strong style="color:${isPaid ? '#10b981' : '#dc2626'};">${isPaid ? "Paid in Full" : "$" + balanceDue}</strong></td></tr>
+        ${!isPaid && prices.card !== null ? `<tr><td style="padding:4px 0;color:#6b7280;">Price</td><td>Card price <strong>${FarriPricing.money(prices.card)}</strong> / Cash or check <strong>${FarriPricing.money(prices.cash)}</strong></td></tr>` : ""}
       </table>
 
       ${serviceLines ? `
@@ -1956,7 +1968,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
     ${!isPaid ? `
     <div style="text-align:center;margin:28px 0;">
       <a href="${payUrl}" style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;padding:14px 36px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:16px;letter-spacing:0.3px;">
-        💳 Pay Invoice — $${balanceDue}
+        💳 Pay Invoice — ${prices.card !== null ? FarriPricing.money(prices.card) : "$" + balanceDue}
       </a>
       <p style="color:#9ca3af;font-size:12px;margin-top:12px;">Or visit: <a href="${portalUrl}" style="color:#6b7280;">${portalUrl}</a></p>
     </div>` : `
@@ -11935,6 +11947,31 @@ function CalendarView({ userId }) {
       const [customEndDate, setCustomEndDate] = useState('');
       const [openInvoiceMenu, setOpenInvoiceMenu] = useState(null);
 
+      // "Waive card price & resend" / "Undo waiver": the server closes the open checkout,
+      // flips invoice.cardFeeWaived, makes a new checkout at the new price and texts/emails
+      // the customer the updated link.
+      const waiveCardPrice = async (invoice, waive) => {
+        const balance = FarriPricing.balanceCents(invoice);
+        const newAmount = waive ? balance : FarriPricing.cardCents(balance, FarriPricing.invoiceRate(invoice));
+        const sendTo = [invoice.customerPhone && 'text', invoice.customerEmail && 'email'].filter(Boolean).join(' and ');
+        const question = waive
+          ? `Waive the card price on Invoice #${invoice.invoiceNumber}?\n\nThe customer can pay ${FarriPricing.money(newAmount)} by card.`
+          : `Put the card price back on Invoice #${invoice.invoiceNumber}?\n\nCard payments will be ${FarriPricing.money(newAmount)}.`;
+        if (!confirm(question + (sendTo ? `\n\nThe updated payment link will be sent by ${sendTo}.` : '\n\nThis customer has no phone or email on file — nothing will be sent.'))) return;
+        try {
+          const res = await fetch('/api/stripe-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'waive_card_price', invoiceId: invoice.id, waive }),
+          });
+          const data = await res.json();
+          if (!data.success) { alert('❌ ' + (data.error || 'Could not update the payment link.')); return; }
+          alert(`✅ Payment link updated to $${Number(data.amount).toFixed(2)}.` + (data.sentVia?.length ? ` Sent by ${data.sentVia.join(' and ')}.` : ' Nothing was sent.'));
+        } catch (e) {
+          alert('❌ Could not update the payment link: ' + e.message);
+        }
+      };
+
       useEffect(() => {
         const handler = (e) => { if (!e.target.closest('.invoice-more-menu')) setOpenInvoiceMenu(null); };
         document.addEventListener('click', handler);
@@ -12301,7 +12338,16 @@ function CalendarView({ userId }) {
                       </div>
                       <div className="appointment-details">
                         Amount: ${invoice.total?.toFixed(2)} • Created: {invoice.createdAt?.toDate().toLocaleDateString()}
-                        {invoice.status === 'partial' && (() => { const paid = invoice.paidAmount || (invoice.payments||[]).reduce((s,p)=>s+(p.amount||0),0); const bal = Math.max(0,(invoice.total||0)-paid); return <> • <strong style={{color:'#d97706'}}>Balance Due: ${bal.toFixed(2)}</strong></>; })()}
+                        {invoice.status === 'partial' && <> • <strong style={{color:'#d97706'}}>Balance Due: {FarriPricing.money(FarriPricing.balanceCents(invoice))}</strong></>}
+                        {(invoice.status === 'outstanding' || invoice.status === 'partial') && FarriPricing.dualPrices(invoice).card !== null && (
+                          <><br/><span style={{color: 'var(--text)'}}>{FarriPricing.dualPriceText(invoice)}</span></>
+                        )}
+                        {(invoice.status === 'outstanding' || invoice.status === 'partial') && FarriPricing.invoiceRate(invoice) > 0 && invoice.cardFeeWaived && (
+                          <><br/><span style={{color: 'var(--text-muted)'}}>Card price waived — card payments charged {FarriPricing.money(FarriPricing.balanceCents(invoice))}</span></>
+                        )}
+                        {invoice.paymentNeedsReview && (
+                          <><br/><span style={{color: '#dc2626'}}>⚠️ A card payment came in after this invoice was already settled — check Stripe and refund it if needed.</span></>
+                        )}
                         {invoice.status === 'paid' && invoice.paidAt && (
                           <><br/>Paid: {invoice.paidAt?.toDate().toLocaleDateString()} 
                           {invoice.cardLast4 && <> • {invoice.cardType || 'Card'} {invoice.cardLast4}</>}
@@ -12323,7 +12369,7 @@ function CalendarView({ userId }) {
                         invoice.status === 'partial' ? 'warning' :
                         'warning'
                       }`}>
-                        {invoice.status === 'partial' ? `partial ($${((invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0)).toFixed(2)} paid)` : invoice.status}
+                        {invoice.status === 'partial' ? `partial (${FarriPricing.money(FarriPricing.toCents(invoice.paidAmount ?? (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0)))} paid)` : invoice.status}
                       </span>
                       {(invoice.status === 'outstanding' || invoice.status === 'partial') && (
                         <>
@@ -12401,11 +12447,13 @@ function CalendarView({ userId }) {
                               overflow: 'hidden'
                             }}>
                               {isOpen && item('✏️ Edit', () => setEditingInvoice(invoice))}
+                              {isOpen && FarriPricing.invoiceRate(invoice) > 0 && userProfile?.stripePublishableKey && !invoice.cardFeeWaived && item('🏷️ Waive card price & resend', () => waiveCardPrice(invoice, true))}
+                              {isOpen && userProfile?.stripePublishableKey && invoice.cardFeeWaived && item('↩️ Undo card price waiver', () => waiveCardPrice(invoice, false))}
                               {item('✉️ Email', () => emailInvoiceLink(invoice, userProfile))}
                               {invoice.customerPhone && item('📱 SMS', async () => {
                                 const bizName = userProfile?.businessName || 'Your Farrier';
                                 const payLink = invoice.paymentUrl || '';
-                                const msg = `Hi ${invoice.customerName}, you have invoice #${invoice.invoiceNumber} for $${invoice.total?.toFixed(2)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''} Reply STOP to opt out.`;
+                                const msg = `Hi ${invoice.customerName}, you have invoice #${invoice.invoiceNumber} for ${FarriPricing.dualPriceText(invoice)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''} Reply STOP to opt out.`;
                                 try {
                                   const res = await fetch('/api/send-sms', {
                                     method: 'POST',
@@ -12738,16 +12786,23 @@ function CalendarView({ userId }) {
       );
     }
 
+    // Keyed card payment. The farrier enters how much of the balance to pay (cash price);
+    // the card price for that amount is shown before charging. The server works out the
+    // same amount, charges it and records the payment on the invoice.
     function PaymentModal({ invoice, onClose, onPaymentSuccess, userProfile }) {
-      const paidSoFar = (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0);
-      const remaining = Math.max(0, (invoice.total || 0) - paidSoFar);
-      const [chargeAmount, setChargeAmount] = useState(remaining.toFixed(2));
+      const paidSoFar = FarriPricing.toCents(invoice.paidAmount ?? (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0)) / 100;
+      const remaining = FarriPricing.balanceCents(invoice) / 100;
+      const [applyAmount, setApplyAmount] = useState(remaining.toFixed(2));
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
       const [stripeReady, setStripeReady] = useState(false);
       const cardElementRef = React.useRef(null);
       const stripeRef = React.useRef(null);
       const cardRef = React.useRef(null);
+
+      const applyCents = Math.min(FarriPricing.toCents(applyAmount), FarriPricing.balanceCents(invoice));
+      const chargeCents = FarriPricing.getChargeCents(invoice, 'card_keyed', applyCents);
+      const hasCardPrice = chargeCents !== applyCents;
 
       // The secret key lives only on the server; a publishable key means Stripe is connected.
       const publishableKey = userProfile?.stripePublishableKey || '';
@@ -12777,13 +12832,10 @@ function CalendarView({ userId }) {
 
       const handlePayment = async () => {
         if (!hasStripe) return;
+        if (!applyCents || applyCents <= 0) { setError('Please enter a valid amount.'); return; }
         setProcessing(true);
         setError('');
         try {
-          const amt = parseFloat(chargeAmount);
-          if (!amt || amt <= 0) { setError('Please enter a valid amount.'); setProcessing(false); return; }
-
-          // Create payment method from card element
           const { paymentMethod, error: pmError } = await stripeRef.current.createPaymentMethod({
             type: 'card',
             card: cardRef.current,
@@ -12795,49 +12847,23 @@ function CalendarView({ userId }) {
 
           if (pmError) { setError(pmError.message); setProcessing(false); return; }
 
-          // Charge via our API — the server uses this farrier's Stripe key (api-auth.js sends who we are)
+          // The server prices and charges it with this farrier's Stripe key, then records
+          // the payment on the invoice (api-auth.js sends who we are).
           const res = await fetch('/api/stripe-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               action: 'charge',
               paymentMethodId: paymentMethod.id,
-              amount: amt,
-              farrierId: invoice.farrierId,
               invoiceId: invoice.id,
-              invoiceNumber: invoice.invoiceNumber,
-              customerEmail: invoice.customerEmail || '',
-              customerName: invoice.customerName || '',
+              applyAmount: applyCents / 100,
             })
           });
 
           const result = await res.json();
 
           if (result.success) {
-            if (db) {
-              const freshDoc = await db.collection('invoices').doc(invoice.id).get();
-              const freshData = freshDoc.exists ? freshDoc.data() : {};
-              const existingPayments = freshData.payments || [];
-              const newPayment = {
-                amount: amt,
-                method: 'credit_card',
-                memo: result.last4 ? `${result.brand || 'Card'} ending ${result.last4}` : 'Credit card',
-                date: new Date().toISOString(),
-                transactionId: result.transactionId
-              };
-              const allPayments = [...existingPayments, newPayment];
-              const totalPaid = allPayments.reduce((s,p) => s + (p.amount||0), 0);
-              const newStatus = totalPaid >= invoice.total ? 'paid' : 'partial';
-              await db.collection('invoices').doc(invoice.id).update({
-                status: newStatus,
-                payments: allPayments,
-                paidAmount: totalPaid,
-                balanceDue: Math.max(0, invoice.total - totalPaid),
-                paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null),
-                transactionId: result.transactionId
-              });
-            }
-            alert('✅ Payment successful!');
+            alert(`✅ Payment of $${Number(result.amount).toFixed(2)} successful!`);
             onPaymentSuccess();
           } else {
             setError(result.error || 'Payment failed. Please try again.');
@@ -12862,6 +12888,9 @@ function CalendarView({ userId }) {
                 Total: ${invoice.total?.toFixed(2)}
                 {paidSoFar > 0 && <> • Paid: ${paidSoFar.toFixed(2)} • <strong>Balance: ${remaining.toFixed(2)}</strong></>}
               </div>
+              {FarriPricing.dualPrices(invoice).card !== null && (
+                <div style={{fontSize: '0.875rem', color: '#666', marginTop: '0.25rem'}}>{FarriPricing.dualPriceText(invoice)}</div>
+              )}
             </div>
 
             {!hasStripe ? (
@@ -12875,14 +12904,20 @@ function CalendarView({ userId }) {
             ) : (
               <>
                 <div className="form-group">
-                  <label>Amount to Charge *</label>
+                  <label>Amount toward balance *</label>
                   <input
                     type="number"
                     step="0.01"
                     min="0.01"
-                    value={chargeAmount}
-                    onChange={(e) => setChargeAmount(e.target.value)}
+                    max={remaining}
+                    value={applyAmount}
+                    onChange={(e) => setApplyAmount(e.target.value)}
                   />
+                  {hasCardPrice && applyCents > 0 && (
+                    <div style={{fontSize: '0.85rem', marginTop: '0.35rem'}}>
+                      Card price: <strong>{FarriPricing.money(chargeCents)}</strong> <span style={{color: 'var(--text-muted)'}}>(cash or check price {FarriPricing.money(applyCents)})</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group">
@@ -12913,11 +12948,11 @@ function CalendarView({ userId }) {
                   <button
                     type="button"
                     className="btn btn-success"
-                    disabled={processing || !stripeReady}
+                    disabled={processing || !stripeReady || applyCents <= 0}
                     onClick={handlePayment}
                     style={{flex: 1}}
                   >
-                    {processing ? <span className="spinner"></span> : `Pay $${parseFloat(chargeAmount || 0).toFixed(2)}`}
+                    {processing ? <span className="spinner"></span> : `Charge ${FarriPricing.money(chargeCents)}`}
                   </button>
                 </div>
 
@@ -12932,15 +12967,22 @@ function CalendarView({ userId }) {
     }
 
 
+    // Record a payment taken outside FarriTech. The amount starts at the price for the
+    // chosen method (card price for "Card (outside terminal)", cash price otherwise) and
+    // can be lowered for a partial payment. The server records it and closes any open
+    // online checkout so the customer can't also pay by link.
     function ManualPaymentModal({ invoice, onClose, onPaymentRecorded }) {
-      const paidSoFar = (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0);
-      const remaining = Math.max(0, (invoice.total || 0) - paidSoFar);
-      const [amount, setAmount] = useState(remaining.toFixed(2));
+      const paidSoFar = FarriPricing.toCents(invoice.paidAmount ?? (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0)) / 100;
+      const remaining = FarriPricing.balanceCents(invoice) / 100;
+      const priceFor = (m) => (FarriPricing.getChargeCents(invoice, m) / 100).toFixed(2);
       const [method, setMethod] = useState('cash');
-      const [memo, setMemo] = useState('');
+      const [amount, setAmount] = useState(priceFor('cash'));
+      const [reference, setReference] = useState('');
       const [datePaid, setDatePaid] = useState(new Date().toISOString().split('T')[0]);
       const [processing, setProcessing] = useState(false);
       const [error, setError] = useState('');
+
+      const changeMethod = (m) => { setMethod(m); setAmount(priceFor(m)); };
 
       const handleRecord = async (e) => {
         e.preventDefault();
@@ -12949,28 +12991,16 @@ function CalendarView({ userId }) {
         setProcessing(true);
         setError('');
         try {
-          if (db) {
-            // Fetch fresh from Firestore to avoid stale payments array
-            const freshDoc = await db.collection('invoices').doc(invoice.id).get();
-            const freshData = freshDoc.exists ? freshDoc.data() : {};
-            const existingPayments = freshData.payments || [];
-            const newPayment = {
-              amount: amt,
-              method: method,
-              memo: memo,
-              date: new Date(datePaid).toISOString()
-            };
-            const allPayments = [...existingPayments, newPayment];
-            const totalPaid = allPayments.reduce((s,p) => s + (p.amount||0), 0);
-            const newStatus = totalPaid >= invoice.total ? 'paid' : 'partial';
-            await db.collection('invoices').doc(invoice.id).update({
-              status: newStatus,
-              payments: allPayments,
-              paidAmount: totalPaid,
-              balanceDue: Math.max(0, invoice.total - totalPaid),
-              paidAt: newStatus === 'paid' ? firebase.firestore.FieldValue.serverTimestamp() : (freshData.paidAt || null)
-            });
+          const res = await fetch('/api/stripe-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'record_payment', invoiceId: invoice.id, method, amount: amt, reference, datePaid }),
+          });
+          const data = await res.json();
+          if (data.success) {
             onPaymentRecorded();
+          } else {
+            setError(data.error || 'Failed to record payment. Please try again.');
           }
         } catch (err) {
           console.error('Error recording payment:', err);
@@ -12979,12 +13009,12 @@ function CalendarView({ userId }) {
         setProcessing(false);
       };
 
-      const methodLabels = { cash: '💵 Cash', check: '📝 Check', other: '🔄 Other' };
+      const referencePlaceholder = { check: 'Check #, e.g. 1042', ach: 'Confirmation #', zelle: 'Confirmation #', venmo: 'Venmo transaction ID', card_terminal: 'Last 4 or approval code' }[method] || 'Optional note';
 
       return (
         <div className="modal-overlay" onClick={onClose}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '480px'}}>
-            <h2 style={{marginBottom: '1.5rem'}}>💵 Record Manual Payment</h2>
+            <h2 style={{marginBottom: '1.5rem'}}>💵 Record Payment</h2>
 
             <div style={{background: 'var(--surface)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem'}}>
               <div style={{fontSize: '0.875rem', color: '#666', marginBottom: '0.25rem'}}>
@@ -12994,11 +13024,23 @@ function CalendarView({ userId }) {
                 Invoice Total: ${invoice.total?.toFixed(2)}
                 {paidSoFar > 0 && <> • Already Paid: ${paidSoFar.toFixed(2)} • <strong>Balance: ${remaining.toFixed(2)}</strong></>}
               </div>
+              {FarriPricing.dualPrices(invoice).card !== null && (
+                <div style={{fontSize: '0.875rem', color: '#666', marginTop: '0.25rem'}}>{FarriPricing.dualPriceText(invoice)}</div>
+              )}
             </div>
 
             {error && <div className="error-message" style={{marginBottom:'1rem'}}>{error}</div>}
 
             <form onSubmit={handleRecord}>
+              <div className="form-group">
+                <label>Payment Method *</label>
+                <select value={method} onChange={(e) => changeMethod(e.target.value)}>
+                  {Object.entries(FarriPricing.MANUAL_METHODS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="form-group">
                 <label>Amount Received *</label>
                 <input
@@ -13009,24 +13051,18 @@ function CalendarView({ userId }) {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                 />
+                <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
+                  {FarriPricing.isCardMethod(method) && FarriPricing.dualPrices(invoice).card !== null ? 'Card price' : 'Cash or check price'} for the balance — lower it for a partial payment.
+                </div>
               </div>
 
               <div className="form-group">
-                <label>Payment Method *</label>
-                <select value={method} onChange={(e) => setMethod(e.target.value)}>
-                  <option value="cash">💵 Cash</option>
-                  <option value="check">📝 Check</option>
-                  <option value="other">🔄 Other</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Memo / Note (optional)</label>
+                <label>Reference (optional)</label>
                 <input
                   type="text"
-                  value={memo}
-                  onChange={(e) => setMemo(e.target.value)}
-                  placeholder={method === 'check' ? 'e.g. Check #1042' : 'Optional note'}
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder={referencePlaceholder}
                 />
               </div>
 
@@ -13443,27 +13479,20 @@ useEffect(() => {
 
             const totalChanged = Math.abs((editingInvoice.total || 0) - total) > 0.001;
             let paymentUrl = editingInvoice.paymentUrl || '';
+            await db.collection('invoices').doc(editingInvoice.id).update(updates);
             if (editingInvoice.paymentUrl && totalChanged) {
               try {
                 if (userProfile?.stripePublishableKey && total > 0) {
+                  // Server re-prices from the invoice we just saved and closes the old checkout.
                   const plRes = await fetch('/api/stripe-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      action: 'payment_link',
-                      amount: total,
-                      invoiceId: editingInvoice.id,
-                      invoiceNumber: editingInvoice.invoiceNumber,
-                      customerEmail,
-                      customerName,
-                      farrierId: userId,
-                    }),
+                    body: JSON.stringify({ action: 'payment_link', invoiceId: editingInvoice.id }),
                   });
                   const plData = await plRes.json();
                   if (plData.success && plData.paymentUrl) {
                     paymentUrl = plData.paymentUrl;
                     updates.paymentUrl = paymentUrl;
-                    updates.paymentLinkId = plData.paymentLinkId || '';
                   } else {
                     console.error('Payment link regeneration failed:', plData.error);
                   }
@@ -13472,8 +13501,6 @@ useEffect(() => {
                 console.error('Payment link regeneration error:', plErr);
               }
             }
-
-            await db.collection('invoices').doc(editingInvoice.id).update(updates);
 
             const updatedInvoice = { ...editingInvoice, ...updates, paymentUrl, total, items: cleanedItems };
 
@@ -13486,7 +13513,7 @@ useEffect(() => {
               } else {
                 try {
                   const bizName = userProfile?.businessName || 'Your Farrier';
-                  const msg = `Hi ${customerName}, your invoice #${editingInvoice.invoiceNumber} for $${total.toFixed(2)} from ${bizName} has been updated.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
+                  const msg = `Hi ${customerName}, your invoice #${editingInvoice.invoiceNumber} for ${FarriPricing.dualPriceText(updatedInvoice)} from ${bizName} has been updated.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
                   await fetch('/api/send-sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -13596,6 +13623,7 @@ useEffect(() => {
               total: total,
               invoiceNumber: invoiceNumber,
               status: 'outstanding',
+              cardPriceRate: FarriPricing.farrierCardPriceRate(userProfile),
               milesDriven: milesDriven || 0,
               createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -13681,21 +13709,13 @@ useEffect(() => {
                 const plRes = await fetch('/api/stripe-payment', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    action: 'payment_link',
-                    amount: total,
-                    invoiceId: docRef.id,
-                    invoiceNumber,
-                    customerEmail,
-                    customerName,
-                    farrierId: userId,
-                  }),
+                  // The server prices it from the saved invoice and saves the link on it.
+                  body: JSON.stringify({ action: 'payment_link', invoiceId: docRef.id }),
                 });
                 const plData = await plRes.json();
                 console.log('💳 Stripe API response:', JSON.stringify(plData));
                 if (plData.success && plData.paymentUrl) {
                   paymentUrl = plData.paymentUrl;
-                  await db.collection('invoices').doc(docRef.id).update({ paymentUrl, paymentLinkId: plData.paymentLinkId || '' });
                   console.log('✅ Payment link generated:', paymentUrl);
                 } else {
                   console.error('❌ Payment link failed:', plData.error);
@@ -13717,6 +13737,7 @@ useEffect(() => {
               total,
               invoiceNumber,
               status: 'outstanding',
+              cardPriceRate: FarriPricing.farrierCardPriceRate(userProfile),
               paymentUrl,
               createdAt: new Date()
             };
@@ -13730,7 +13751,7 @@ useEffect(() => {
               } else {
                 try {
                   const bizName = userProfile?.businessName || 'Your Farrier';
-                  const msg = `Hi ${customerName}, you have a new invoice #${invoiceNumber} for $${total.toFixed(2)} from ${bizName}.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
+                  const msg = `Hi ${customerName}, you have a new invoice #${invoiceNumber} for ${FarriPricing.dualPriceText(createdInvoice)} from ${bizName}.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
                   await fetch('/api/send-sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -14175,7 +14196,11 @@ useEffect(() => {
       const [aboutMe, setAboutMe] = useState(userProfile?.aboutMe || '');
       const [autoPrintPdf, setAutoPrintPdf] = useState(userProfile?.autoPrintPdf ?? true);
       const [allowManualPayments, setAllowManualPayments] = useState(userProfile?.allowManualPayments ?? true);
+      const [cardPriceEnabled, setCardPriceEnabled] = useState(userProfile?.cardPricingEnabled ?? true);
+      const [cardPricePercent, setCardPricePercent] = useState(String(Math.round((userProfile?.cardPriceRate ?? FarriPricing.DEFAULT_CARD_PRICE_RATE) * 10000) / 100));
       const [smsEnabled, setSmsEnabled] = useState(userProfile?.smsEnabled ?? false);
+      const cardPriceRateValue = Math.round((parseFloat(cardPricePercent) || 0) * 100) / 10000;
+      const cardPriceRateValid = cardPriceRateValue >= 0 && cardPriceRateValue <= FarriPricing.MAX_CARD_PRICE_RATE && cardPricePercent !== '';
       const [phone, setPhone] = useState(userProfile?.phone || '');
       const [address, setAddress] = useState(userProfile?.address || '');
       const [city, setCity] = useState(userProfile?.city || '');
@@ -14192,6 +14217,15 @@ useEffect(() => {
       const [stripeValidating, setStripeValidating] = useState(false);
       const [stripeStatus, setStripeStatus] = useState(userProfile?.stripePublishableKey ? 'connected' : 'none');
       const [stripeAccountName, setStripeAccountName] = useState(userProfile?.stripeAccountName || '');
+      const [stripeError, setStripeError] = useState('');
+      const [stripeWebhookMissing, setStripeWebhookMissing] = useState(false);
+      useEffect(() => {
+        if (!userProfile?.stripePublishableKey) return;
+        fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) })
+          .then(r => r.json())
+          .then(r => setStripeWebhookMissing(!!(r.success && r.connected && !r.webhookConfigured)))
+          .catch(() => {});
+      }, [userProfile?.stripePublishableKey]);
       
       // Availability settings with defaults
       const defaultAvailability = {
@@ -14220,6 +14254,7 @@ useEffect(() => {
 
       const handleSave = async (e) => {
         e.preventDefault();
+        if (cardPriceEnabled && !cardPriceRateValid) { setError('Card price must be between 0% and 5%.'); return; }
         setLoading(true);
         setError('');
         setSuccessMessage('');
@@ -14243,6 +14278,8 @@ useEffect(() => {
               aboutMe: aboutMe,
               autoPrintPdf: autoPrintPdf,
               allowManualPayments: allowManualPayments,
+              cardPricingEnabled: cardPriceEnabled,
+              cardPriceRate: cardPriceRateValue,
               smsEnabled: smsEnabled,
               availability: availability,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -14263,6 +14300,8 @@ useEffect(() => {
               aboutMe,
               autoPrintPdf,
               allowManualPayments,
+              cardPricingEnabled: cardPriceEnabled,
+              cardPriceRate: cardPriceRateValue,
               smsEnabled,
               availability
             }));
@@ -14436,6 +14475,20 @@ useEffect(() => {
                   <input type="checkbox" id="manualPayToggle" checked={Boolean(allowManualPayments)} onChange={(e)=>setAllowManualPayments(e.target.checked)} style={{width:'18px',height:'18px'}} />
                   <label htmlFor="manualPayToggle" style={{cursor:'pointer'}}>Allow manual payments (Cash / Check) on invoices</label>
                 </div>
+                <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.75rem', flexWrap:'wrap'}}>
+                  <input type="checkbox" id="cardPriceToggle" checked={Boolean(cardPriceEnabled)} onChange={(e)=>setCardPriceEnabled(e.target.checked)} style={{width:'18px',height:'18px'}} />
+                  <label htmlFor="cardPriceToggle" style={{cursor:'pointer'}}>Card price (dual pricing): card payments are</label>
+                  <input type="number" min="0" max="5" step="0.1" value={cardPricePercent} disabled={!cardPriceEnabled}
+                    onChange={(e)=>setCardPricePercent(e.target.value)} style={{width:'80px'}} />
+                  <span>% more than the cash or check price</span>
+                </div>
+                {cardPriceEnabled && (
+                  <div style={{fontSize:'0.8rem', color:'var(--text-muted)', marginTop:'0.4rem', marginLeft:'28px'}}>
+                    {cardPriceRateValid
+                      ? <>New invoices show both prices, e.g. "Card price ${(150 * (1 + cardPriceRateValue)).toFixed(2)} / Cash or check $150.00". Existing invoices keep the price they were created with. You can waive the card price on any invoice.</>
+                      : <span style={{color:'#dc2626'}}>Enter a card price between 0% and 5%.</span>}
+                  </div>
+                )}
               </div>
 
               <button 
@@ -14613,7 +14666,13 @@ useEffect(() => {
 
             {stripeStatus === 'error' && (
               <div style={{background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem'}}>
-                <span style={{color: '#dc2626'}}>❌ Invalid keys — please check and try again.</span>
+                <span style={{color: '#dc2626'}}>❌ {stripeError || 'Invalid keys — please check and try again.'}</span>
+              </div>
+            )}
+
+            {stripeStatus === 'connected' && stripeWebhookMissing && (
+              <div style={{background: '#fff7ed', border: '1px solid #fdba74', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', color: '#9a3412', fontSize: '0.9rem'}}>
+                ⚠️ Invoices paid online aren't being marked paid automatically yet. Paste your secret key below and click Validate &amp; Save again to finish setup.
               </div>
             )}
 
@@ -14629,12 +14688,12 @@ useEffect(() => {
             </div>
 
             <div className="form-group">
-              <label>Secret Key <span style={{color:'var(--text-muted)', fontWeight:400}}>(starts with sk_)</span></label>
+              <label>Secret Key <span style={{color:'var(--text-muted)', fontWeight:400}}>(starts with rk_ or sk_)</span></label>
               <input
                 type="password"
                 value={stripeSecretKey}
                 onChange={(e) => { setStripeSecretKey(e.target.value); setStripeStatus('none'); }}
-                placeholder={stripeStatus === 'connected' ? '•••••••• saved securely — paste a new key to replace it' : 'sk_live_...'}
+                placeholder={stripeStatus === 'connected' ? '•••••••• saved securely — paste a new key to replace it' : 'rk_live_...'}
                 autoComplete="off"
                 style={{fontFamily: 'monospace', fontSize: '0.85rem'}}
               />
@@ -14648,16 +14707,20 @@ useEffect(() => {
                 className="btn btn-primary"
                 disabled={stripeValidating || !stripePublishableKey || !stripeSecretKey}
                 onClick={async () => {
-                  if (!stripePublishableKey.startsWith('pk_')) { alert('Publishable key must start with pk_'); return; }
-                  if (!/^(sk|rk)_/.test(stripeSecretKey)) { alert('Secret key must start with sk_ or rk_'); return; }
+                  const pkMode = (/^pk_(live|test)_/.exec(stripePublishableKey.trim()) || [])[1];
+                  const skMode = (/^(?:sk|rk)_(live|test)_/.exec(stripeSecretKey.trim()) || [])[1];
+                  if (!pkMode) { alert('Publishable key must start with pk_live_ or pk_test_'); return; }
+                  if (!skMode) { alert('Secret key must start with rk_live_, rk_test_, sk_live_ or sk_test_'); return; }
+                  if (pkMode !== skMode) { alert('Both keys must be live keys, or both test keys.'); return; }
                   setStripeValidating(true);
+                  setStripeError('');
                   try {
                     // The server validates the key with Stripe and stores it in its locked
                     // secrets store; only the publishable key + account name go on the profile.
                     const res = await fetch('/api/stripe-payment', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action: 'connect', stripeSecretKey })
+                      body: JSON.stringify({ action: 'connect', stripeSecretKey: stripeSecretKey.trim() })
                     });
                     const data = await res.json();
                     if (data.success) {
@@ -14669,10 +14732,13 @@ useEffect(() => {
                       setStripeSecretKey('');
                       setStripeAccountName(data.accountName || '');
                       setStripeStatus('connected');
+                      setStripeWebhookMissing(false);
                     } else {
+                      setStripeError(data.error || '');
                       setStripeStatus('error');
                     }
                   } catch (e) {
+                    setStripeError('');
                     setStripeStatus('error');
                   }
                   setStripeValidating(false);
@@ -14706,7 +14772,7 @@ useEffect(() => {
             </div>
 
             <div style={{marginTop: '1rem', padding: '0.75rem', background: 'var(--surface)', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-muted)'}}>
-              💡 Use <strong>test keys</strong> (pk_test_ / sk_test_) while testing, then switch to live keys when ready to accept real payments.
+              💡 Use <strong>test keys</strong> (pk_test_ / rk_test_) while testing, then switch to live keys when ready to accept real payments. A restricted key needs <strong>Write</strong> access to PaymentIntents, Checkout Sessions, Customers, PaymentMethods, Refunds and Webhook Endpoints.
             </div>
           </div>
 
