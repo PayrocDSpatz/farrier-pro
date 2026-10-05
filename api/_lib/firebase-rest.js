@@ -128,54 +128,51 @@ export async function patchDoc(path, fields = {}, deleteFields = []) {
 
 // ── Transactions ──
 // runTransaction(async tx => { const inv = await tx.get('invoices/x'); tx.patch('invoices/x', {...}); })
-// Reads inside go through the transaction; writes are committed together at the end, and
-// the whole thing is retried if Firestore aborts it because something changed underneath.
-// tx.create() fails the commit if the document already exists.
+// Optimistic: reads are plain reads, and every write is committed together with a
+// precondition that the document is exactly as it was read (same updateTime, or still
+// missing). If anything changed in between, the commit is refused and the whole function
+// runs again on fresh data. tx.create() also refuses to overwrite an existing document.
+// (Firestore won't let this server user open a real transaction — beginTransaction is
+// PERMISSION_DENIED — but preconditions give the same guarantees for these writes.)
 const DOC_NAME = `projects/${PROJECT_ID}/databases/(default)/documents`;
 export async function runTransaction(fn, attempts = 4) {
   for (let attempt = 1; ; attempt++) {
     const { idToken } = await serverAuth();
     const headers = { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' };
-    const begin = await fetch(`${DOCS}:beginTransaction`, { method: 'POST', headers, body: '{}' });
-    if (!begin.ok) throw new Error(`Firestore beginTransaction failed: ${begin.status} ${await begin.text()}`);
-    const { transaction } = await begin.json();
+    const seen = {}; // path -> updateTime, or null if the document didn't exist
     const writes = [];
+    const precondition = (path) => path in seen
+      ? (seen[path] ? { updateTime: seen[path] } : { exists: false })
+      : undefined;
+    const encFields = (fields) => Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, enc(v)]));
     const tx = {
       async get(path) {
-        const r = await fetch(`${DOCS}/${path}?transaction=${encodeURIComponent(transaction)}`, { headers });
-        if (r.status === 404) return null;
+        const r = await fetch(`${DOCS}/${path}`, { headers });
+        if (r.status === 404) { seen[path] = null; return null; }
         if (!r.ok) throw new Error(`Firestore read ${path} failed: ${r.status} (server uid ${cached?.uid}) ${await r.text()}`);
         const d = await r.json();
+        seen[path] = d.updateTime;
         return Object.fromEntries(Object.entries(d.fields || {}).map(([k, v]) => [k, dec(v)]));
       },
       patch(path, fields) {
+        const pre = precondition(path);
         writes.push({
-          update: { name: `${DOC_NAME}/${path}`, fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, enc(v)])) },
+          update: { name: `${DOC_NAME}/${path}`, fields: encFields(fields) },
           updateMask: { fieldPaths: Object.keys(fields).map(f => /^[A-Za-z_][A-Za-z0-9_]*$/.test(f) ? f : `\`${f}\``) },
+          ...(pre ? { currentDocument: pre } : {}),
         });
       },
       create(path, fields) {
-        writes.push({
-          update: { name: `${DOC_NAME}/${path}`, fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, enc(v)])) },
-          currentDocument: { exists: false },
-        });
+        writes.push({ update: { name: `${DOC_NAME}/${path}`, fields: encFields(fields) }, currentDocument: { exists: false } });
       },
     };
-    let result;
-    try {
-      result = await fn(tx);
-    } catch (e) {
-      await fetch(`${DOCS}:rollback`, { method: 'POST', headers, body: JSON.stringify({ transaction }) }).catch(() => {});
-      throw e;
-    }
-    if (!writes.length) {
-      await fetch(`${DOCS}:rollback`, { method: 'POST', headers, body: JSON.stringify({ transaction }) }).catch(() => {});
-      return result;
-    }
-    const commit = await fetch(`${DOCS}:commit`, { method: 'POST', headers, body: JSON.stringify({ writes, transaction }) });
+    const result = await fn(tx);
+    if (!writes.length) return result;
+    const commit = await fetch(`${DOCS}:commit`, { method: 'POST', headers, body: JSON.stringify({ writes }) });
     if (commit.ok) return result;
     const text = await commit.text();
-    if (commit.status === 409 && attempt < attempts) continue; // ABORTED: contention, retry
+    // Something changed since we read it (FAILED_PRECONDITION / ALREADY_EXISTS / ABORTED): run again.
+    if ([400, 409].includes(commit.status) && /FAILED_PRECONDITION|ALREADY_EXISTS|ABORTED/.test(text) && attempt < attempts) continue;
     throw new Error(`Firestore commit failed: ${commit.status} (server uid ${cached?.uid}) ${text}`);
   }
 }
