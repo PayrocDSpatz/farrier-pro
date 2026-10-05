@@ -5805,8 +5805,8 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
       const filteredInvoices = getFilteredInvoices();
 
-      // Calculate metrics - use paidAmount to include partial payments
-      const getPaidAmount = (inv) => inv.paidAmount || (inv.payments || []).reduce((s,p) => s + (p.amount||0), 0) || (inv.status === 'paid' ? (inv.total || 0) : 0);
+      // Calculate metrics - use paidAmount to include partial payments, minus anything refunded
+      const getPaidAmount = (inv) => Math.max(0, (inv.paidAmount || (inv.payments || []).reduce((s,p) => s + (p.amount||0), 0) || (inv.status === 'paid' || inv.status === 'refunded' ? (inv.total || 0) : 0)) - (inv.refundedAmount || 0));
       const totalRevenue = filteredInvoices.reduce((sum, inv) => sum + getPaidAmount(inv), 0);
 
       const totalOutstanding = filteredInvoices
@@ -6477,23 +6477,41 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
           {/* Payment Methods Report */}
           {(() => {
-            const methodLabels = { cash: '💵 Cash', check: '📝 Check', credit_card: '💳 Credit Card', other: '🔄 Other' };
-            const methodColors = { cash: '#059669', check: '#2683FB', credit_card: '#7c3aed', other: '#d97706' };
+            const methodLabels = { cash: '💵 Cash', check: '📝 Check', credit_card: '💳 Credit Card', ach: '🏦 ACH', zelle: '⚡ Zelle', venmo: '📱 Venmo', other: '🔄 Other' };
+            const methodColors = { cash: '#059669', check: '#2683FB', credit_card: '#7c3aed', ach: '#0891b2', zelle: '#6d28d9', venmo: '#0ea5e9', other: '#d97706' };
             const methodTotals = {};
             const methodCounts = {};
             filteredInvoices.forEach(inv => {
-              (inv.payments || []).forEach(p => {
-                const m = p.method || 'other';
-                methodTotals[m] = (methodTotals[m] || 0) + (p.amount || 0);
-                methodCounts[m] = (methodCounts[m] || 0) + 1;
+              // Net of refunds: each refund comes off the payment it refunded (matched by
+              // Stripe payment id); a payment refunded in full no longer counts.
+              const refunds = Array.isArray(inv.refunds) ? inv.refunds : [];
+              let unmatchedRefund = refunds.length ? 0 : (inv.refundedAmount || 0);
+              const refundedFor = {};
+              refunds.forEach(r => {
+                if (r.transactionId && (inv.payments || []).some(p => p.transactionId === r.transactionId)) {
+                  refundedFor[r.transactionId] = (refundedFor[r.transactionId] || 0) + (r.amount || 0);
+                } else {
+                  unmatchedRefund += r.amount || 0;
+                }
               });
-              // Legacy: fully paid invoice with no payments array
-              if ((!inv.payments || inv.payments.length === 0) && inv.status === 'paid') {
-                const m = inv.cardLast4 ? 'credit_card' : 'cash';
-                methodTotals[m] = (methodTotals[m] || 0) + (inv.total || 0);
-                methodCounts[m] = (methodCounts[m] || 0) + 1;
+              const add = (m, amount) => {
+                const net = Math.max(0, amount);
+                methodTotals[m] = (methodTotals[m] || 0) + net;
+                if (net > 0.004) methodCounts[m] = (methodCounts[m] || 0) + 1;
+              };
+              (inv.payments || []).forEach(p => {
+                let amount = (p.amount || 0) - (p.transactionId ? (refundedFor[p.transactionId] || 0) : 0);
+                if (p.method === 'credit_card' && unmatchedRefund > 0) {
+                  const take = Math.min(amount, unmatchedRefund); amount -= take; unmatchedRefund -= take;
+                }
+                add(p.method || 'other', amount);
+              });
+              // Legacy: fully paid (or refunded) invoice with no payments array
+              if ((!inv.payments || inv.payments.length === 0) && (inv.status === 'paid' || inv.status === 'refunded')) {
+                add(inv.cardLast4 ? 'credit_card' : 'cash', (inv.total || 0) - unmatchedRefund);
               }
             });
+            Object.keys(methodTotals).forEach(m => { if (methodTotals[m] < 0.005 && !methodCounts[m]) { delete methodTotals[m]; } });
             const totalPaid = Object.values(methodTotals).reduce((s,v) => s+v, 0);
             const methods = Object.keys(methodTotals).sort((a,b) => methodTotals[b] - methodTotals[a]);
             return (
