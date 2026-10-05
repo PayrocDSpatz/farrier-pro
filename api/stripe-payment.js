@@ -218,10 +218,20 @@ export default async function handler(req, res) {
 
     if (action === 'connect' || action === 'validate') {
       const { stripeSecretKey } = body;
-      if (!stripeSecretKey || !stripeSecretKey.startsWith('sk_')) return res.status(400).json({ success: false, error: 'Secret key must start with sk_' });
-      const account = await new Stripe(stripeSecretKey).accounts.retrieve();
+      if (!stripeSecretKey || !/^(sk|rk)_/.test(stripeSecretKey)) return res.status(400).json({ success: false, error: 'Secret key must start with sk_ or rk_' });
+      const stripe = new Stripe(stripeSecretKey);
+      let accountName = 'Stripe Account';
+      try {
+        const account = await stripe.accounts.retrieve();
+        accountName = account.settings?.dashboard?.display_name || account.email || accountName;
+      } catch (e) {
+        // Restricted (rk_) keys usually can't read account details; prove the key works
+        // with a call the app actually needs (PaymentIntents) instead.
+        if (e.type !== 'StripePermissionError') throw e;
+        await stripe.paymentIntents.list({ limit: 1 });
+      }
       await setStripeSecretKey(farrierId, stripeSecretKey);
-      return res.status(200).json({ success: true, accountName: account.settings?.dashboard?.display_name || account.email || 'Stripe Account' });
+      return res.status(200).json({ success: true, accountName });
     }
     if (action === 'disconnect') {
       await setStripeSecretKey(farrierId, '');
@@ -229,7 +239,7 @@ export default async function handler(req, res) {
     }
     if (action === 'status') {
       const key = await getStripeSecretKey(farrierId); // also migrates a legacy key off the profile
-      return res.status(200).json({ success: true, connected: !!key, mode: key.startsWith('sk_live_') ? 'live' : key ? 'test' : '' });
+      return res.status(200).json({ success: true, connected: !!key, mode: /^(sk|rk)_live_/.test(key) ? 'live' : key ? 'test' : '' });
     }
 
     // ── Manager password (Settings → Manager Password): guards refunds ──

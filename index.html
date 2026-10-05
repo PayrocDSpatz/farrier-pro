@@ -14649,7 +14649,7 @@ useEffect(() => {
                 disabled={stripeValidating || !stripePublishableKey || !stripeSecretKey}
                 onClick={async () => {
                   if (!stripePublishableKey.startsWith('pk_')) { alert('Publishable key must start with pk_'); return; }
-                  if (!stripeSecretKey.startsWith('sk_')) { alert('Secret key must start with sk_'); return; }
+                  if (!/^(sk|rk)_/.test(stripeSecretKey)) { alert('Secret key must start with sk_ or rk_'); return; }
                   setStripeValidating(true);
                   try {
                     // The server validates the key with Stripe and stores it in its locked

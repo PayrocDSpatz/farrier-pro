@@ -1096,7 +1096,7 @@
       <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Connect Stripe to accept card payments on invoices. Your keys are stored securely.</div>
       <div id="stripe-status-banner" style="display:none;"></div>
       <div class="field"><label>Publishable Key <span style="font-weight:400; color:var(--text-muted);">(starts with pk_)</span></label><input type="text" id="set-stripe-pk" placeholder="pk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
-      <div class="field"><label>Secret Key <span style="font-weight:400; color:var(--text-muted);">(starts with sk_)</span></label><input type="password" id="set-stripe-sk" placeholder="sk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
+      <div class="field"><label>Secret Key <span style="font-weight:400; color:var(--text-muted);">(starts with sk_ or rk_)</span></label><input type="password" id="set-stripe-sk" placeholder="sk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
       <div style="font-size:0.75rem; color:var(--text-muted); margin:-6px 0 12px;">Find these at dashboard.stripe.com/apikeys</div>
       <button class="btn-primary" id="stripe-validate-btn" onclick="validateAndSaveStripe()">✓ Validate & Save</button>
       <div style="margin-top:8px;"></div>
@@ -3690,7 +3690,7 @@ async function validateAndSaveStripe() {
   const sk = document.getElementById('set-stripe-sk').value.trim();
   if (!pk || !sk) { showToast('Enter both keys', 'error'); return; }
   if (!pk.startsWith('pk_')) { showToast('Publishable key must start with pk_', 'error'); return; }
-  if (!sk.startsWith('sk_')) { showToast('Secret key must start with sk_', 'error'); return; }
+  if (!/^(sk|rk)_/.test(sk)) { showToast('Secret key must start with sk_ or rk_', 'error'); return; }
   if (!netState.online) { showToast('Connecting Stripe requires an internet connection', 'error'); return; }
 
   const btn = document.getElementById('stripe-validate-btn');

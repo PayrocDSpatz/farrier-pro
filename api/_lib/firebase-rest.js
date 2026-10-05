@@ -138,7 +138,7 @@ export async function getStripeSecretKey(farrierId) {
   if (secrets?.stripeSecretKey) return secrets.stripeSecretKey;
   const profile = await getDoc(`farriers/${farrierId}`);
   const legacy = profile?.stripeSecretKey || '';
-  if (legacy && legacy.startsWith('sk_')) {
+  if (legacy && /^(sk|rk)_/.test(legacy)) {
     await patchDoc(`farrierSecrets/${farrierId}`, { stripeSecretKey: legacy, migratedAt: new Date() });
     await patchDoc(`farriers/${farrierId}`, {}, ['stripeSecretKey']);
     return legacy;
