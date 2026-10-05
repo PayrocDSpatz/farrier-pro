@@ -14701,6 +14701,23 @@ useEffect(() => {
           {/* Stripe Payments Settings */}
           <div className="card" style={{marginTop: '1.5rem'}}>
             <h2>💳 Stripe Payments</h2>
+            {userProfile?.stripeConnectAccountId ? (
+              // FarriTech Payments (Stripe Connect): no keys to manage here, and no way to swap in
+              // the farrier's own keys (that would skip FarriTech's fee). The server enforces this too.
+              <>
+                <div style={{background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                  <span style={{fontSize: '1.1rem'}}>✅</span>
+                  <span style={{color: '#16a34a', fontWeight: 600}}>FarriTech Payments active{userProfile.stripeAccountName ? ` — ${userProfile.stripeAccountName}` : ''}</span>
+                </div>
+                <p style={{color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem'}}>
+                  Card payments on your invoices are switched on through FarriTech Payments. Your payouts, bank account and payment history are in your Stripe dashboard.
+                </p>
+                <a className="btn btn-outline" href="https://dashboard.stripe.com" target="_blank" rel="noreferrer">Open my Stripe dashboard</a>
+                <div style={{marginTop: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)'}}>
+                  Need to change how you get paid? Email support@farritech.com.
+                </div>
+              </>
+            ) : (<>
             <p style={{color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem'}}>
               Connect your Stripe account to accept credit card payments on invoices. Your keys are stored securely and never shared.
             </p>
@@ -14823,6 +14840,7 @@ useEffect(() => {
             <div style={{marginTop: '1rem', padding: '0.75rem', background: 'var(--surface)', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-muted)'}}>
               💡 Use <strong>test keys</strong> (pk_test_ / rk_test_) while testing, then switch to live keys when ready to accept real payments. A restricted key needs <strong>Write</strong> access to PaymentIntents, Checkout Sessions, Customers, PaymentMethods, Refunds and Webhook Endpoints.
             </div>
+            </>)}
           </div>
 
           <div className="card" style={{marginTop: '1.5rem'}}>

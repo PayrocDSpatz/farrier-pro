@@ -1106,6 +1106,14 @@
     <div class="card" style="margin-top:14px;">
       <div class="card-title">💳 Stripe Payments</div>
       <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Connect Stripe to accept card payments on invoices. Your keys are stored securely.</div>
+      <!-- FarriTech Payments (Stripe Connect) farriers see this instead of the key form. -->
+      <div id="stripe-connect-info" style="display:none;">
+        <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:10px 12px; margin-bottom:12px; color:#16a34a; font-weight:600;" id="stripe-connect-name">✅ FarriTech Payments active</div>
+        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Card payments on your invoices are switched on through FarriTech Payments. Your payouts, bank account and payment history are in your Stripe dashboard.</div>
+        <a class="btn-secondary" href="https://dashboard.stripe.com" target="_blank" rel="noreferrer" style="display:block; text-align:center; text-decoration:none;">Open my Stripe dashboard</a>
+        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:10px;">Need to change how you get paid? Email support@farritech.com.</div>
+      </div>
+      <div id="stripe-key-form">
       <div id="stripe-status-banner" style="display:none;"></div>
       <div class="field"><label>Publishable Key <span style="font-weight:400; color:var(--text-muted);">(starts with pk_)</span></label><input type="text" id="set-stripe-pk" placeholder="pk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
       <div class="field"><label>Secret Key <span style="font-weight:400; color:var(--text-muted);">(starts with rk_ or sk_)</span></label><input type="password" id="set-stripe-sk" placeholder="rk_live_…" style="font-family:monospace; font-size:0.82rem;"></div>
@@ -1113,6 +1121,7 @@
       <button class="btn-primary" id="stripe-validate-btn" onclick="validateAndSaveStripe()">✓ Validate & Save</button>
       <div style="margin-top:8px;"></div>
       <button class="btn-secondary" id="stripe-disconnect-btn" onclick="disconnectStripe()" style="display:none;">Disconnect Stripe</button>
+      </div>
     </div>
 
     <div class="card" style="margin-top:14px; margin-bottom:24px;">
@@ -3596,6 +3605,11 @@ function loadSettingsScreen() {
   document.getElementById('set-stripe-sk').value = '';
   document.getElementById('set-stripe-sk').placeholder = p.stripePublishableKey ? '•••••••• saved securely — paste a new key to replace' : 'rk_live_...';
   renderStripeStatus(p.stripePublishableKey ? 'connected' : 'none', p.stripeAccountName || '');
+  // FarriTech Payments farriers don't manage keys (and can't swap in their own — see index.html).
+  const isConnect = !!p.stripeConnectAccountId;
+  document.getElementById('stripe-connect-info').style.display = isConnect ? '' : 'none';
+  document.getElementById('stripe-key-form').style.display = isConnect ? 'none' : '';
+  document.getElementById('stripe-connect-name').textContent = '✅ FarriTech Payments active' + (isConnect && p.stripeAccountName ? ' — ' + p.stripeAccountName : '');
   // Connected before webhooks were set up automatically? Ask for one more save.
   if (p.stripePublishableKey && netState.online) {
     fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) })

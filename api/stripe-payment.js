@@ -240,6 +240,12 @@ export default async function handler(req, res) {
     const farrierId = caller.uid;
 
     if (action === 'connect' || action === 'validate') {
+      // A farrier on FarriTech Payments (Stripe Connect) can't switch to their own keys — that
+      // would skip FarriTech's fee. Covers farriers who disconnected too (stripeConnectCustomerId stays).
+      const connectSecrets = await getDoc(`farrierSecrets/${farrierId}`);
+      if (connectSecrets?.stripeConnectAccountId || connectSecrets?.stripeConnectCustomerId) {
+        return res.status(409).json({ success: false, error: 'Your account uses FarriTech Payments, so Stripe keys can\'t be added here. Email support@farritech.com to change how you get paid.' });
+      }
       const { stripeSecretKey } = body;
       if (!stripeSecretKey || !SECRET_KEY_RE.test(stripeSecretKey)) return res.status(400).json({ success: false, error: 'Secret key must start with sk_live_, sk_test_, rk_live_ or rk_test_' });
       const stripe = new Stripe(stripeSecretKey);
