@@ -2098,6 +2098,24 @@ async function seedDefaultServicesIfEmpty_(userId) {
 }
 
 // Ensures the farrier profile doc exists and surfaces permission/config errors clearly
+// FarriTech Payments (Stripe Connect): for a farrier with no Stripe yet, ask the server whether
+// a Connect account they set up from www.farritech.com has been approved. If so, save the
+// platform publishable key + account ID on their profile so card payments switch on, and hand
+// the new fields to onLinked (to update the profile in React state).
+function syncFarriTechPayments_(uid, profile, onLinked) {
+  if (!uid || !profile || profile.stripePublishableKey) return;
+  fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'connect_sync' }) })
+    .then(r => r.json())
+    .then(async r => {
+      console.log('FarriTech Payments sync:', r.linked ? 'linked ' + r.accountId : (r.reason || r.error || 'not linked'));
+      if (!r.success || !r.linked) return;
+      const fields = { stripePublishableKey: r.publishableKey, stripeConnectAccountId: r.accountId, stripeAccountName: r.accountName || '' };
+      await db.collection('farriers').doc(uid).set({ ...fields, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      onLinked(fields);
+    })
+    .catch(e => console.warn('FarriTech Payments sync skipped:', e.message));
+}
+
 async function ensureFarriTechfile_(uid, profile) {
   if (!db || !uid) throw new Error("Firestore is not initialized.");
   const ref = db.collection("farriers").doc(uid);
@@ -2642,7 +2660,9 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
               };
               await ensureFarriTechfile_(farrierIdToUse, baseProfile);
               const createdSnap = await db.collection("farriers").doc(farrierIdToUse).get();
-              setUserProfile(createdSnap.exists ? createdSnap.data() : baseProfile);
+              const createdProfile = createdSnap.exists ? createdSnap.data() : baseProfile;
+              syncFarriTechPayments_(farrierIdToUse, createdProfile, fields => setUserProfile(prev => (prev ? { ...prev, ...fields } : prev)));
+              setUserProfile(createdProfile);
             } catch (e) {
               console.error("❌ Could not auto-create missing farrier profile doc", e);
               setUserProfile(null);
@@ -2662,20 +2682,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
                 .catch(e => console.warn('Stripe key migration deferred:', e.message));
               delete profileData.stripeSecretKey;
             }
-            // FarriTech Payments (Stripe Connect): no Stripe yet → ask the server whether a Connect
-            // account this farrier set up from www.farritech.com has been approved. If so, save the
-            // platform publishable key + account ID here so card payments switch on.
-            if (!profileData.stripePublishableKey) {
-              fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'connect_sync' }) })
-                .then(r => r.json())
-                .then(async r => {
-                  if (!r.success || !r.linked) return;
-                  const fields = { stripePublishableKey: r.publishableKey, stripeConnectAccountId: r.accountId, stripeAccountName: r.accountName || '' };
-                  await db.collection('farriers').doc(farrierIdToUse).set({ ...fields, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
-                  setUserProfile(prev => (prev ? { ...prev, ...fields } : prev));
-                })
-                .catch(e => console.warn('FarriTech Payments sync skipped:', e.message));
-            }
+            syncFarriTechPayments_(farrierIdToUse, profileData, fields => setUserProfile(prev => (prev ? { ...prev, ...fields } : prev)));
             setUserProfile(profileData);
           }
 } else {
@@ -14252,6 +14259,14 @@ useEffect(() => {
       const [stripeAccountName, setStripeAccountName] = useState(userProfile?.stripeAccountName || '');
       const [stripeError, setStripeError] = useState('');
       const [stripeWebhookMissing, setStripeWebhookMissing] = useState(false);
+      // The profile can gain a key after Settings opens (FarriTech Payments links on login),
+      // so mirror it here instead of only reading it once.
+      useEffect(() => {
+        if (!userProfile?.stripePublishableKey) return;
+        setStripePublishableKey(userProfile.stripePublishableKey);
+        setStripeAccountName(userProfile.stripeAccountName || '');
+        setStripeStatus('connected');
+      }, [userProfile?.stripePublishableKey, userProfile?.stripeAccountName]);
       useEffect(() => {
         if (!userProfile?.stripePublishableKey) return;
         fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) })
