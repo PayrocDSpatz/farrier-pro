@@ -8,6 +8,7 @@ import {
 } from './_lib/invoice-payments.js';
 import { payPage } from './_lib/pay-page.js';
 import { farrierWebhook } from './_lib/farrier-webhook.js';
+import { closeIposPages, connectIpospays, createIposPage, disconnectIpospays, getIposCreds, iposCallback } from './_lib/ipospays.js';
 
 const P = globalThis.FarriPricing;
 const SECRET_KEY_RE = /^(sk|rk)_(live|test)_/;
@@ -31,6 +32,11 @@ export const config = { api: { bodyParser: false } };
 //   anyone                → confirm_session  (only marks paid after Stripe confirms the session)
 //   Stripe                → webhook          (legacy platform webhook, signature required; farriers'
 //                                               own accounts post to /api/stripe/webhook/{farrierId} → _lib/farrier-webhook.js)
+//   farrier (signed in)   → ipospays_connect, ipospays_disconnect, ipospays_status
+//   iPOSpays              → /api/ipospays/callback/{invoiceId} → _lib/ipospays.js (re-checked with iPOSpays before recording)
+//
+// While a farrier has iPOSpays connected, payment_link / waive_card_price and the /pay page
+// use iPOSpays payment pages; keyed cards, refunds and the customer portal stay on Stripe.
 //
 // Amounts are always worked out here from the invoice (lib/pricing.js), never taken from
 // the browser — see api/_lib/invoice-payments.js for how payments are recorded.
@@ -138,6 +144,8 @@ export default async function handler(req, res) {
   const rawBody = await getRawBody(req);
   // Farrier's own Stripe account (/api/stripe/webhook/:farrierId, see vercel.json)
   if (req.query?.webhookFarrier) return farrierWebhook(req, res, rawBody, String(req.query.webhookFarrier));
+  // iPOSpays payment callback (/api/ipospays/callback/:invoiceId, see vercel.json)
+  if (req.query?.iposCallback) return iposCallback(req, res, rawBody, String(req.query.iposCallback));
   if (req.headers['stripe-signature']) return handleWebhook(req, res, rawBody);
 
   try {
@@ -200,6 +208,8 @@ export default async function handler(req, res) {
           paidVia: invoices.length > 1 ? 'stripe_card_multi' : 'stripe_card', recordedBy: caller.email,
         });
         await closeOnlinePayment(stripe, inv);
+        const ipos = await getIposCreds(farrierId);
+        if (ipos) await closeIposPages(ipos, inv.id, inv);
       }
       return res.status(200).json({ success: true, transactionId: pi.id, amount: amountCents / 100, ...card });
     }
@@ -227,8 +237,46 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    // Everything below acts on the signed-in farrier's own Stripe account.
+    // Everything below acts on the signed-in farrier's own payment accounts.
     const farrierId = caller.uid;
+
+    // ── iPOSpays (Settings → iPOSpays Payments) ──
+    if (action === 'ipospays_connect') {
+      const { tpn, apiKey, secretKey, ecomToken, mode } = body;
+      const result = await connectIpospays(farrierId, { tpn, apiKey, secretKey, ecomToken, mode });
+      return res.status(200).json({ success: true, ...result });
+    }
+    if (action === 'ipospays_disconnect') {
+      await disconnectIpospays(farrierId);
+      return res.status(200).json({ success: true });
+    }
+    if (action === 'ipospays_status') {
+      const ipos = await getIposCreds(farrierId);
+      return res.status(200).json({ success: true, connected: !!ipos, mode: ipos?.mode || '', tpnLast4: ipos ? ipos.tpn.slice(-4) : '' });
+    }
+
+    // Pay links go through iPOSpays while it's connected.
+    const ipos = ['payment_link', 'waive_card_price'].includes(action) ? await getIposCreds(farrierId) : null;
+    if (ipos && action === 'payment_link') {
+      const invoice = await ownInvoice(body.invoiceId, farrierId);
+      if (invoice.status === 'paid' || invoice.status === 'cancelled') return res.status(400).json({ success: false, error: `This invoice is ${invoice.status}.` });
+      const { paymentUrl, chargeCents, cashCents } = await createIposPage(ipos, body.invoiceId, invoice);
+      return res.status(200).json({ success: true, paymentUrl, amount: chargeCents / 100, cashAmount: cashCents / 100 });
+    }
+    if (ipos && action === 'waive_card_price') {
+      const { invoiceId, waive = true } = body;
+      const invoice = await ownInvoice(invoiceId, farrierId);
+      if (invoice.status === 'paid' || invoice.status === 'cancelled') return res.status(400).json({ success: false, error: `This invoice is ${invoice.status}.` });
+      const changes = waive
+        ? { cardFeeWaived: true, cardFeeWaivedBy: caller.email || caller.uid, cardFeeWaivedAt: new Date() }
+        : { cardFeeWaived: false, cardFeeWaivedBy: '', cardFeeWaivedAt: null };
+      // createIposPage closes the open page first (and stops if the customer just paid it).
+      const updated = { ...invoice, ...changes };
+      const { paymentUrl, chargeCents } = await createIposPage(ipos, invoiceId, updated);
+      await patchDoc(`invoices/${invoiceId}`, changes);
+      const sentVia = await sendUpdatedPayLink(updated, invoiceId, chargeCents);
+      return res.status(200).json({ success: true, paymentUrl, amount: chargeCents / 100, sentVia });
+    }
 
     if (action === 'connect' || action === 'validate') {
       const { stripeSecretKey } = body;
@@ -278,6 +326,8 @@ export default async function handler(req, res) {
       });
       const key = await getStripeSecretKey(farrierId);
       if (key) await closeOnlinePayment(new Stripe(key), invoice);
+      const iposCreds = await getIposCreds(farrierId);
+      if (iposCreds) await closeIposPages(iposCreds, invoiceId, invoice);
       return res.status(200).json({ success: true, status: result.status, balance: (result.balanceCents || 0) / 100 });
     }
 
@@ -299,6 +349,7 @@ export default async function handler(req, res) {
 
     const key = await getStripeSecretKey(farrierId);
     if (!key) return res.status(400).json({ success: false, error: 'No Stripe account connected. Connect Stripe in Settings → Stripe Payments.' });
+    // (iPOSpays farriers' pay links were handled above.)
     const stripe = new Stripe(key);
 
     // Keyed card payment. `applyAmount` is how much of the (cash-price) balance to pay off —

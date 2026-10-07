@@ -43,8 +43,8 @@ export async function cardDetails(stripe, paymentIntentId) {
 //   amountCents  what was actually collected
 //   creditCents  how much of the cash-price balance it pays down (default: worked out from
 //                the invoice's cardPriceRate)
-//   source       'stripe' when Stripe already took the money — then an already-paid invoice
-//                gets the payment logged for review instead of an error
+//   source       'stripe' or 'ipospays' when the processor already took the money — then an
+//                already-paid invoice gets the payment logged for review instead of an error
 export async function applyPayment(invoiceId, {
   paymentId = crypto.randomUUID(), method, amountCents, creditCents,
   reference = '', source = 'manual', recordedBy = '', paidDate = null,
@@ -66,8 +66,8 @@ export async function applyPayment(invoiceId, {
     };
 
     if (inv.status === 'paid' || inv.status === 'cancelled') {
-      if (source !== 'stripe') throw new PaymentError(inv.status === 'paid' ? 'This invoice is already paid.' : 'This invoice is cancelled.', 409);
-      // Stripe already has the money (e.g. the customer paid online at the same moment the
+      if (source !== 'stripe' && source !== 'ipospays') throw new PaymentError(inv.status === 'paid' ? 'This invoice is already paid.' : 'This invoice is cancelled.', 409);
+      // The processor already has the money (e.g. the customer paid online at the same moment the
       // farrier recorded cash). Keep a record so the farrier can refund it.
       tx.create(`invoices/${invoiceId}/payments/${paymentId}`, { ...paymentDoc, creditCents: 0, unapplied: true });
       tx.patch(`invoices/${invoiceId}`, { paymentNeedsReview: true });
