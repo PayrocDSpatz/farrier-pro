@@ -192,10 +192,11 @@ function pageRequest(creds, invoiceId, invoice, farrier, ref, chargeCents, cashC
       integrationVersion: 'v2',
     },
     personalization: {
-      merchantName: String(farrier?.businessName || 'Your Farrier').slice(0, 35),
-      description: (`Invoice #${invoice.invoiceNumber || invoiceId}` +
-        (chargeCents !== cashCents ? ` (card price; cash or check price ${P.money(cashCents)})` : '')).slice(0, 150),
-      payNowButtonText: `Pay ${P.money(chargeCents)}`.slice(0, 15),
+      // iPOSpays refuses symbols in these fields ("$", "." in the button text gave
+      // "Invalid pay button text"), so keep them to letters, digits and spaces.
+      merchantName: alnum(farrier?.businessName, 35) || 'Your Farrier',
+      description: alnum(`Invoice ${number}` + (chargeCents !== cashCents ? ' card price' : ''), 150),
+      payNowButtonText: 'Pay Now',
     },
   };
 }
