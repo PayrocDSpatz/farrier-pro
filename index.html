@@ -1797,6 +1797,17 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
             }
             doc.setTextColor(0);
           }
+          const venmoUrl = FarriPricing.venmoPayUrl(farrierProfile, invoice);
+          if (venmoUrl) {
+            y += 16;
+            const venmoLabel = "PAY WITH VENMO";
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.setTextColor(0, 140, 255);
+            doc.textWithLink(venmoLabel, pageW - 48, y, { url: venmoUrl, align: "right" });
+            doc.setTextColor(0);
+            doc.setFont("helvetica", "normal");
+          }
         }
 
         // Payment History
@@ -1981,7 +1992,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         💳 Pay Invoice — ${prices.card !== null ? FarriPricing.money(prices.card) : "$" + balanceDue}
       </a>
       <p style="color:#9ca3af;font-size:12px;margin-top:12px;">Or visit: <a href="${portalUrl}" style="color:#6b7280;">${portalUrl}</a></p>
-      ${FarriPricing.altPayNote(_userProfile) ? `<p style="color:#4b5563;font-size:14px;margin-top:16px;">${FarriPricing.altPayNote(_userProfile)}</p>` : ""}
+      ${FarriPricing.altPayHtml(_userProfile, invoice)}
     </div>` : `
     <div style="background:#f0fdf4;border:1px solid #10b981;border-radius:8px;padding:16px;text-align:center;margin:24px 0;">
       <p style="color:#065f46;font-weight:600;margin:0;">✅ This invoice has been paid in full. Thank you!</p>
@@ -12482,7 +12493,7 @@ function CalendarView({ userId }) {
                               {invoice.customerPhone && item('📱 SMS', async () => {
                                 const bizName = userProfile?.businessName || 'Your Farrier';
                                 const payLink = invoice.paymentUrl || '';
-                                const msg = `Hi ${invoice.customerName}, you have invoice #${invoice.invoiceNumber} for ${FarriPricing.dualPriceText(invoice)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''}${payLink && FarriPricing.altPayNote(userProfile) ? ' ' + FarriPricing.altPayNote(userProfile) : ''} Reply STOP to opt out.`;
+                                const msg = `Hi ${invoice.customerName}, you have invoice #${invoice.invoiceNumber} for ${FarriPricing.dualPriceText(invoice)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''}${payLink ? FarriPricing.altPaySms(userProfile, invoice) : ''} Reply STOP to opt out.`;
                                 try {
                                   const res = await fetch('/api/send-sms', {
                                     method: 'POST',
@@ -13542,7 +13553,7 @@ useEffect(() => {
               } else {
                 try {
                   const bizName = userProfile?.businessName || 'Your Farrier';
-                  const msg = `Hi ${customerName}, your invoice #${editingInvoice.invoiceNumber} for ${FarriPricing.dualPriceText(updatedInvoice)} from ${bizName} has been updated.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''}${paymentUrl && FarriPricing.altPayNote(userProfile) ? ' ' + FarriPricing.altPayNote(userProfile) : ''} Reply STOP to opt out.`;
+                  const msg = `Hi ${customerName}, your invoice #${editingInvoice.invoiceNumber} for ${FarriPricing.dualPriceText(updatedInvoice)} from ${bizName} has been updated.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''}${paymentUrl ? FarriPricing.altPaySms(userProfile, updatedInvoice) : ''} Reply STOP to opt out.`;
                   await fetch('/api/send-sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -13780,7 +13791,7 @@ useEffect(() => {
               } else {
                 try {
                   const bizName = userProfile?.businessName || 'Your Farrier';
-                  const msg = `Hi ${customerName}, you have a new invoice #${invoiceNumber} for ${FarriPricing.dualPriceText(createdInvoice)} from ${bizName}.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''}${paymentUrl && FarriPricing.altPayNote(userProfile) ? ' ' + FarriPricing.altPayNote(userProfile) : ''} Reply STOP to opt out.`;
+                  const msg = `Hi ${customerName}, you have a new invoice #${invoiceNumber} for ${FarriPricing.dualPriceText(createdInvoice)} from ${bizName}.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''}${paymentUrl ? FarriPricing.altPaySms(userProfile, createdInvoice) : ''} Reply STOP to opt out.`;
                   await fetch('/api/send-sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
