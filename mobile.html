@@ -2995,7 +2995,7 @@ async function saveAndSendSms() {
     state.editingInvoice = null;
     const bizName = state.userProfile?.businessName || 'Your Farrier';
     const msg = inv.paymentUrl
-      ? `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} from ${bizName} is ready. Pay here: ${inv.paymentUrl}${FarriPricing.altPayNote(state.userProfile) ? ' ' + FarriPricing.altPayNote(state.userProfile) : ''} Reply STOP to opt out.`
+      ? `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} from ${bizName} is ready. Pay here: ${inv.paymentUrl}${FarriPricing.altPaySms(state.userProfile, inv)} Reply STOP to opt out.`
       : `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} from ${bizName} has been created. Reply STOP to opt out.`;
     const res = await fetch('/api/send-sms', {
       method: 'POST',
@@ -3027,7 +3027,7 @@ async function saveAndSendEmail() {
     const bizName = state.userProfile?.businessName || 'Your Farrier';
     const payBlock = inv.paymentUrl
       ? `<p style="text-align:center;margin:24px 0;"><a href="${inv.paymentUrl}" style="background:#2563eb;color:#fff;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;">Pay Invoice — $${inv.total.toFixed(2)}</a></p>`
-        + (FarriPricing.altPayNote(state.userProfile) ? `<p style="text-align:center;color:#4b5563;font-size:14px;">${FarriPricing.altPayNote(state.userProfile)}</p>` : '')
+        + FarriPricing.altPayHtml(state.userProfile, inv)
       : '';
     const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:520px;margin:0 auto;padding:20px;color:#333;">
       <h2 style="color:#1a365d;">Invoice #${escapeHtml(inv.invoiceNumber)} from ${escapeHtml(bizName)}</h2>
@@ -3829,7 +3829,7 @@ function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
       <a href="${payUrl}" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 36px;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;display:inline-block;">
         💳 Pay Invoice — ${prices.card !== null ? FarriPricing.money(prices.card) : FarriPricing.money(prices.cash)}
       </a>
-      ${FarriPricing.altPayNote(state.userProfile) ? `<p style="color:#4b5563;font-size:14px;margin-top:16px;">${FarriPricing.altPayNote(state.userProfile)}</p>` : ''}
+      ${FarriPricing.altPayHtml(state.userProfile, inv)}
     </div>` : ''}
     <p style="color:#6b7280;font-size:13px;">Questions? Contact your farrier directly.</p>
   </div>
@@ -3956,7 +3956,7 @@ async function confirmPayment() {
       if (sendSms && inv.customerPhone) {
         await fetch('/api/send-sms', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for ${FarriPricing.dualPriceText(inv)} is ready. Pay here: ${payUrl}${FarriPricing.altPayNote(state.userProfile) ? ' ' + FarriPricing.altPayNote(state.userProfile) : ''} Reply STOP to opt out.` })
+          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for ${FarriPricing.dualPriceText(inv)} is ready. Pay here: ${payUrl}${FarriPricing.altPaySms(state.userProfile, inv)} Reply STOP to opt out.` })
         });
         sent.push('SMS');
       } else if (sendSms && !inv.customerPhone) {
