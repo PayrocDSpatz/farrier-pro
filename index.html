@@ -1787,6 +1787,16 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
           doc.line(pageW - 48 - linkWidth, y + 3, pageW - 48, y + 3);
           doc.setTextColor(0);
           doc.setFont("helvetica", "normal");
+          const altPay = FarriPricing.altPayNote(farrierProfile);
+          if (altPay) {
+            doc.setFontSize(9);
+            doc.setTextColor(75);
+            for (const line of doc.splitTextToSize(altPay, 300)) {
+              y += 13;
+              doc.text(line, pageW - 48, y, { align: "right" });
+            }
+            doc.setTextColor(0);
+          }
         }
 
         // Payment History
@@ -1971,6 +1981,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         💳 Pay Invoice — ${prices.card !== null ? FarriPricing.money(prices.card) : "$" + balanceDue}
       </a>
       <p style="color:#9ca3af;font-size:12px;margin-top:12px;">Or visit: <a href="${portalUrl}" style="color:#6b7280;">${portalUrl}</a></p>
+      ${FarriPricing.altPayNote(_userProfile) ? `<p style="color:#4b5563;font-size:14px;margin-top:16px;">${FarriPricing.altPayNote(_userProfile)}</p>` : ""}
     </div>` : `
     <div style="background:#f0fdf4;border:1px solid #10b981;border-radius:8px;padding:16px;text-align:center;margin:24px 0;">
       <p style="color:#065f46;font-weight:600;margin:0;">✅ This invoice has been paid in full. Thank you!</p>
@@ -12471,7 +12482,7 @@ function CalendarView({ userId }) {
                               {invoice.customerPhone && item('📱 SMS', async () => {
                                 const bizName = userProfile?.businessName || 'Your Farrier';
                                 const payLink = invoice.paymentUrl || '';
-                                const msg = `Hi ${invoice.customerName}, you have invoice #${invoice.invoiceNumber} for ${FarriPricing.dualPriceText(invoice)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''} Reply STOP to opt out.`;
+                                const msg = `Hi ${invoice.customerName}, you have invoice #${invoice.invoiceNumber} for ${FarriPricing.dualPriceText(invoice)} from ${bizName}.${payLink ? ` Pay here: ${payLink}` : ''}${payLink && FarriPricing.altPayNote(userProfile) ? ' ' + FarriPricing.altPayNote(userProfile) : ''} Reply STOP to opt out.`;
                                 try {
                                   const res = await fetch('/api/send-sms', {
                                     method: 'POST',
@@ -13531,7 +13542,7 @@ useEffect(() => {
               } else {
                 try {
                   const bizName = userProfile?.businessName || 'Your Farrier';
-                  const msg = `Hi ${customerName}, your invoice #${editingInvoice.invoiceNumber} for ${FarriPricing.dualPriceText(updatedInvoice)} from ${bizName} has been updated.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
+                  const msg = `Hi ${customerName}, your invoice #${editingInvoice.invoiceNumber} for ${FarriPricing.dualPriceText(updatedInvoice)} from ${bizName} has been updated.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''}${paymentUrl && FarriPricing.altPayNote(userProfile) ? ' ' + FarriPricing.altPayNote(userProfile) : ''} Reply STOP to opt out.`;
                   await fetch('/api/send-sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -13769,7 +13780,7 @@ useEffect(() => {
               } else {
                 try {
                   const bizName = userProfile?.businessName || 'Your Farrier';
-                  const msg = `Hi ${customerName}, you have a new invoice #${invoiceNumber} for ${FarriPricing.dualPriceText(createdInvoice)} from ${bizName}.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''} Reply STOP to opt out.`;
+                  const msg = `Hi ${customerName}, you have a new invoice #${invoiceNumber} for ${FarriPricing.dualPriceText(createdInvoice)} from ${bizName}.${paymentUrl ? ` Pay here: ${paymentUrl}` : ''}${paymentUrl && FarriPricing.altPayNote(userProfile) ? ' ' + FarriPricing.altPayNote(userProfile) : ''} Reply STOP to opt out.`;
                   await fetch('/api/send-sms', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -14214,6 +14225,8 @@ useEffect(() => {
       const [aboutMe, setAboutMe] = useState(userProfile?.aboutMe || '');
       const [autoPrintPdf, setAutoPrintPdf] = useState(userProfile?.autoPrintPdf ?? true);
       const [allowManualPayments, setAllowManualPayments] = useState(userProfile?.allowManualPayments ?? true);
+      const [zelleVenmoNote, setZelleVenmoNote] = useState(Boolean(userProfile?.zelleVenmoNote));
+      const [zelleContact, setZelleContact] = useState(userProfile?.zelleContact || '');
       const [cardPriceEnabled, setCardPriceEnabled] = useState(userProfile?.cardPricingEnabled ?? true);
       const [cardPricePercent, setCardPricePercent] = useState(String(Math.round((userProfile?.cardPriceRate ?? FarriPricing.DEFAULT_CARD_PRICE_RATE) * 10000) / 100));
       const [smsEnabled, setSmsEnabled] = useState(userProfile?.smsEnabled ?? false);
@@ -14296,6 +14309,8 @@ useEffect(() => {
               aboutMe: aboutMe,
               autoPrintPdf: autoPrintPdf,
               allowManualPayments: allowManualPayments,
+              zelleVenmoNote: zelleVenmoNote,
+              zelleContact: zelleContact.trim(),
               cardPricingEnabled: cardPriceEnabled,
               cardPriceRate: cardPriceRateValue,
               smsEnabled: smsEnabled,
@@ -14318,6 +14333,8 @@ useEffect(() => {
               aboutMe,
               autoPrintPdf,
               allowManualPayments,
+              zelleVenmoNote,
+              zelleContact: zelleContact.trim(),
               cardPricingEnabled: cardPriceEnabled,
               cardPriceRate: cardPriceRateValue,
               smsEnabled,
@@ -14493,6 +14510,16 @@ useEffect(() => {
                   <input type="checkbox" id="manualPayToggle" checked={Boolean(allowManualPayments)} onChange={(e)=>setAllowManualPayments(e.target.checked)} style={{width:'18px',height:'18px'}} />
                   <label htmlFor="manualPayToggle" style={{cursor:'pointer'}}>Allow manual payments (Cash / Check) on invoices</label>
                 </div>
+                <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.75rem'}}>
+                  <input type="checkbox" id="zelleVenmoToggle" checked={Boolean(zelleVenmoNote)} onChange={(e)=>setZelleVenmoNote(e.target.checked)} style={{width:'18px',height:'18px'}} />
+                  <label htmlFor="zelleVenmoToggle" style={{cursor:'pointer'}}>Tell customers they can pay by Zelle or Venmo (adds a line to pay-link texts, emails and invoice PDFs)</label>
+                </div>
+                {zelleVenmoNote && (
+                  <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.5rem', marginLeft:'28px', flexWrap:'wrap'}}>
+                    <label htmlFor="zelleContactInput">Your Zelle phone or email</label>
+                    <input id="zelleContactInput" type="text" value={zelleContact} onChange={(e)=>setZelleContact(e.target.value)} placeholder="e.g. 561-555-0123" style={{width:'220px'}} />
+                  </div>
+                )}
                 <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.75rem', flexWrap:'wrap'}}>
                   <input type="checkbox" id="cardPriceToggle" checked={Boolean(cardPriceEnabled)} onChange={(e)=>setCardPriceEnabled(e.target.checked)} style={{width:'18px',height:'18px'}} />
                   <label htmlFor="cardPriceToggle" style={{cursor:'pointer'}}>Card price (dual pricing): card payments are</label>

@@ -1078,6 +1078,11 @@
         <input type="checkbox" id="set-manual-pay" style="width:18px;height:18px;flex-shrink:0;">
         Allow manual payments (Cash / Check) on invoices
       </label>
+      <label style="display:flex; align-items:center; gap:10px; font-size:0.9rem; font-weight:600; cursor:pointer;">
+        <input type="checkbox" id="set-zelle-venmo" style="width:18px;height:18px;flex-shrink:0;">
+        Tell customers they can pay by Zelle or Venmo (adds a line to pay-link texts and emails)
+      </label>
+      <div class="field"><label>Your Zelle phone or email <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label><input type="text" id="set-zelle-contact" placeholder="e.g. 561-555-0123"></div>
     </div>
 
     <button class="btn-primary" id="settings-save-btn" onclick="saveSettingsProfile()" style="margin-top:14px;">Save Changes</button>
@@ -2989,7 +2994,7 @@ async function saveAndSendSms() {
     state.editingInvoice = null;
     const bizName = state.userProfile?.businessName || 'Your Farrier';
     const msg = inv.paymentUrl
-      ? `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} from ${bizName} is ready. Pay here: ${inv.paymentUrl} Reply STOP to opt out.`
+      ? `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} from ${bizName} is ready. Pay here: ${inv.paymentUrl}${FarriPricing.altPayNote(state.userProfile) ? ' ' + FarriPricing.altPayNote(state.userProfile) : ''} Reply STOP to opt out.`
       : `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for $${inv.total.toFixed(2)} from ${bizName} has been created. Reply STOP to opt out.`;
     const res = await fetch('/api/send-sms', {
       method: 'POST',
@@ -3021,6 +3026,7 @@ async function saveAndSendEmail() {
     const bizName = state.userProfile?.businessName || 'Your Farrier';
     const payBlock = inv.paymentUrl
       ? `<p style="text-align:center;margin:24px 0;"><a href="${inv.paymentUrl}" style="background:#2563eb;color:#fff;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;">Pay Invoice — $${inv.total.toFixed(2)}</a></p>`
+        + (FarriPricing.altPayNote(state.userProfile) ? `<p style="text-align:center;color:#4b5563;font-size:14px;">${FarriPricing.altPayNote(state.userProfile)}</p>` : '')
       : '';
     const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:520px;margin:0 auto;padding:20px;color:#333;">
       <h2 style="color:#1a365d;">Invoice #${escapeHtml(inv.invoiceNumber)} from ${escapeHtml(bizName)}</h2>
@@ -3575,6 +3581,8 @@ function loadSettingsScreen() {
 
   document.getElementById('set-auto-print').checked = p.autoPrintPdf ?? true;
   document.getElementById('set-manual-pay').checked = p.allowManualPayments ?? true;
+  document.getElementById('set-zelle-venmo').checked = Boolean(p.zelleVenmoNote);
+  document.getElementById('set-zelle-contact').value = p.zelleContact || '';
   document.getElementById('set-sms-enabled').checked = Boolean(p.smsEnabled);
   document.getElementById('set-card-pricing').checked = p.cardPricingEnabled !== false;
   document.getElementById('set-card-price-rate').value = String(Math.round((p.cardPriceRate ?? FarriPricing.DEFAULT_CARD_PRICE_RATE) * 10000) / 100);
@@ -3652,6 +3660,9 @@ function saveSettingsProfile() {
     return;
   }
   const suffix = netState.online ? '' : ' (will sync when back online)';
+  const zelleVenmoNote = document.getElementById('set-zelle-venmo').checked;
+  const zelleContact = document.getElementById('set-zelle-contact').value.trim();
+  state.userProfile = { ...(state.userProfile || {}), zelleVenmoNote, zelleContact };
   performWrite(() => db.collection('farriers').doc(state.user.uid).set({
     businessName,
     firstName,
@@ -3665,6 +3676,8 @@ function saveSettingsProfile() {
     aboutMe: document.getElementById('set-about-me').value,
     autoPrintPdf: document.getElementById('set-auto-print').checked,
     allowManualPayments: document.getElementById('set-manual-pay').checked,
+    zelleVenmoNote,
+    zelleContact,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   }, { merge: true }));
   showSettingsSaved(suffix);
@@ -3812,6 +3825,7 @@ function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
       <a href="${payUrl}" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 36px;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;display:inline-block;">
         💳 Pay Invoice — ${prices.card !== null ? FarriPricing.money(prices.card) : FarriPricing.money(prices.cash)}
       </a>
+      ${FarriPricing.altPayNote(state.userProfile) ? `<p style="color:#4b5563;font-size:14px;margin-top:16px;">${FarriPricing.altPayNote(state.userProfile)}</p>` : ''}
     </div>` : ''}
     <p style="color:#6b7280;font-size:13px;">Questions? Contact your farrier directly.</p>
   </div>
@@ -3892,7 +3906,7 @@ async function confirmPayment() {
       // Send payment link via SMS/email
       const sendSms = document.getElementById('send-sms-link')?.checked;
       const sendEmail = document.getElementById('send-email-link')?.checked;
-      const payUrl = inv.paymentUrl || '';
+      let payUrl = inv.paymentUrl || '';
 
       // Must select at least one delivery method
       if (!sendSms && !sendEmail) {
@@ -3902,9 +3916,33 @@ async function confirmPayment() {
         return;
       }
 
+      // No link yet (invoice made offline, or the link failed when it was saved) — make
+      // one now; the server builds it from the saved invoice.
+      let linkError = '';
+      if (!payUrl && netState.online && state.userProfile?.stripePublishableKey && inv.id) {
+        try {
+          const plRes = await fetch('/api/stripe-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'payment_link', invoiceId: inv.id }),
+          });
+          const plData = await plRes.json();
+          if (plData.success && plData.paymentUrl) {
+            payUrl = plData.paymentUrl;
+            inv.paymentUrl = payUrl;
+          } else {
+            linkError = plData.error || 'Stripe error';
+          }
+        } catch (e) {
+          linkError = e.message;
+        }
+      }
+
       // Must have a payment URL
       if (!payUrl) {
-        showToast(netState.online ? 'No payment link available — check Stripe is connected in Settings' : 'No payment link — this invoice was created offline', 'error');
+        showToast(linkError ? 'No payment link: ' + linkError
+          : !netState.online ? 'No payment link — you are offline'
+          : 'No payment link available — check Stripe is connected in Settings', 'error');
         document.getElementById('confirm-pay-btn').disabled = false;
         document.getElementById('pay-saving').style.display = 'none';
         return;
@@ -3914,7 +3952,7 @@ async function confirmPayment() {
       if (sendSms && inv.customerPhone) {
         await fetch('/api/send-sms', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for ${FarriPricing.dualPriceText(inv)} is ready. Pay here: ${payUrl} Reply STOP to opt out.` })
+          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for ${FarriPricing.dualPriceText(inv)} is ready. Pay here: ${payUrl}${FarriPricing.altPayNote(state.userProfile) ? ' ' + FarriPricing.altPayNote(state.userProfile) : ''} Reply STOP to opt out.` })
         });
         sent.push('SMS');
       } else if (sendSms && !inv.customerPhone) {

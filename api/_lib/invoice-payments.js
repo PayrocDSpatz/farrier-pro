@@ -257,6 +257,7 @@ export async function sendUpdatedPayLink(invoice, invoiceId, amountCents) {
   const number = invoice.invoiceNumber || invoiceId;
   const url = payUrlFor(invoiceId);
   const amount = P.money(amountCents);
+  const altPay = P.altPayNote(farrier);
   const { idToken } = await serverAuth();
   const sent = [];
 
@@ -264,7 +265,7 @@ export async function sendUpdatedPayLink(invoice, invoiceId, amountCents) {
     const r = await fetch(`${APP_URL}/api/send-sms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-      body: JSON.stringify({ to: invoice.customerPhone, body: `Hi ${name}, here is your updated payment link for Invoice #${number} from ${biz}: ${amount}. Pay here: ${url} Reply STOP to opt out.` }),
+      body: JSON.stringify({ to: invoice.customerPhone, body: `Hi ${name}, here is your updated payment link for Invoice #${number} from ${biz}: ${amount}. Pay here: ${url}${altPay ? ' ' + altPay : ''} Reply STOP to opt out.` }),
     }).catch(() => null);
     if (r?.ok) sent.push('text');
   }
@@ -273,6 +274,7 @@ export async function sendUpdatedPayLink(invoice, invoiceId, amountCents) {
   <p>Hi ${escapeHtml(name)},</p>
   <p>Here is your updated payment link for Invoice #${escapeHtml(number)} from <strong>${escapeHtml(biz)}</strong>: <strong>${amount}</strong>.</p>
   <p style="text-align:center;margin:28px 0;"><a href="${url}" style="background:#059669;color:#fff;padding:14px 32px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;">Pay ${amount}</a></p>
+  ${altPay ? `<p style="text-align:center;color:#4b5563;">${escapeHtml(altPay)}</p>` : ''}
   <p style="color:#9ca3af;font-size:12px;">Powered by FarriTech</p>
 </body></html>`;
     const r = await fetch(`${APP_URL}/api/send-email`, {
