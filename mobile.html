@@ -3906,7 +3906,7 @@ async function confirmPayment() {
       // Send payment link via SMS/email
       const sendSms = document.getElementById('send-sms-link')?.checked;
       const sendEmail = document.getElementById('send-email-link')?.checked;
-      const payUrl = inv.paymentUrl || '';
+      let payUrl = inv.paymentUrl || '';
 
       // Must select at least one delivery method
       if (!sendSms && !sendEmail) {
@@ -3916,9 +3916,33 @@ async function confirmPayment() {
         return;
       }
 
+      // No link yet (invoice made offline, or the link failed when it was saved) — make
+      // one now; the server builds it from the saved invoice.
+      let linkError = '';
+      if (!payUrl && netState.online && state.userProfile?.stripePublishableKey && inv.id) {
+        try {
+          const plRes = await fetch('/api/stripe-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'payment_link', invoiceId: inv.id }),
+          });
+          const plData = await plRes.json();
+          if (plData.success && plData.paymentUrl) {
+            payUrl = plData.paymentUrl;
+            inv.paymentUrl = payUrl;
+          } else {
+            linkError = plData.error || 'Stripe error';
+          }
+        } catch (e) {
+          linkError = e.message;
+        }
+      }
+
       // Must have a payment URL
       if (!payUrl) {
-        showToast(netState.online ? 'No payment link available — check Stripe is connected in Settings' : 'No payment link — this invoice was created offline', 'error');
+        showToast(linkError ? 'No payment link: ' + linkError
+          : !netState.online ? 'No payment link — you are offline'
+          : 'No payment link available — check Stripe is connected in Settings', 'error');
         document.getElementById('confirm-pay-btn').disabled = false;
         document.getElementById('pay-saving').style.display = 'none';
         return;
