@@ -4114,6 +4114,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const [showNewAppt, setShowNewAppt] = useState(false);
       const [invoiceApt, setInvoiceApt] = useState(null);
       const [horseModal, setHorseModal] = useState(null); // { horse } — horse is null when adding new; presence of the key just controls modal visibility
+      const [horseNamesByCustomer, setHorseNamesByCustomer] = useState({}); // customerId → horse names, so search finds an owner by horse name
 
       // Form state
       const [formName, setFormName] = useState('');
@@ -4239,6 +4240,19 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           console.error('Error loading customers:', e);
         }
         setLoading(false);
+        // Horse names for search — the list works without them if this fails.
+        try {
+          const horseSnap = await db.collection('horses').where('farrierId', '==', userId).get();
+          const byCustomer = {};
+          horseSnap.docs.forEach(d => {
+            const h = d.data();
+            if (!h.customerId || !h.name) return;
+            (byCustomer[h.customerId] = byCustomer[h.customerId] || []).push(String(h.name));
+          });
+          setHorseNamesByCustomer(byCustomer);
+        } catch (e) {
+          console.error('Error loading horses for search:', e);
+        }
       };
 
       useEffect(() => { loadCustomers(); }, [userId]);
@@ -4331,6 +4345,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           const horses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
             .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
           setCustomerDetail(prev => prev ? { ...prev, horses } : prev);
+          setHorseNamesByCustomer(prev => ({ ...prev, [selectedCustomer.id]: horses.map(h => String(h.name || '')).filter(Boolean) }));
         } catch (e) { console.error('Error refreshing horses:', e); }
       };
 
@@ -4421,9 +4436,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         }
       };
 
+      const searchQ = search.trim().toLowerCase();
+      const matchingHorses = (c) => searchQ ? (horseNamesByCustomer[c.id] || []).filter(n => n.toLowerCase().includes(searchQ)) : [];
       const filtered = customers.filter(c => {
         const q = search.toLowerCase();
-        const matchSearch = !q ||
+        const matchSearch = !q || matchingHorses(c).length > 0 ||
           (c.name || '').toLowerCase().includes(q) ||
           (c.farmName || '').toLowerCase().includes(q) ||
           (c.managerContact || '').toLowerCase().includes(q) ||
@@ -4828,7 +4845,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           {/* Filters */}
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <input
-              type="text" placeholder="🔍 Search name, email, phone…"
+              type="text" placeholder="🔍 Search name, email, phone, horse…"
               value={search} onChange={e => setSearch(e.target.value)}
               style={{ flex: '1', minWidth: 200, padding: '0.6rem 0.9rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '0.95rem' }}
             />
@@ -4870,6 +4887,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                         {cust.phone && <span>📞 {cust.phone}</span>}
                         {cust.email && <span>✉️ {cust.email}</span>}
+                        {matchingHorses(cust).length > 0 && <span style={{ color: 'var(--primary)', fontWeight: 600 }}>🐴 {matchingHorses(cust).join(', ')}</span>}
                       </div>
                     </div>
                   </div>
