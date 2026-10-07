@@ -14227,6 +14227,7 @@ useEffect(() => {
       const [allowManualPayments, setAllowManualPayments] = useState(userProfile?.allowManualPayments ?? true);
       const [zelleVenmoNote, setZelleVenmoNote] = useState(Boolean(userProfile?.zelleVenmoNote));
       const [zelleContact, setZelleContact] = useState(userProfile?.zelleContact || '');
+      const [venmoHandle, setVenmoHandle] = useState(userProfile?.venmoHandle || '');
       const [cardPriceEnabled, setCardPriceEnabled] = useState(userProfile?.cardPricingEnabled ?? true);
       const [cardPricePercent, setCardPricePercent] = useState(String(Math.round((userProfile?.cardPriceRate ?? FarriPricing.DEFAULT_CARD_PRICE_RATE) * 10000) / 100));
       const [smsEnabled, setSmsEnabled] = useState(userProfile?.smsEnabled ?? false);
@@ -14311,6 +14312,7 @@ useEffect(() => {
               allowManualPayments: allowManualPayments,
               zelleVenmoNote: zelleVenmoNote,
               zelleContact: zelleContact.trim(),
+              venmoHandle: venmoHandle.trim().replace(/^@/, ''),
               cardPricingEnabled: cardPriceEnabled,
               cardPriceRate: cardPriceRateValue,
               smsEnabled: smsEnabled,
@@ -14335,6 +14337,7 @@ useEffect(() => {
               allowManualPayments,
               zelleVenmoNote,
               zelleContact: zelleContact.trim(),
+              venmoHandle: venmoHandle.trim().replace(/^@/, ''),
               cardPricingEnabled: cardPriceEnabled,
               cardPriceRate: cardPriceRateValue,
               smsEnabled,
@@ -14518,6 +14521,12 @@ useEffect(() => {
                   <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.5rem', marginLeft:'28px', flexWrap:'wrap'}}>
                     <label htmlFor="zelleContactInput">Your Zelle phone or email</label>
                     <input id="zelleContactInput" type="text" value={zelleContact} onChange={(e)=>setZelleContact(e.target.value)} placeholder="e.g. 561-555-0123" style={{width:'220px'}} />
+                  </div>
+                )}
+                {zelleVenmoNote && (
+                  <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.5rem', marginLeft:'28px', flexWrap:'wrap'}}>
+                    <label htmlFor="venmoHandleInput">Your Venmo @handle</label>
+                    <input id="venmoHandleInput" type="text" value={venmoHandle} onChange={(e)=>setVenmoHandle(e.target.value)} placeholder="e.g. @Davids-Farrier" style={{width:'220px'}} />
                   </div>
                 )}
                 <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.75rem', flexWrap:'wrap'}}>
