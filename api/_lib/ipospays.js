@@ -141,9 +141,25 @@ export async function connectIpospays(farrierId, { tpn, apiKey, secretKey, ecomT
     throw new PaymentError('iPOSpays didn’t accept that Ecom token. In the iPOSpays portal go to Settings → Merchant Keys / Ecom Token, pick this TPN and generate a token.');
   }
 
+  // Prove the account can make payment pages (iPOSpays has to enable PaymentTokenization
+  // per merchant): make a $1 page for no invoice, then cancel it straight away.
+  const callbackSecret = crypto.randomBytes(24).toString('hex').slice(0, 40);
+  const ref = newReferenceId();
+  const testPage = pageRequest({ tpn, callbackSecret }, 'connectiontest', { invoiceNumber: 'TEST' }, { businessName: 'FarriTech' }, ref, 100, 100);
+  const r = await fetch(`${hosts(mode).payment}/api/v3/external-payment-transaction`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', token }, body: JSON.stringify(testPage),
+  }).catch(() => null);
+  const d = r ? await readJson(r) : {};
+  if (!r || !r.ok || !d.information) {
+    console.error('iPOSpays test page failed:', r?.status, JSON.stringify(d));
+    throw new PaymentError(`Your keys work, but iPOSpays won’t make payment pages for this account yet: ${errorText(d, r ? `HTTP ${r.status}` : 'no response').replace(/\.+$/, '')}. Ask iPOSpays (devsupport@dejavoo.io) or your ISO to enable PaymentTokenization / Hosted Payment Page for TPN ${tpn}.`);
+  }
+  const t = linkToken(d.information);
+  if (t) await fetch(`${hosts(mode).payment}/api/v1/cancel`, { method: 'POST', headers: { Authorization: t } }).catch(() => null);
+
   await patchDoc(`farrierSecrets/${farrierId}`, {
     ipospaysTpn: tpn, ipospaysApiKey: apiKey, ipospaysSecretKey: secretKey, ipospaysEcomToken: ecomToken, ipospaysMode: mode,
-    ipospaysCallbackSecret: crypto.randomBytes(24).toString('hex').slice(0, 40),
+    ipospaysCallbackSecret: callbackSecret,
     ipospaysToken: token, ipospaysTokenExpiresAt: expiresAt, ipospaysConnectedAt: new Date(),
   });
   return { mode, tpnLast4: tpn.slice(-4) };
