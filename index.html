@@ -1787,6 +1787,16 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
           doc.line(pageW - 48 - linkWidth, y + 3, pageW - 48, y + 3);
           doc.setTextColor(0);
           doc.setFont("helvetica", "normal");
+          const altPay = FarriPricing.altPayNote(farrierProfile);
+          if (altPay) {
+            doc.setFontSize(9);
+            doc.setTextColor(75);
+            for (const line of doc.splitTextToSize(altPay, 300)) {
+              y += 13;
+              doc.text(line, pageW - 48, y, { align: "right" });
+            }
+            doc.setTextColor(0);
+          }
         }
 
         // Payment History
@@ -14216,6 +14226,7 @@ useEffect(() => {
       const [autoPrintPdf, setAutoPrintPdf] = useState(userProfile?.autoPrintPdf ?? true);
       const [allowManualPayments, setAllowManualPayments] = useState(userProfile?.allowManualPayments ?? true);
       const [zelleVenmoNote, setZelleVenmoNote] = useState(Boolean(userProfile?.zelleVenmoNote));
+      const [zelleContact, setZelleContact] = useState(userProfile?.zelleContact || '');
       const [cardPriceEnabled, setCardPriceEnabled] = useState(userProfile?.cardPricingEnabled ?? true);
       const [cardPricePercent, setCardPricePercent] = useState(String(Math.round((userProfile?.cardPriceRate ?? FarriPricing.DEFAULT_CARD_PRICE_RATE) * 10000) / 100));
       const [smsEnabled, setSmsEnabled] = useState(userProfile?.smsEnabled ?? false);
@@ -14299,6 +14310,7 @@ useEffect(() => {
               autoPrintPdf: autoPrintPdf,
               allowManualPayments: allowManualPayments,
               zelleVenmoNote: zelleVenmoNote,
+              zelleContact: zelleContact.trim(),
               cardPricingEnabled: cardPriceEnabled,
               cardPriceRate: cardPriceRateValue,
               smsEnabled: smsEnabled,
@@ -14322,6 +14334,7 @@ useEffect(() => {
               autoPrintPdf,
               allowManualPayments,
               zelleVenmoNote,
+              zelleContact: zelleContact.trim(),
               cardPricingEnabled: cardPriceEnabled,
               cardPriceRate: cardPriceRateValue,
               smsEnabled,
@@ -14499,8 +14512,14 @@ useEffect(() => {
                 </div>
                 <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.75rem'}}>
                   <input type="checkbox" id="zelleVenmoToggle" checked={Boolean(zelleVenmoNote)} onChange={(e)=>setZelleVenmoNote(e.target.checked)} style={{width:'18px',height:'18px'}} />
-                  <label htmlFor="zelleVenmoToggle" style={{cursor:'pointer'}}>Tell customers they can pay by Zelle or Venmo (adds a line to pay-link texts and emails)</label>
+                  <label htmlFor="zelleVenmoToggle" style={{cursor:'pointer'}}>Tell customers they can pay by Zelle or Venmo (adds a line to pay-link texts, emails and invoice PDFs)</label>
                 </div>
+                {zelleVenmoNote && (
+                  <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.5rem', marginLeft:'28px', flexWrap:'wrap'}}>
+                    <label htmlFor="zelleContactInput">Your Zelle phone or email</label>
+                    <input id="zelleContactInput" type="text" value={zelleContact} onChange={(e)=>setZelleContact(e.target.value)} placeholder="e.g. 561-555-0123" style={{width:'220px'}} />
+                  </div>
+                )}
                 <div style={{display:'flex', alignItems:'center', gap:'10px', marginTop:'0.75rem', flexWrap:'wrap'}}>
                   <input type="checkbox" id="cardPriceToggle" checked={Boolean(cardPriceEnabled)} onChange={(e)=>setCardPriceEnabled(e.target.checked)} style={{width:'18px',height:'18px'}} />
                   <label htmlFor="cardPriceToggle" style={{cursor:'pointer'}}>Card price (dual pricing): card payments are</label>

@@ -1082,6 +1082,7 @@
         <input type="checkbox" id="set-zelle-venmo" style="width:18px;height:18px;flex-shrink:0;">
         Tell customers they can pay by Zelle or Venmo (adds a line to pay-link texts and emails)
       </label>
+      <div class="field"><label>Your Zelle phone or email <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label><input type="text" id="set-zelle-contact" placeholder="e.g. 561-555-0123"></div>
     </div>
 
     <button class="btn-primary" id="settings-save-btn" onclick="saveSettingsProfile()" style="margin-top:14px;">Save Changes</button>
@@ -3581,6 +3582,7 @@ function loadSettingsScreen() {
   document.getElementById('set-auto-print').checked = p.autoPrintPdf ?? true;
   document.getElementById('set-manual-pay').checked = p.allowManualPayments ?? true;
   document.getElementById('set-zelle-venmo').checked = Boolean(p.zelleVenmoNote);
+  document.getElementById('set-zelle-contact').value = p.zelleContact || '';
   document.getElementById('set-sms-enabled').checked = Boolean(p.smsEnabled);
   document.getElementById('set-card-pricing').checked = p.cardPricingEnabled !== false;
   document.getElementById('set-card-price-rate').value = String(Math.round((p.cardPriceRate ?? FarriPricing.DEFAULT_CARD_PRICE_RATE) * 10000) / 100);
@@ -3659,7 +3661,8 @@ function saveSettingsProfile() {
   }
   const suffix = netState.online ? '' : ' (will sync when back online)';
   const zelleVenmoNote = document.getElementById('set-zelle-venmo').checked;
-  state.userProfile = { ...(state.userProfile || {}), zelleVenmoNote };
+  const zelleContact = document.getElementById('set-zelle-contact').value.trim();
+  state.userProfile = { ...(state.userProfile || {}), zelleVenmoNote, zelleContact };
   performWrite(() => db.collection('farriers').doc(state.user.uid).set({
     businessName,
     firstName,
@@ -3674,6 +3677,7 @@ function saveSettingsProfile() {
     autoPrintPdf: document.getElementById('set-auto-print').checked,
     allowManualPayments: document.getElementById('set-manual-pay').checked,
     zelleVenmoNote,
+    zelleContact,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   }, { merge: true }));
   showSettingsSaved(suffix);
