@@ -96,10 +96,11 @@ export async function getIposCreds(farrierId, secrets = null) {
 }
 
 // Generate Auth Token. Throws PaymentError with a farrier-friendly message.
+// Only these three headers: Dejavoo support confirmed the request takes no scope header.
 async function requestToken({ apiKey, secretKey, mode }) {
   const r = await fetch(`${hosts(mode).auth}/v1/authenticate-token`, {
     method: 'POST',
-    headers: { apiKey, secretKey, scope: 'PaymentTokenization', TokenExpiryMinutes: String(TOKEN_MINUTES) },
+    headers: { apiKey, secretKey, TokenExpiryMinutes: String(TOKEN_MINUTES) },
   });
   const d = await readJson(r);
   if (r.ok && d.responseCode === '00' && d.token) {

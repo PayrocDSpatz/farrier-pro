@@ -34,7 +34,7 @@ FarriTech checks the keys with iPOSpays before saving, then stores everything in
 
 | Step | iPOSpays API |
 |---|---|
-| Get an auth token (24 h, cached, refreshed automatically) | `POST auth.ipospays.{tech,com}/v1/authenticate-token` (scope `PaymentTokenization`) |
+| Get an auth token (24 h, cached, refreshed automatically) | `POST auth.ipospays.{tech,com}/v1/authenticate-token` (headers `apiKey`, `secretKey`, `TokenExpiryMinutes` only) |
 | Make the payment page | `POST payment.ipospays.{tech,com}/api/v3/external-payment-transaction` |
 | Confirm a payment | `GET api.ipospays.{tech,com}/v1/queryPaymentStatus` (Ecom token) |
 | Close a page | `POST payment.ipospays.{tech,com}/api/v1/cancel` |
@@ -51,9 +51,9 @@ only 12 functions.
 
 The iPOSpays docs leave a few details open. Check each of these on the first test payment:
 
-1. **Scope header.** The docs say a scope is required but don't name the header. FarriTech
-   sends `scope: PaymentTokenization`. If connecting fails with `AUTH_ERR_003` ("Scope is
-   required"), the header name is wrong.
+1. **Token request headers.** Dejavoo support confirmed the token request sends only
+   `apiKey`, `secretKey` and `TokenExpiryMinutes`, with no `scope` header, and tested the
+   Hosted Payment Page end to end on sandbox TPN 950126444275.
 2. **Both notifications in one request.** FarriTech sends `notifyByPOST` (callback) and
    `notifyByRedirect` (customer return) together. If the payment page request is rejected
    for that, keep one of them.
