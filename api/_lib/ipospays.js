@@ -301,6 +301,8 @@ export async function syncIposPayment(creds, invoiceId, ref) {
   if (!resp) return { paid: false };
   if (!succeeded(resp) || resp.transactionReferenceId !== ref) {
     // iPOSpays has an answer and it isn't an approval (e.g. a decline for a CVV mismatch).
+    // That page can't be used again ("link expired"), so the next try makes a new one.
+    if (invoice.iposOpenRef === ref) await patchDoc(`invoices/${invoiceId}`, { iposOpenRef: '' });
     return { paid: false, declined: true, message: resp.errResponseMessage || resp.responseMessage || '' };
   }
 
