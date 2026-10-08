@@ -68,8 +68,6 @@ export function linkToken(url) {
   try { return new URL(url).searchParams.get('t') || ''; } catch (e) { return ''; }
 }
 
-// Dollars ("125.25" or 125.25) → cents, or null.
-export const dollarsToCents = (v) => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? null : Math.round(Number(v) * 100);
 
 async function readJson(r) {
   const text = await r.text();
@@ -280,7 +278,10 @@ export async function queryIposPayment(creds, ref) {
     const d = r ? await readJson(r) : {};
     console.log(`iPOSpays status (${label}):`, ref, r?.status, JSON.stringify(d).slice(0, 1500));
     if (!r?.ok) return null;
-    return d.iposHPResponse || d.data?.iposHPResponse || (d.responseCode !== undefined && d.transactionReferenceId ? d : null);
+    // Sandbox answers { status: 'Success', data: {...} } ({ status: 'Pending', data: {} } before
+    // the payment settles); the docs show { iposHPResponse: {...} }.
+    const resp = d.iposHPResponse || d.data?.iposHPResponse || d.data || d;
+    return resp?.responseCode !== undefined && resp?.responseCode !== '' ? resp : null;
   };
   // The docs show the Ecom token as the Authorization header. If that gets no answer,
   // try the auth token the payment page was made with.
@@ -306,7 +307,10 @@ export async function syncIposPayment(creds, invoiceId, ref) {
     return { paid: false, declined: true, message: resp.errResponseMessage || resp.responseMessage || '' };
   }
 
-  const amountCents = dollarsToCents(resp.totalAmount) ?? dollarsToCents(resp.amount) ?? link.chargeCents;
+  // iPOSpays reports amounts in cents ("103" for $1.03), like the amount we sent.
+  const reported = Math.round(Number(resp.totalAmount || resp.amount));
+  const amountCents = reported > 0 ? reported : link.chargeCents;
+  if (amountCents !== link.chargeCents) console.warn('iPOSpays amount differs from the page:', invoiceId, ref, amountCents, link.chargeCents);
   const last4 = String(resp.cardLast4Digit ?? '').replace(/\D/g, '').slice(-4);
   const brand = resp.cardType ? String(resp.cardType).charAt(0).toUpperCase() + String(resp.cardType).slice(1).toLowerCase() : 'Card';
   const result = await applyPayment(invoiceId, {
