@@ -20,7 +20,10 @@ const P = globalThis.FarriPricing;
 export const APP_URL = (process.env.APP_URL || 'https://app.farritech.com').replace(/\/$/, '');
 // Customers always get this link. It never expires — it opens (or creates) a Checkout
 // Session at the current price, so a link texted last week still works.
-export const payUrlFor = (invoiceId) => `${APP_URL}/pay/${invoiceId}`;
+// On a Vercel preview they point at that preview's branch URL instead, so a preview can be
+// tested end to end (production doesn't have what's being tested yet).
+const PAY_BASE = process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : APP_URL;
+export const payUrlFor = (invoiceId) => `${PAY_BASE}/pay/${invoiceId}`;
 
 export class PaymentError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }

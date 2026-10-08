@@ -188,7 +188,7 @@ function pageRequest(creds, invoiceId, invoice, farrier, ref, chargeCents, cashC
     },
     notificationOption: {
       notifyByPOST: true,
-      postAPI: `${APP_URL}/api/ipospays/callback/${invoiceId}?ref=${ref}`,
+      postAPI: `${new URL(payUrlFor(invoiceId)).origin}/api/ipospays/callback/${invoiceId}?ref=${ref}`,
       authHeader: creds.callbackSecret,
       notifyByRedirect: true,
       returnUrl: `${payUrlFor(invoiceId)}?ipos_ref=${ref}`,
