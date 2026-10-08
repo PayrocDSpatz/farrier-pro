@@ -343,6 +343,66 @@ export async function syncIposPayment(creds, invoiceId, ref) {
   return { paid: true, amountCents, invoice, ...result };
 }
 
+// ── Refunds (iPOS Transact, by the original payment's RRN) ──
+// Same-day payments are voided (nothing reaches the card statement); once the batch has
+// settled a void is declined and a refund is sent instead. A partial amount can only be a
+// refund. Records the refund on the invoice the way Stripe refunds are recorded.
+export async function refundIposPayment(creds, invoiceId, invoice, cents) {
+  const paid = (Array.isArray(invoice.payments) ? invoice.payments : []).filter(p => String(p.paymentId || '').startsWith('ipos_'));
+  const payment = paid[paid.length - 1];
+  if (!payment) throw new PaymentError('No iPOSpays payment on this invoice.');
+  const paidCents = Math.round((payment.amount || 0) * 100);
+  const already = (Array.isArray(invoice.refunds) ? invoice.refunds : [])
+    .filter(r => r.transactionId === payment.paymentId).reduce((s, r) => s + Math.round((r.amount || 0) * 100), 0);
+  const left = paidCents - already;
+  if (!Number.isInteger(cents) || cents <= 0) throw new PaymentError('Enter a refund amount.');
+  if (cents > left) throw new PaymentError(`Refund can't be more than ${P.money(left)}.`);
+
+  // The RRN saved with the payment, or (payments from before it was saved) iPOSpays' own answer.
+  const doc = await getDoc(`invoices/${invoiceId}/payments/${payment.paymentId}`).catch(() => null);
+  let rrn = doc?.processorDetails?.rrn || '';
+  if (!rrn) rrn = String((await queryIposPayment(creds, payment.paymentId.slice(5)))?.rrn || '');
+  if (!/^\d{12}$/.test(rrn)) throw new PaymentError('Couldn’t find this payment in iPOSpays. Refund it in the iPOSpays portal instead.');
+
+  const send = async (transactionType, amount) => {
+    const body = {
+      merchantAuthentication: { merchantId: creds.tpn, transactionReferenceId: newReferenceId() },
+      transactionRequest: { transactionType, rrn, amount }, // '' = the whole original amount (never '0')
+    };
+    const r = await fetch(`${hosts(creds.mode).payment}/api/v3/iposTransact`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', token: await authToken(creds) }, body: JSON.stringify(body),
+    }).catch(() => null);
+    const d = r ? await readJson(r) : {};
+    console.log(`iPOSpays ${transactionType === 2 ? 'void' : 'refund'}:`, invoiceId, rrn, r?.status, JSON.stringify(d).slice(0, 800));
+    const resp = d.iposhpresponse || d.iposHPResponse || d.data || d;
+    return { ok: !!r?.ok && Number(resp?.responseCode) === 200, resp, d, status: r?.status };
+  };
+
+  const full = cents === left && already === 0;
+  let kind = 'refund';
+  let result = full ? await send(2, '') : null;
+  if (result?.ok) kind = 'void';
+  else result = await send(3, full ? '' : String(cents));
+  if (!result.ok) {
+    const why = result.resp?.errResponseMessage || result.resp?.responseMessage || errorText(result.d, result.status ? `HTTP ${result.status}` : 'no response');
+    throw new PaymentError(`iPOSpays didn’t take the refund: ${why}. You can refund it in the iPOSpays portal instead.`, 400);
+  }
+
+  const fresh = await getDoc(`invoices/${invoiceId}`);
+  const refunds = [...(Array.isArray(fresh.refunds) ? fresh.refunds : []), {
+    amount: cents / 100, refundId: String(result.resp.transactionId || ''), transactionId: payment.paymentId,
+    processor: 'ipospays', kind, rrn: String(result.resp.rrn || ''), date: new Date().toISOString(),
+  }];
+  const refundedAmount = refunds.reduce((s, r) => s + (r.amount || 0), 0);
+  const paidTotal = fresh.paidAmount || (fresh.payments || []).reduce((s, p) => s + (p.amount || 0), 0) || fresh.total || 0;
+  const fully = refundedAmount >= paidTotal - 0.001;
+  await patchDoc(`invoices/${invoiceId}`, {
+    refunds, refundedAmount, updatedAt: new Date(),
+    ...(fully ? { status: 'refunded', refundedAt: new Date() } : {}),
+  });
+  return { kind, amountCents: cents, refundId: String(result.resp.transactionId || '') };
+}
+
 // Closes every payment page still on offer for the invoice, so the customer can't pay
 // for something that's already settled. Any page that turns out to be paid is recorded
 // instead — then { paid: true }.

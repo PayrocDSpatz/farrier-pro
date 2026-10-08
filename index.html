@@ -12461,7 +12461,7 @@ function CalendarView({ userId }) {
                       >
                         🖨️ Print / PDF
                       </button>
-                      {(invoice.status === 'paid' || invoice.status === 'partial') && invoiceStripePaymentId(invoice) && invoiceRefundable(invoice) > 0 && (
+                      {(invoice.status === 'paid' || invoice.status === 'partial') && (invoiceStripePaymentId(invoice) || invoiceIposPaid(invoice)) && invoiceRefundable(invoice) > 0 && (
                         <button
                           className="btn btn-sm btn-outline"
                           onClick={() => { setSelectedInvoice(invoice); setShowRefundModal(true); }}
@@ -12682,6 +12682,10 @@ function CalendarView({ userId }) {
       const id = invoice.transactionId || invoice.stripePaymentIntentId || '';
       return String(id).startsWith('pi_') ? id : '';
     }
+    // Paid through an iPOSpays pay link — refunded through iPOSpays (void or refund by RRN).
+    function invoiceIposPaid(invoice) {
+      return (invoice.payments || []).some(p => String(p.paymentId || '').startsWith('ipos_'));
+    }
     function invoiceRefundable(invoice) {
       const paid = invoice.paidAmount || (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0) || invoice.total || 0;
       return Math.max(0, paid - (invoice.refundedAmount || 0));
@@ -12780,14 +12784,23 @@ function CalendarView({ userId }) {
         if (!password) { setError('Enter the manager password.'); return; }
         setProcessing(true); setError('');
         try {
-          // Server checks the manager password and uses this farrier's Stripe key
+          // Server checks the manager password and uses this farrier's Stripe key, or for an
+          // iPOSpays payment voids/refunds it in iPOSpays and records it on the invoice itself.
+          const ipos = !invoiceStripePaymentId(invoice) && invoiceIposPaid(invoice);
           const res = await fetch('/api/stripe-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'refund', transactionId: invoiceStripePaymentId(invoice), amount: amt, refundPassword: password })
+            body: JSON.stringify(ipos
+              ? { action: 'ipospays_refund', invoiceId: invoice.id, amount: amt, refundPassword: password }
+              : { action: 'refund', transactionId: invoiceStripePaymentId(invoice), amount: amt, refundPassword: password })
           });
           const result = await res.json();
           if (!result.success) { setError(result.error || 'Refund failed.'); setProcessing(false); return; }
+          if (result.recorded) {
+            alert(`✅ ${result.kind === 'void' ? 'Voided' : 'Refunded'} $${amt.toFixed(2)} in iPOSpays`);
+            onRefunded();
+            return;
+          }
           const fresh = (await db.collection('invoices').doc(invoice.id).get()).data() || {};
           const refunds = [...(fresh.refunds || []), { amount: amt, refundId: result.refundId, transactionId: invoiceStripePaymentId(invoice), date: new Date().toISOString() }];
           const refundedAmount = refunds.reduce((s,r) => s + (r.amount||0), 0);
@@ -12830,7 +12843,7 @@ function CalendarView({ userId }) {
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter' && !processing) handleRefund(); }} />
               </div>
-              <div style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>The money goes back to the customer's card through Stripe. This can't be undone.</div>
+              <div style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>The money goes back to the customer's card through {!invoiceStripePaymentId(invoice) && invoiceIposPaid(invoice) ? 'iPOSpays' : 'Stripe'}. This can't be undone.</div>
               {error && <div style={{marginTop: '1rem', padding: '0.75rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b'}}>{error}</div>}
               <div style={{display: 'flex', gap: '0.75rem', marginTop: '1.5rem'}}>
                 <button className="btn btn-outline" onClick={onClose} style={{flex: 1}} disabled={processing}>Nevermind</button>
@@ -14869,7 +14882,7 @@ useEffect(() => {
           <div className="card" style={{marginTop: '1.5rem'}}>
             <h2>💳 iPOSpays Payments</h2>
             <p style={{color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem'}}>
-              Take pay-link payments through your iPOSpays (Dejavoo) merchant account instead of Stripe. While iPOSpays is connected, the Pay Now links you text and email open an iPOSpays payment page. Keyed cards and refunds in FarriTech still use Stripe — refund iPOSpays payments in the iPOSpays portal.
+              Take pay-link payments through your iPOSpays (Dejavoo) merchant account instead of Stripe. While iPOSpays is connected, the Pay Now links you text and email open an iPOSpays payment page. Keyed cards still use Stripe. The Refund button on an invoice paid through iPOSpays voids or refunds it in iPOSpays.
             </p>
 
             {userProfile?.ipospaysConnected ? (

@@ -12,8 +12,12 @@ account instead of Stripe, using the iPOSpays **Hosted Payment Page** (HPP).
 - Invoices are marked paid automatically, and the customer gets the usual "payment received" text.
 - Recording a cash/check/Zelle/etc. payment, or waiving the card price, cancels the open
   iPOSpays page so the customer can't pay twice.
-- **Still Stripe only:** keyed card payments, refunds, and the customer portal. Refund
-  iPOSpays payments in the iPOSpays portal.
+- **Refunds:** the Refund button on an invoice paid through iPOSpays (manager password required)
+  voids it if the batch hasn't settled, otherwise refunds it, via iPOS Transact
+  (`POST payment.ipospays.{tech,com}/api/v3/iposTransact`, transactionType 2 or 3, by the
+  payment's RRN). Partial amounts are always refunds. Refunds done in the iPOSpays portal
+  aren't seen by FarriTech.
+- **Still Stripe only:** keyed card payments and the customer portal.
 
 Disconnecting iPOSpays sends pay links back to Stripe.
 
