@@ -275,9 +275,11 @@ export function reusableIposPage(invoice, chargeCents) {
 // Query Payment Status. Returns iposHPResponse, or null if iPOSpays has nothing (yet).
 export async function queryIposPayment(creds, ref) {
   const r = await fetch(`${hosts(creds.mode).api}/v1/queryPaymentStatus?${new URLSearchParams({ tpn: creds.tpn, transactionReferenceId: ref })}`, {
-    headers: { Authorization: creds.ecomToken },
+    // The docs show the Ecom token as the Authorization header; also send it as "token" in case.
+    headers: { Authorization: creds.ecomToken, token: creds.ecomToken },
   });
   const d = await readJson(r);
+  console.log('iPOSpays status:', ref, r.status, JSON.stringify(d).slice(0, 1500));
   if (!r.ok) {
     if (r.status !== 404) console.warn('iPOSpays status check failed:', ref, r.status, JSON.stringify(d));
     return null;
@@ -297,7 +299,8 @@ export async function syncIposPayment(creds, invoiceId, ref) {
   const resp = await queryIposPayment(creds, ref);
   if (!resp) return { paid: false };
   if (!succeeded(resp) || resp.transactionReferenceId !== ref) {
-    return { paid: false, declined: Number(resp.responseCode) === 400, message: resp.errResponseMessage || resp.responseMessage || '' };
+    // iPOSpays has an answer and it isn't an approval (e.g. a decline for a CVV mismatch).
+    return { paid: false, declined: true, message: resp.errResponseMessage || resp.responseMessage || '' };
   }
 
   const amountCents = dollarsToCents(resp.totalAmount) ?? dollarsToCents(resp.amount) ?? link.chargeCents;

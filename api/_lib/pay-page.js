@@ -95,8 +95,9 @@ async function iposPayPage(req, res, invoiceId, invoice, creds) {
   const retry = (cents) => `<a class="btn" href="/pay/${encodeURIComponent(invoiceId)}">Pay ${P.money(cents)}</a>`;
 
   // Back from iPOSpays
-  const ref = String(req.query?.ipos_ref || '');
-  if (/^[A-Za-z0-9]{1,20}$/.test(ref)) {
+  // iPOSpays may tack its own "?…" onto our return URL, so keep only the leading reference id.
+  const ref = (String(req.query?.ipos_ref || '').match(/^[A-Za-z0-9]{1,20}/) || [''])[0];
+  if (ref) {
     const result = await syncIposPayment(creds, invoiceId, ref);
     if (result.paid) return page(res, 200, 'Payment received', `Thank you! Your payment of ${P.money(result.amountCents)} for Invoice #${number} has been received.`);
     const fresh = await getDoc(`invoices/${invoiceId}`);
@@ -104,6 +105,11 @@ async function iposPayPage(req, res, invoiceId, invoice, creds) {
       return page(res, 200, 'Payment not completed', `Your card payment for Invoice #${number} didn't go through${result.message ? ` (${result.message})` : ''}. You can try again with another card.`, retry(P.getChargeCents(fresh, 'card_link')));
     }
     if (fresh) invoice = fresh;
+    // Not confirmed yet: never send them straight back to a payment page they may have just
+    // paid. They can check again (or pay, if it really didn't go through) from here.
+    if (fresh?.status !== 'paid') {
+      return page(res, 200, 'Confirming your payment', `We haven't heard back from the card processor about your payment for Invoice #${number} yet. Please don't pay again. Check back in a minute.`, `<a class="btn" href="/pay/${encodeURIComponent(invoiceId)}?ipos_ref=${ref}">Check again</a>`);
+    }
   }
 
   if (invoice.status === 'paid') return page(res, 200, 'Invoice paid', `Invoice #${number} has already been paid. Thank you!`);
