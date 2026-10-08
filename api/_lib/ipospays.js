@@ -274,17 +274,18 @@ export function reusableIposPage(invoice, chargeCents) {
 // ── Payment status ──
 // Query Payment Status. Returns iposHPResponse, or null if iPOSpays has nothing (yet).
 export async function queryIposPayment(creds, ref) {
-  const r = await fetch(`${hosts(creds.mode).api}/v1/queryPaymentStatus?${new URLSearchParams({ tpn: creds.tpn, transactionReferenceId: ref })}`, {
-    // The docs show the Ecom token as the Authorization header; also send it as "token" in case.
-    headers: { Authorization: creds.ecomToken, token: creds.ecomToken },
-  });
-  const d = await readJson(r);
-  console.log('iPOSpays status:', ref, r.status, JSON.stringify(d).slice(0, 1500));
-  if (!r.ok) {
-    if (r.status !== 404) console.warn('iPOSpays status check failed:', ref, r.status, JSON.stringify(d));
-    return null;
-  }
-  return d.iposHPResponse || null;
+  const url = `${hosts(creds.mode).api}/v1/queryPaymentStatus?${new URLSearchParams({ tpn: creds.tpn, transactionReferenceId: ref })}`;
+  const ask = async (label, headers) => {
+    const r = await fetch(url, { headers }).catch(() => null);
+    const d = r ? await readJson(r) : {};
+    console.log(`iPOSpays status (${label}):`, ref, r?.status, JSON.stringify(d).slice(0, 1500));
+    if (!r?.ok) return null;
+    return d.iposHPResponse || d.data?.iposHPResponse || (d.responseCode !== undefined && d.transactionReferenceId ? d : null);
+  };
+  // The docs show the Ecom token as the Authorization header. If that gets no answer,
+  // try the auth token the payment page was made with.
+  return await ask('ecom token', { Authorization: creds.ecomToken })
+    || await ask('auth token', { token: await authToken(creds).catch(() => '') });
 }
 
 const succeeded = (resp) => resp && Number(resp.responseCode) === 200 && String(resp.transactionReferenceId || '') !== '';
