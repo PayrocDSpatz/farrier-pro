@@ -112,6 +112,19 @@ async function iposPayPage(req, res, invoiceId, invoice, creds) {
     }
   }
 
+  // Before offering a page, ask iPOSpays about the recent ones: a customer may have paid
+  // (or tried, which expires the page) without the return ever reaching us.
+  if (!ref && invoice.status !== 'paid' && invoice.iposLinks) {
+    const recent = Object.entries(invoice.iposLinks)
+      .sort((a, b) => (b[0] === invoice.iposOpenRef) - (a[0] === invoice.iposOpenRef) || new Date(b[1]?.createdAt) - new Date(a[1]?.createdAt))
+      .slice(0, 3).map(([r]) => r);
+    for (const r of recent) {
+      const result = await syncIposPayment(creds, invoiceId, r);
+      if (result.paid) return page(res, 200, 'Payment received', `Thank you! Your payment of ${P.money(result.amountCents)} for Invoice #${number} has been received.`);
+    }
+    invoice = (await getDoc(`invoices/${invoiceId}`)) || invoice;
+  }
+
   if (invoice.status === 'paid') return page(res, 200, 'Invoice paid', `Invoice #${number} has already been paid. Thank you!`);
   if (invoice.status === 'cancelled') return page(res, 200, 'Invoice cancelled', `Invoice #${number} was cancelled. Please contact your farrier with any questions.`);
   const expected = P.getChargeCents(invoice, 'card_link');
