@@ -12505,8 +12505,8 @@ function CalendarView({ userId }) {
                               overflow: 'hidden'
                             }}>
                               {isOpen && item('✏️ Edit', () => setEditingInvoice(invoice))}
-                              {isOpen && FarriPricing.invoiceRate(invoice) > 0 && userProfile?.stripePublishableKey && !invoice.cardFeeWaived && item('🏷️ Waive card price & resend', () => waiveCardPrice(invoice, true))}
-                              {isOpen && userProfile?.stripePublishableKey && invoice.cardFeeWaived && item('↩️ Undo card price waiver', () => waiveCardPrice(invoice, false))}
+                              {isOpen && FarriPricing.invoiceRate(invoice) > 0 && (userProfile?.stripePublishableKey || userProfile?.ipospaysConnected) && !invoice.cardFeeWaived && item('🏷️ Waive card price & resend', () => waiveCardPrice(invoice, true))}
+                              {isOpen && (userProfile?.stripePublishableKey || userProfile?.ipospaysConnected) && invoice.cardFeeWaived && item('↩️ Undo card price waiver', () => waiveCardPrice(invoice, false))}
                               {item('✉️ Email', () => emailInvoiceLink(invoice, userProfile))}
                               {invoice.customerPhone && item('📱 SMS', async () => {
                                 const bizName = userProfile?.businessName || 'Your Farrier';
@@ -13540,7 +13540,7 @@ useEffect(() => {
             await db.collection('invoices').doc(editingInvoice.id).update(updates);
             if (editingInvoice.paymentUrl && totalChanged) {
               try {
-                if (userProfile?.stripePublishableKey && total > 0) {
+                if ((userProfile?.stripePublishableKey || userProfile?.ipospaysConnected) && total > 0) {
                   // Server re-prices from the invoice we just saved and closes the old checkout.
                   const plRes = await fetch('/api/stripe-payment', {
                     method: 'POST',
@@ -13759,10 +13759,10 @@ useEffect(() => {
               }
             }
 
-            // Generate Stripe Payment Link if farrier has Stripe connected (the server
-            // holds the secret key; a publishable key on the profile means connected)
+            // Generate the pay link if the farrier has Stripe or iPOSpays connected (the
+            // server holds the keys; the profile only says which is connected)
             let paymentUrl = '';
-            if (userProfile?.stripePublishableKey && total > 0) {
+            if ((userProfile?.stripePublishableKey || userProfile?.ipospaysConnected) && total > 0) {
               try {
                 const plRes = await fetch('/api/stripe-payment', {
                   method: 'POST',
@@ -14280,6 +14280,11 @@ useEffect(() => {
       const [stripeAccountName, setStripeAccountName] = useState(userProfile?.stripeAccountName || '');
       const [stripeError, setStripeError] = useState('');
       const [stripeWebhookMissing, setStripeWebhookMissing] = useState(false);
+
+      // iPOSpays settings — keys are only held while being typed, then live on the server.
+      const [ipos, setIpos] = useState({ tpn: '', apiKey: '', secretKey: '', ecomToken: '', mode: userProfile?.ipospaysMode || 'sandbox' });
+      const [iposSaving, setIposSaving] = useState(false);
+      const [iposError, setIposError] = useState('');
       useEffect(() => {
         if (!userProfile?.stripePublishableKey) return;
         fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status' }) })
@@ -14857,6 +14862,104 @@ useEffect(() => {
             <div style={{marginTop: '1rem', padding: '0.75rem', background: 'var(--surface)', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-muted)'}}>
               💡 Use <strong>test keys</strong> (pk_test_ / rk_test_) while testing, then switch to live keys when ready to accept real payments. A restricted key needs <strong>Write</strong> access to PaymentIntents, Checkout Sessions, Customers, PaymentMethods, Refunds and Webhook Endpoints.
             </div>
+          </div>
+
+
+          {/* iPOSpays Payments Settings */}
+          <div className="card" style={{marginTop: '1.5rem'}}>
+            <h2>💳 iPOSpays Payments</h2>
+            <p style={{color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem'}}>
+              Take pay-link payments through your iPOSpays (Dejavoo) merchant account instead of Stripe. While iPOSpays is connected, the Pay Now links you text and email open an iPOSpays payment page. Keyed cards and refunds in FarriTech still use Stripe — refund iPOSpays payments in the iPOSpays portal.
+            </p>
+
+            {userProfile?.ipospaysConnected ? (
+              <>
+                <div style={{background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                  <span style={{fontSize: '1.1rem'}}>✅</span>
+                  <span style={{color: '#16a34a', fontWeight: 600}}>
+                    iPOSpays connected — TPN ending {userProfile.ipospaysTpnLast4 || '••••'}{userProfile.ipospaysMode === 'production' ? '' : ' (sandbox — test payments only)'}
+                  </span>
+                </div>
+                <button
+                  className="btn btn-outline"
+                  onClick={async () => {
+                    if (!confirm('Disconnect iPOSpays? Pay Now links will go back to Stripe (if connected).')) return;
+                    const res = await fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ipospays_disconnect' }) });
+                    if (!(await res.json()).success) { alert('Could not disconnect iPOSpays — please try again.'); return; }
+                    const cleared = { ipospaysConnected: false, ipospaysMode: '', ipospaysTpnLast4: '' };
+                    await db.collection('farriers').doc(safeFarrierId).set({ ...cleared, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    setUserProfile(prev => ({ ...prev, ...cleared }));
+                  }}
+                >
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <>
+                {iposError && (
+                  <div style={{background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem'}}>
+                    <span style={{color: '#dc2626'}}>❌ {iposError}</span>
+                  </div>
+                )}
+                <div className="form-group">
+                  <label>Environment</label>
+                  <select value={ipos.mode} onChange={(e) => setIpos({ ...ipos, mode: e.target.value })}>
+                    <option value="sandbox">Sandbox (testing)</option>
+                    <option value="production">Production (real payments)</option>
+                  </select>
+                </div>
+                {[
+                  ['tpn', 'TPN', 'text', '12-digit CloudPOS TPN'],
+                  ['apiKey', 'API Key', 'password', ''],
+                  ['secretKey', 'Secret Key', 'password', ''],
+                  ['ecomToken', 'Ecom Token', 'password', ''],
+                ].map(([field, label, type, placeholder]) => (
+                  <div className="form-group" key={field}>
+                    <label>{label}</label>
+                    <input
+                      type={type}
+                      value={ipos[field]}
+                      onChange={(e) => { setIpos({ ...ipos, [field]: e.target.value }); setIposError(''); }}
+                      placeholder={placeholder}
+                      autoComplete="off"
+                      style={{fontFamily: 'monospace', fontSize: '0.85rem'}}
+                    />
+                  </div>
+                ))}
+                <div style={{fontSize: '0.75rem', color: 'var(--text-muted)', margin: '-0.25rem 0 1rem'}}>
+                  In the <a href="https://portal.ipospays.com/" target="_blank" rel="noreferrer" style={{color:'var(--primary)'}}>iPOSpays portal</a>, signed in as Merchant Admin: API key and secret key are under <strong>Settings → Generate API &amp; Secret Key</strong>; the Ecom token is under <strong>Settings → Merchant Keys / Ecom Token</strong> (pick your TPN, then Generate Token). They're stored on FarriTech's server only and never shown again.
+                </div>
+                <button
+                  className="btn btn-primary"
+                  disabled={iposSaving || !ipos.tpn || !ipos.apiKey || !ipos.secretKey || !ipos.ecomToken}
+                  onClick={async () => {
+                    setIposSaving(true);
+                    setIposError('');
+                    try {
+                      const res = await fetch('/api/stripe-payment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'ipospays_connect', ...ipos }),
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        const saved = { ipospaysConnected: true, ipospaysMode: data.mode, ipospaysTpnLast4: data.tpnLast4 };
+                        await db.collection('farriers').doc(safeFarrierId).set({ ...saved, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                        setUserProfile(prev => ({ ...prev, ...saved }));
+                        setIpos({ tpn: '', apiKey: '', secretKey: '', ecomToken: '', mode: data.mode });
+                      } else {
+                        setIposError(data.error || 'Could not connect iPOSpays.');
+                      }
+                    } catch (e) {
+                      setIposError('Could not reach FarriTech — check your connection and try again.');
+                    }
+                    setIposSaving(false);
+                  }}
+                >
+                  {iposSaving ? <span className="spinner"></span> : '✓ Validate & Save'}
+                </button>
+              </>
+            )}
           </div>
 
           <div className="card" style={{marginTop: '1.5rem'}}>

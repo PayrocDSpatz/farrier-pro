@@ -20,7 +20,10 @@ const P = globalThis.FarriPricing;
 export const APP_URL = (process.env.APP_URL || 'https://app.farritech.com').replace(/\/$/, '');
 // Customers always get this link. It never expires — it opens (or creates) a Checkout
 // Session at the current price, so a link texted last week still works.
-export const payUrlFor = (invoiceId) => `${APP_URL}/pay/${invoiceId}`;
+// On a Vercel preview they point at that preview's branch URL instead, so a preview can be
+// tested end to end (production doesn't have what's being tested yet).
+const PAY_BASE = process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : APP_URL;
+export const payUrlFor = (invoiceId) => `${PAY_BASE}/pay/${invoiceId}`;
 
 export class PaymentError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
@@ -43,8 +46,8 @@ export async function cardDetails(stripe, paymentIntentId) {
 //   amountCents  what was actually collected
 //   creditCents  how much of the cash-price balance it pays down (default: worked out from
 //                the invoice's cardPriceRate)
-//   source       'stripe' when Stripe already took the money — then an already-paid invoice
-//                gets the payment logged for review instead of an error
+//   source       'stripe' or 'ipospays' when the processor already took the money — then an
+//                already-paid invoice gets the payment logged for review instead of an error
 export async function applyPayment(invoiceId, {
   paymentId = crypto.randomUUID(), method, amountCents, creditCents,
   reference = '', source = 'manual', recordedBy = '', paidDate = null,
@@ -66,8 +69,8 @@ export async function applyPayment(invoiceId, {
     };
 
     if (inv.status === 'paid' || inv.status === 'cancelled') {
-      if (source !== 'stripe') throw new PaymentError(inv.status === 'paid' ? 'This invoice is already paid.' : 'This invoice is cancelled.', 409);
-      // Stripe already has the money (e.g. the customer paid online at the same moment the
+      if (source !== 'stripe' && source !== 'ipospays') throw new PaymentError(inv.status === 'paid' ? 'This invoice is already paid.' : 'This invoice is cancelled.', 409);
+      // The processor already has the money (e.g. the customer paid online at the same moment the
       // farrier recorded cash). Keep a record so the farrier can refund it.
       tx.create(`invoices/${invoiceId}/payments/${paymentId}`, { ...paymentDoc, creditCents: 0, unapplied: true });
       tx.patch(`invoices/${invoiceId}`, { paymentNeedsReview: true });

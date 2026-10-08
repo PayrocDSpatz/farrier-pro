@@ -11,6 +11,10 @@
       "destination": "/api/stripe-payment?webhookFarrier=:farrierId"
     },
     {
+      "source": "/api/ipospays/callback/:invoiceId",
+      "destination": "/api/stripe-payment?iposCallback=:invoiceId"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

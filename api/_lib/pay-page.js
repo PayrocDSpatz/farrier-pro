@@ -7,10 +7,14 @@
 // amount, otherwise makes a new one. Stripe sends them back here afterwards with
 // ?session_id=…, and we record the payment right away (the webhook does the same,
 // whichever comes first wins; both are idempotent).
+//
+// Farriers who connected iPOSpays get an iPOSpays payment page instead (see ipospays.js);
+// iPOSpays sends the customer back here with ?ipos_ref=… and we check that payment.
 import Stripe from 'stripe';
 import '../../lib/pricing.js';
 import { getDoc, getStripeSecretKey } from './firebase-rest.js';
-import { createCheckoutSession, recordCheckoutSession, escapeHtml } from './invoice-payments.js';
+import { createCheckoutSession, recordCheckoutSession, escapeHtml, PaymentError } from './invoice-payments.js';
+import { getIposCreds, syncIposPayment, createIposPage, reusableIposPage } from './ipospays.js';
 
 const P = globalThis.FarriPricing;
 
@@ -38,6 +42,8 @@ export async function payPage(req, res) {
     const invoice = await getDoc(`invoices/${invoiceId}`);
     if (!invoice) return page(res, 404, 'Invoice not found', 'This payment link is not valid. Please contact your farrier.');
     const number = invoice.invoiceNumber || '';
+    const ipos = await getIposCreds(invoice.farrierId);
+    if (ipos) return await iposPayPage(req, res, invoiceId, invoice, ipos);
     const key = await getStripeSecretKey(invoice.farrierId);
 
     // Back from Stripe Checkout
@@ -81,5 +87,58 @@ export async function payPage(req, res) {
   } catch (err) {
     console.error('pay link error:', invoiceId, err);
     return page(res, 500, 'Something went wrong', 'We couldn’t open the payment page. Please try again in a minute, or contact your farrier.');
+  }
+}
+
+async function iposPayPage(req, res, invoiceId, invoice, creds) {
+  const number = invoice.invoiceNumber || '';
+  const retry = (cents) => `<a class="btn" href="/pay/${encodeURIComponent(invoiceId)}">Pay ${P.money(cents)}</a>`;
+
+  // Back from iPOSpays
+  // iPOSpays may tack its own "?…" onto our return URL, so keep only the leading reference id.
+  const ref = (String(req.query?.ipos_ref || '').match(/^[A-Za-z0-9]{1,20}/) || [''])[0];
+  if (ref) {
+    const result = await syncIposPayment(creds, invoiceId, ref);
+    if (result.paid) return page(res, 200, 'Payment received', `Thank you! Your payment of ${P.money(result.amountCents)} for Invoice #${number} has been received.`);
+    const fresh = await getDoc(`invoices/${invoiceId}`);
+    if (result.declined && fresh?.status !== 'paid') {
+      return page(res, 200, 'Payment not completed', `Your card payment for Invoice #${number} didn't go through${result.message ? ` (${result.message})` : ''}. You can try again with another card.`, retry(P.getChargeCents(fresh, 'card_link')));
+    }
+    if (fresh) invoice = fresh;
+    // Not confirmed yet: never send them straight back to a payment page they may have just
+    // paid. They can check again (or pay, if it really didn't go through) from here.
+    if (fresh?.status !== 'paid') {
+      return page(res, 200, 'Confirming your payment', `We haven't heard back from the card processor about your payment for Invoice #${number} yet. Please don't pay again. Check back in a minute.`, `<a class="btn" href="/pay/${encodeURIComponent(invoiceId)}?ipos_ref=${ref}">Check again</a>`);
+    }
+  }
+
+  // Before offering a page, ask iPOSpays about the recent ones: a customer may have paid
+  // (or tried, which expires the page) without the return ever reaching us.
+  if (!ref && invoice.status !== 'paid' && invoice.iposLinks) {
+    const recent = Object.entries(invoice.iposLinks)
+      .sort((a, b) => (b[0] === invoice.iposOpenRef) - (a[0] === invoice.iposOpenRef) || new Date(b[1]?.createdAt) - new Date(a[1]?.createdAt))
+      .slice(0, 3).map(([r]) => r);
+    for (const r of recent) {
+      const result = await syncIposPayment(creds, invoiceId, r);
+      if (result.paid) return page(res, 200, 'Payment received', `Thank you! Your payment of ${P.money(result.amountCents)} for Invoice #${number} has been received.`);
+    }
+    invoice = (await getDoc(`invoices/${invoiceId}`)) || invoice;
+  }
+
+  if (invoice.status === 'paid') return page(res, 200, 'Invoice paid', `Invoice #${number} has already been paid. Thank you!`);
+  if (invoice.status === 'cancelled') return page(res, 200, 'Invoice cancelled', `Invoice #${number} was cancelled. Please contact your farrier with any questions.`);
+  const expected = P.getChargeCents(invoice, 'card_link');
+  if (expected <= 0) return page(res, 200, "Nothing owed", `There's no balance due on Invoice #${number}.`);
+  if (req.query?.canceled) return page(res, 200, 'Payment not completed', `Your payment for Invoice #${number} wasn't completed.`, retry(expected));
+
+  res.setHeader('Cache-Control', 'no-store');
+  const open = reusableIposPage(invoice, expected);
+  if (open) return res.redirect(303, open);
+  try {
+    const { url } = await createIposPage(creds, invoiceId, invoice);
+    return res.redirect(303, url);
+  } catch (err) {
+    if (err instanceof PaymentError && err.status === 409) return page(res, 200, 'Invoice paid', `Invoice #${number} has already been paid. Thank you!`);
+    throw err;
   }
 }
