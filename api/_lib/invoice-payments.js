@@ -48,10 +48,11 @@ export async function cardDetails(stripe, paymentIntentId) {
 //                the invoice's cardPriceRate)
 //   source       'stripe' or 'ipospays' when the processor already took the money — then an
 //                already-paid invoice gets the payment logged for review instead of an error
+//   processorDetails  optional object saved on the payment doc (ids a refund or void would need)
 export async function applyPayment(invoiceId, {
   paymentId = crypto.randomUUID(), method, amountCents, creditCents,
   reference = '', source = 'manual', recordedBy = '', paidDate = null,
-  sessionId = '', paymentIntentId = '', last4 = '', brand = '', paidVia = '',
+  sessionId = '', paymentIntentId = '', last4 = '', brand = '', paidVia = '', processorDetails = null,
 }) {
   if (!Number.isInteger(amountCents) || amountCents <= 0) throw new PaymentError('Invalid amount.');
   const isCard = P.isCardMethod(method);
@@ -65,6 +66,9 @@ export async function applyPayment(invoiceId, {
       ...(sessionId ? { stripeSessionId: sessionId } : {}),
       ...(paymentIntentId ? { stripePaymentIntent: paymentIntentId } : {}),
       ...(last4 ? { cardLast4: last4, cardBrand: brand } : {}),
+      // What a later refund or void needs (e.g. iPOSpays RRN and card token). Payment docs are
+      // readable only by the farrier and the server, never by the customer.
+      ...(processorDetails ? { processorDetails } : {}),
       createdAt: new Date(),
     };
 
