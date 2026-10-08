@@ -235,8 +235,13 @@ export async function createIposPage(creds, invoiceId, invoice) {
     method: 'POST', headers: { 'Content-Type': 'application/json', token }, body,
   });
   let r = await send(await authToken(creds));
-  if (r.status === 401) r = await send(await authToken(creds, { fresh: true })); // token revoked early
-  const d = await readJson(r);
+  let d = await readJson(r);
+  // A token revoked early, or one saved before the scope header was dropped (iPOSpays
+  // answers those with "not registered for PaymentTokenization"): get a new one, once.
+  if (r.status === 401 || (!d.information && /PaymentTokenization/i.test(errorText(d, '')))) {
+    r = await send(await authToken(creds, { fresh: true }));
+    d = await readJson(r);
+  }
   if (!r.ok || !d.information) {
     console.error('iPOSpays payment page failed:', invoiceId, r.status, JSON.stringify(d));
     throw new PaymentError(`iPOSpays couldn’t make the payment page: ${errorText(d, `HTTP ${r.status}`)}`, 400);
