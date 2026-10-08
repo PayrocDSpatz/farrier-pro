@@ -276,7 +276,7 @@ export async function queryIposPayment(creds, ref) {
   const ask = async (label, headers) => {
     const r = await fetch(url, { headers }).catch(() => null);
     const d = r ? await readJson(r) : {};
-    console.log(`iPOSpays status (${label}):`, ref, r?.status, JSON.stringify(d).slice(0, 1500));
+    console.log(`iPOSpays status (${label}):`, ref, r?.status, JSON.stringify(d).replace(/("cardToken":")[^"]*/g, '$1[hidden]').slice(0, 1500));
     if (!r?.ok) return null;
     // Sandbox answers { status: 'Success', data: {...} } ({ status: 'Pending', data: {} } before
     // the payment settles); the docs show { iposHPResponse: {...} }.
