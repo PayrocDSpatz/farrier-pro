@@ -202,7 +202,7 @@ function pageRequest(creds, invoiceId, invoice, farrier, ref, chargeCents, cashC
       customerEmail: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : '',
       customerMobile: toIposMobile(invoice.customerPhone),
       sendPaymentLink: false, // FarriTech texts/emails /pay/{id} itself
-      requestCardToken: false,
+      requestCardToken: true, // kept on the payment record in case a refund or void is ever needed
       shortenURL: false,
       integrationVersion: 'v2',
     },
@@ -276,7 +276,7 @@ export async function queryIposPayment(creds, ref) {
   const ask = async (label, headers) => {
     const r = await fetch(url, { headers }).catch(() => null);
     const d = r ? await readJson(r) : {};
-    console.log(`iPOSpays status (${label}):`, ref, r?.status, JSON.stringify(d).slice(0, 1500));
+    console.log(`iPOSpays status (${label}):`, ref, r?.status, JSON.stringify(d).replace(/("cardToken":")[^"]*/g, '$1[hidden]').slice(0, 1500));
     if (!r?.ok) return null;
     // Sandbox answers { status: 'Success', data: {...} } ({ status: 'Pending', data: {} } before
     // the payment settles); the docs show { iposHPResponse: {...} }.
@@ -322,6 +322,16 @@ export async function syncIposPayment(creds, invoiceId, ref) {
     reference: `iPOSpays ${resp.transactionId || ref}`,
     last4, brand: last4 ? brand : '',
     paidVia: 'ipospays_link',
+    processorDetails: {
+      processor: 'ipospays',
+      referenceId: ref,
+      transactionId: String(resp.transactionId || ''),
+      rrn: String(resp.rrn || ''),
+      batchNumber: String(resp.batchNumber || ''),
+      approvalCode: String(resp.responseApprovalCode || '').trim(),
+      // The docs don't name the token field on the status answer; take whichever is there.
+      cardToken: String(resp.cardToken || resp.paymentToken || resp.cardTokenId || resp.token || ''),
+    },
   });
   if (!result.duplicate) {
     await patchDoc(`invoices/${invoiceId}`, {
