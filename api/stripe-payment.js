@@ -8,7 +8,7 @@ import {
 } from './_lib/invoice-payments.js';
 import { payPage } from './_lib/pay-page.js';
 import { farrierWebhook } from './_lib/farrier-webhook.js';
-import { closeIposPages, connectIpospays, createIposPage, disconnectIpospays, getIposCreds, iposCallback } from './_lib/ipospays.js';
+import { closeIposPages, connectIpospays, createIposPage, disconnectIpospays, getIposCreds, iposCallback, refundIposPayment } from './_lib/ipospays.js';
 
 const P = globalThis.FarriPricing;
 const SECRET_KEY_RE = /^(sk|rk)_(live|test)_/;
@@ -32,7 +32,7 @@ export const config = { api: { bodyParser: false } };
 //   anyone                → confirm_session  (only marks paid after Stripe confirms the session)
 //   Stripe                → webhook          (legacy platform webhook, signature required; farriers'
 //                                               own accounts post to /api/stripe/webhook/{farrierId} → _lib/farrier-webhook.js)
-//   farrier (signed in)   → ipospays_connect, ipospays_disconnect, ipospays_status
+//   farrier (signed in)   → ipospays_connect, ipospays_disconnect, ipospays_status, ipospays_refund
 //   iPOSpays              → /api/ipospays/callback/{invoiceId} → _lib/ipospays.js (re-checked with iPOSpays before recording)
 //
 // While a farrier has iPOSpays connected, payment_link / waive_card_price and the /pay page
@@ -249,6 +249,17 @@ export default async function handler(req, res) {
     if (action === 'ipospays_disconnect') {
       await disconnectIpospays(farrierId);
       return res.status(200).json({ success: true });
+    }
+    if (action === 'ipospays_refund') {
+      const { invoiceId, amount, refundPassword } = body;
+      const secrets = await getDoc(`farrierSecrets/${farrierId}`);
+      if (!secrets?.managerPasswordHash) return res.status(400).json({ success: false, error: 'Set a Manager Password in Settings before issuing refunds.' });
+      if (!checkManagerPassword(refundPassword, secrets.managerPasswordHash)) return res.status(403).json({ success: false, error: 'Incorrect manager password.' });
+      const ipos = await getIposCreds(farrierId, secrets);
+      if (!ipos) return res.status(400).json({ success: false, error: 'iPOSpays isn’t connected. Reconnect it in Settings, or refund in the iPOSpays portal.' });
+      const invoice = await ownInvoice(invoiceId, farrierId);
+      const result = await refundIposPayment(ipos, invoiceId, invoice, Math.round(parseFloat(amount) * 100));
+      return res.status(200).json({ success: true, recorded: true, ...result, amount: result.amountCents / 100 });
     }
     if (action === 'ipospays_status') {
       const ipos = await getIposCreds(farrierId);
