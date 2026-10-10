@@ -54,6 +54,9 @@ only 12 functions.
 
 `.tech` hosts = sandbox, `.com` hosts = production, chosen per farrier by the Environment setting.
 
+Sandbox test cards and the amounts that trigger declines are in
+[IPOSPAYS-SANDBOX-CARDS.md](IPOSPAYS-SANDBOX-CARDS.md).
+
 ## What the first sandbox test showed (2026-10-08)
 
 A $1.03 test payment on sandbox TPN 950126444275 went through end to end and marked the invoice
