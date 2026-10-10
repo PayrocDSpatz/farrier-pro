@@ -17,7 +17,13 @@ account instead of Stripe, using the iPOSpays **Hosted Payment Page** (HPP).
   (`POST payment.ipospays.{tech,com}/api/v3/iposTransact`, transactionType 2 or 3, by the
   payment's RRN). Partial amounts are always refunds. Refunds done in the iPOSpays portal
   aren't seen by FarriTech.
-- **Still Stripe only:** keyed card payments and the customer portal.
+- **One processor at a time:** a farrier connects Stripe or iPOSpays, not both. Connecting one
+  is refused while the other is connected, and disconnecting either first closes its open
+  payment pages (recording any a customer has just paid).
+- **Keyed cards:** with iPOSpays, Charge Card (desktop) and Card (mobile) open the invoice's
+  iPOSpays payment page for the farrier to key the card in. It charges the whole balance at the
+  pay-link price; the card details never pass through FarriTech.
+- **Still Stripe only:** the customer portal's card payments.
 
 Disconnecting iPOSpays sends pay links back to Stripe. It first closes every iPOSpays payment
 page still on offer (recording any a customer has just paid), because a page paid after the keys
