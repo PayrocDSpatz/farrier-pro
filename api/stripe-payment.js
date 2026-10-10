@@ -36,7 +36,8 @@ export const config = { api: { bodyParser: false } };
 //   iPOSpays              → /api/ipospays/callback/{invoiceId} → _lib/ipospays.js (re-checked with iPOSpays before recording)
 //
 // While a farrier has iPOSpays connected, payment_link / waive_card_price and the /pay page
-// use iPOSpays payment pages; keyed cards, refunds and the customer portal stay on Stripe.
+// use iPOSpays payment pages (refunded with ipospays_refund); keyed cards and the customer
+// portal stay on Stripe.
 //
 // Amounts are always worked out here from the invoice (lib/pricing.js), never taken from
 // the browser — see api/_lib/invoice-payments.js for how payments are recorded.
@@ -247,8 +248,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, ...result });
     }
     if (action === 'ipospays_disconnect') {
-      await disconnectIpospays(farrierId);
-      return res.status(200).json({ success: true });
+      const result = await disconnectIpospays(farrierId);
+      return res.status(200).json({ success: true, ...result });
     }
     if (action === 'ipospays_refund') {
       const { invoiceId, amount, refundPassword } = body;

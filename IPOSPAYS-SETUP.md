@@ -19,7 +19,10 @@ account instead of Stripe, using the iPOSpays **Hosted Payment Page** (HPP).
   aren't seen by FarriTech.
 - **Still Stripe only:** keyed card payments and the customer portal.
 
-Disconnecting iPOSpays sends pay links back to Stripe.
+Disconnecting iPOSpays sends pay links back to Stripe. It first closes every iPOSpays payment
+page still on offer (recording any a customer has just paid), because a page paid after the keys
+are gone could never be confirmed or refunded from FarriTech. If iPOSpays can't be reached to
+close one, iPOSpays stays connected and the farrier is asked to try again.
 
 ## What the farrier needs (iPOSpays portal, Merchant Admin login)
 
