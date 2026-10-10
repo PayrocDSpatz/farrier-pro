@@ -1123,7 +1123,7 @@
 
     <div class="card" style="margin-top:14px;">
       <div class="card-title">💳 iPOSpays Payments</div>
-      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Take pay-link payments through your iPOSpays (Dejavoo) merchant account instead of Stripe. While connected, Pay Now links open an iPOSpays payment page. Refund iPOSpays payments in the iPOSpays portal.</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Take pay-link payments through your iPOSpays (Dejavoo) merchant account instead of Stripe. While connected, Pay Now links open an iPOSpays payment page. The Refund button on an invoice paid through iPOSpays voids or refunds it in iPOSpays.</div>
       <div id="ipos-status-banner" style="display:none;"></div>
       <div id="ipos-form">
         <div class="field"><label>Environment</label><select id="set-ipos-mode"><option value="sandbox">Sandbox (testing)</option><option value="production">Production (real payments)</option></select></div>
@@ -3809,12 +3809,14 @@ async function validateAndSaveIpos() {
 }
 
 async function disconnectIpos() {
-  if (!confirm('Disconnect iPOSpays? Pay Now links will go back to Stripe (if connected).')) return;
+  if (!confirm('Disconnect iPOSpays? Payment pages your customers haven\'t paid yet will be closed, and Pay Now links will go back to Stripe (if connected).')) return;
   if (!netState.online) { showToast('Disconnecting iPOSpays requires an internet connection', 'error'); return; }
+  let result = {};
   try {
     const res = await fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ipospays_disconnect' }) });
-    if (!(await res.json()).success) throw new Error('disconnect failed');
-  } catch (e) { showToast('Could not disconnect iPOSpays — try again', 'error'); return; }
+    result = await res.json().catch(() => ({}));
+  } catch (e) { /* offline or server unreachable */ }
+  if (!result.success) { showToast(result.error || 'Could not disconnect iPOSpays — try again', 'error'); return; }
   await saveIposProfile({ ipospaysConnected: false, ipospaysMode: '', ipospaysTpnLast4: '' });
   renderIposStatus(state.userProfile);
   showToast('iPOSpays disconnected', 'success');
