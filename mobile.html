@@ -745,6 +745,12 @@
     <div class="field"><label>Manager / Contact</label><input type="text" id="nc-manager-contact" placeholder="Barn manager or on-site contact name"></div>
     <div class="field"><label>Phone</label><input type="tel" id="nc-phone" placeholder="(555) 555-5555" autocomplete="tel" inputmode="tel" oninput="formatPhoneInput(this)"></div>
     <div class="field"><label>Email</label><input type="email" id="nc-email" placeholder="jane@example.com" autocomplete="email"></div>
+    <!-- Other people to reach for this customer (customers/{id}.contacts) -->
+    <div class="field">
+      <label>Other Contacts <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+      <div id="nc-contacts"></div>
+      <button type="button" class="btn-sm" style="background:var(--bg); border:2px solid var(--border); color:var(--blue);" onclick="addNcContact()">+ Add contact</button>
+    </div>
     <div class="field">
       <label>Address <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
       <div id="cust-address-pac-container" style="width:100%;"></div>
@@ -2045,6 +2051,7 @@ async function loadCustomerDetail(c) {
       ${c.managerContact ? `<div>👔 ${c.managerContact}</div>` : ''}
       ${c.phone ? `<div>📞 ${fmtPhoneDisplay(c.phone)}</div>` : ''}
       ${c.email ? `<div>✉️ ${c.email}</div>` : ''}
+      ${(Array.isArray(c.contacts) ? c.contacts : []).map(k => `<div>👥 ${[k.name, k.role].filter(Boolean).join(' · ')}${k.phone ? ` · <a href="tel:${String(k.phone).replace(/\D/g, '')}" style="color:inherit;">${fmtPhoneDisplay(k.phone)}</a>` : ''}</div>`).join('')}
       ${c.notes ? `<div style="margin-top:4px; font-style:italic; opacity:0.8;">📝 ${c.notes}</div>` : ''}
     </div>
   `;
@@ -4356,11 +4363,45 @@ async function confirmPayment() {
 }
 
 // ── NEW / EDIT CUSTOMER ──
+// Other contacts on the customer form: [{ name, role, phone, email }].
+function readNcContacts() {
+  return Array.from(document.querySelectorAll('#nc-contacts .nc-contact')).map(row => ({
+    name: row.querySelector('.ncc-name').value.trim(),
+    role: row.querySelector('.ncc-role').value.trim(),
+    phone: row.querySelector('.ncc-phone').value.trim(),
+    email: row.querySelector('.ncc-email').value.trim(),
+  })).filter(c => c.name || c.phone || c.email);
+}
+function renderNcContacts() {
+  const esc = (v) => String(v || '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  document.getElementById('nc-contacts').innerHTML = (state.ncContacts || []).map((c, i) => `
+    <div class="nc-contact" style="border:2px solid var(--border); border-radius:10px; padding:10px; margin-bottom:8px;">
+      <div style="display:flex; gap:8px;">
+        <input type="text" class="ncc-name" placeholder="Name" value="${esc(c.name)}" style="flex:1;">
+        <button type="button" onclick="removeNcContact(${i})" style="background:none; border:none; color:var(--danger); font-size:1.1rem; padding:0 6px;">✕</button>
+      </div>
+      <input type="text" class="ncc-role" placeholder="Role (e.g. Barn manager, Trainer, Vet)" value="${esc(c.role)}" style="margin-top:6px;">
+      <input type="tel" class="ncc-phone" placeholder="(555) 555-5555" inputmode="tel" value="${esc(c.phone)}" oninput="formatPhoneInput(this)" style="margin-top:6px;">
+      <input type="email" class="ncc-email" placeholder="Email (optional)" value="${esc(c.email)}" style="margin-top:6px;">
+    </div>`).join('');
+  document.querySelectorAll('#nc-contacts .ncc-phone').forEach(el => formatPhoneInput(el));
+}
+function addNcContact() { state.ncContacts = [...readNcContactsRaw(), { name: '', role: '', phone: '', email: '' }]; renderNcContacts(); }
+function removeNcContact(i) { state.ncContacts = readNcContactsRaw().filter((_, j) => j !== i); renderNcContacts(); }
+// Same as readNcContacts but keeps blank rows (while the farrier is still filling them in).
+function readNcContactsRaw() {
+  return Array.from(document.querySelectorAll('#nc-contacts .nc-contact')).map(row => ({
+    name: row.querySelector('.ncc-name').value, role: row.querySelector('.ncc-role').value,
+    phone: row.querySelector('.ncc-phone').value, email: row.querySelector('.ncc-email').value,
+  }));
+}
+
 function startNewCustomer() {
   state.editingCustomerId = null;
   document.getElementById('nc-form-title').textContent = 'New Customer';
   document.getElementById('nc-save-btn').textContent = 'Save Customer';
   ['nc-name','nc-farm','nc-manager-contact','nc-phone','nc-email','nc-notes','nc-address','nc-city','nc-state','nc-zip'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  state.ncContacts = []; renderNcContacts();
   document.getElementById('nc-address').style.display = '';
   goTo('screen-new-customer');
   _custPac = null;
@@ -4381,6 +4422,8 @@ function startEditCustomer(c) {
   document.getElementById('nc-phone').value = c.phone || '';
   formatPhoneInput(document.getElementById('nc-phone'));
   document.getElementById('nc-email').value = c.email || '';
+  state.ncContacts = Array.isArray(c.contacts) ? c.contacts.map(k => ({ name: k.name || '', role: k.role || '', phone: k.phone || '', email: k.email || '' })) : [];
+  renderNcContacts();
   document.getElementById('nc-notes').value = c.notes || '';
   document.getElementById('nc-address').value = c.address || '';
   document.getElementById('nc-city').value = c.city || '';
@@ -4414,6 +4457,7 @@ async function saveNewCustomer() {
     city: document.getElementById('nc-city').value.trim(),
     state: document.getElementById('nc-state').value.trim(),
     zip: document.getElementById('nc-zip').value.trim(),
+    contacts: readNcContacts(),
   };
   // Doc IDs are generated client-side (synchronously) so we can update local state and
   // navigate right away — performWrite queues the actual write and syncs in the
