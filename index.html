@@ -2868,8 +2868,8 @@ if (support) {
         <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center'}}>
           <div style={{background:'var(--surface)', color:'var(--text)', borderRadius:'12px', padding:'2rem', maxWidth:'420px', width:'90%', textAlign:'center', border:'2px solid rgba(38,131,251,0.45)', boxShadow:'0 20px 60px rgba(0,0,0,0.6)'}}>
             <div style={{fontSize:'3rem', marginBottom:'1rem'}}>⏱️</div>
-            <h2 style={{marginBottom:'0.75rem', color:'#1a1a1a'}}>Still there?</h2>
-            <p style={{color:'#666', marginBottom:'1.5rem'}}>
+            <h2 style={{marginBottom:'0.75rem', color:'var(--text)'}}>Still there?</h2>
+            <p style={{color:'var(--text-muted)', marginBottom:'1.5rem'}}>
               You've been inactive for 30 minutes. For your security, you'll be logged out in:
             </p>
             <div style={{fontSize:'3rem', fontWeight:'700', color:'#ef4444', marginBottom:'1.5rem'}}>
@@ -4123,11 +4123,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               color: '#9ca3af',
             }}>
               <span>© {new Date().getFullYear()} FarriTech &nbsp;·&nbsp; </span>
-              <a href="https://farritech.com/privacy" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Privacy Policy</a>
+              <a href="https://farritech.com/privacy" target="_blank" rel="noreferrer" style={{color:'var(--text-muted)',textDecoration:'none'}}>Privacy Policy</a>
               <span> &nbsp;·&nbsp; </span>
-              <a href="https://farritech.com/terms" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Terms of Service</a>
+              <a href="https://farritech.com/terms" target="_blank" rel="noreferrer" style={{color:'var(--text-muted)',textDecoration:'none'}}>Terms of Service</a>
               <span> &nbsp;·&nbsp; </span>
-              <a href="https://farritech.com/refund-policy" target="_blank" rel="noreferrer" style={{color:'#6b7280',textDecoration:'none'}}>Refund Policy</a>
+              <a href="https://farritech.com/refund-policy" target="_blank" rel="noreferrer" style={{color:'var(--text-muted)',textDecoration:'none'}}>Refund Policy</a>
             </footer>
           </main>
         </div>
@@ -4532,28 +4532,6 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             </div>
           ))}
 
-          {/* Other contacts: barn manager, spouse, trainer, vet… */}
-          <div className="form-group">
-            <label>Other Contacts</label>
-            {formContacts.map((c, i) => {
-              const setField = (k, v) => setFormContacts(prev => prev.map((x, j) => j === i ? { ...x, [k]: v } : x));
-              const inp = { padding: '0.6rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '0.95rem', boxSizing: 'border-box', minWidth: 0 };
-              return (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1.3fr auto', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                  <input type="text" value={c.name} placeholder="Name" onChange={e => setField('name', e.target.value)} style={inp} />
-                  <input type="text" value={c.role} placeholder="Role (e.g. Trainer)" list="contact-roles" onChange={e => setField('role', e.target.value)} style={inp} />
-                  <input type="tel" value={fmtPhone(c.phone)} placeholder="Phone" onChange={e => setField('phone', e.target.value.replace(/\D/g, '').slice(0, 11))} style={inp} />
-                  <input type="email" value={c.email} placeholder="Email (optional)" onChange={e => setField('email', e.target.value)} style={inp} />
-                  <button type="button" className="btn btn-sm btn-outline" title="Remove contact" onClick={() => setFormContacts(prev => prev.filter((_, j) => j !== i))}>✕</button>
-                </div>
-              );
-            })}
-            <datalist id="contact-roles">
-              {['Barn manager', 'Spouse', 'Trainer', 'Rider', 'Vet', 'Groom', 'Owner', 'Other'].map(r => <option key={r} value={r} />)}
-            </datalist>
-            <button type="button" className="btn btn-sm btn-outline" onClick={() => setFormContacts(prev => [...prev, { name: '', role: '', phone: '', email: '' }])}>+ Add contact</button>
-          </div>
-
           {/* Address with Google Places Autocomplete */}
           <div className="form-group">
             <label>Street Address</label>
@@ -4594,6 +4572,28 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             <textarea value={formNotes} placeholder="Horse names, special instructions, preferences…"
               onChange={e => setFormNotes(e.target.value)} rows={3}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', resize: 'vertical', boxSizing: 'border-box' }} />
+          </div>
+
+          {/* Other contacts: barn manager, spouse, trainer, vet… */}
+          <div className="form-group">
+            <label>Other Contacts</label>
+            {formContacts.map((c, i) => {
+              const setField = (k, v) => setFormContacts(prev => prev.map((x, j) => j === i ? { ...x, [k]: v } : x));
+              const inp = { padding: '0.6rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '0.95rem', boxSizing: 'border-box', minWidth: 0 };
+              return (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1.3fr auto', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                  <input type="text" value={c.name} placeholder="Name" onChange={e => setField('name', e.target.value)} style={inp} />
+                  <input type="text" value={c.role} placeholder="Role (e.g. Trainer)" list="contact-roles" onChange={e => setField('role', e.target.value)} style={inp} />
+                  <input type="tel" value={fmtPhone(c.phone)} placeholder="Phone" onChange={e => setField('phone', e.target.value.replace(/\D/g, '').slice(0, 11))} style={inp} />
+                  <input type="email" value={c.email} placeholder="Email (optional)" onChange={e => setField('email', e.target.value)} style={inp} />
+                  <button type="button" className="btn btn-sm btn-outline" title="Remove contact" onClick={() => setFormContacts(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                </div>
+              );
+            })}
+            <datalist id="contact-roles">
+              {['Barn manager', 'Spouse', 'Trainer', 'Rider', 'Vet', 'Groom', 'Owner', 'Other'].map(r => <option key={r} value={r} />)}
+            </datalist>
+            <button type="button" className="btn btn-sm btn-outline" onClick={() => setFormContacts(prev => [...prev, { name: '', role: '', phone: '', email: '' }])}>+ Add contact</button>
           </div>
           {/* Source — hide the qr_booking option for manual entry; show as read-only if editing a qr_booking customer */}
           <div className="form-group">
@@ -4649,6 +4649,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   {selectedCustomer.email && <span>✉️ {selectedCustomer.email}</span>}
                   {(selectedCustomer.address || selectedCustomer.city) && <span>📍 {[selectedCustomer.address, selectedCustomer.city, selectedCustomer.state, selectedCustomer.zip].filter(Boolean).join(', ')}</span>}
                 </div>
+                {selectedCustomer.notes && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.06)', borderRadius: 8, fontSize: '0.9rem', color: 'var(--text)', borderLeft: '3px solid var(--primary)' }}>
+                    💬 {selectedCustomer.notes}
+                  </div>
+                )}
                 {Array.isArray(selectedCustomer.contacts) && selectedCustomer.contacts.length > 0 && (
                   <div style={{ marginTop: '0.75rem' }}>
                     <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>Other contacts</div>
@@ -4660,11 +4665,6 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                         {c.email && <a href={`mailto:${c.email}`} style={{ color: 'var(--primary)' }}>✉️ {c.email}</a>}
                       </div>
                     ))}
-                  </div>
-                )}
-                {selectedCustomer.notes && (
-                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.06)', borderRadius: 8, fontSize: '0.9rem', color: 'var(--text)', borderLeft: '3px solid var(--primary)' }}>
-                    💬 {selectedCustomer.notes}
                   </div>
                 )}
                 <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -5003,10 +5003,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           {/* Delete confirm modal */}
           {confirmDelete && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-              <div style={{ background: 'var(--surface)', color: '#1e293b', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
+              <div style={{ background: 'var(--surface)', color: 'var(--text)', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
                 <h3 style={{ marginBottom: '0.5rem' }}>Delete {confirmDelete.name}?</h3>
-                <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
                   This removes the customer record only. Appointments and invoices are not affected.
                 </p>
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
@@ -5236,10 +5236,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
           {confirmDelete && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-              <div style={{ background: 'var(--surface)', color: '#1e293b', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
+              <div style={{ background: 'var(--surface)', color: 'var(--text)', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
                 <h3 style={{ marginBottom: '0.5rem' }}>Delete {confirmDelete.businessName}?</h3>
-                <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
                   This removes the banner permanently. If you just want to hide it temporarily, use the Active toggle instead.
                 </p>
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
@@ -6481,7 +6481,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                           ></div>
                         </div>
                         <div style={{textAlign: 'center'}}>
-                          <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#1e293b', marginBottom: '0.25rem'}}>
+                          <div style={{fontSize: '0.75rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.25rem'}}>
                             {bucket.label}
                           </div>
                           <div style={{fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.5rem'}}>
@@ -8283,8 +8283,8 @@ function ServicesView({ userId }) {
         <div style={{maxWidth: '900px', margin: '0 auto', padding: '2rem 1rem'}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'1.5rem', flexWrap:'wrap', gap:'1rem'}}>
             <div>
-              <h1 style={{fontSize:'1.75rem', fontWeight:'800', color:'#0D1320', margin:0}}>🚗 Mileage Log</h1>
-              <p style={{color:'#6b7280', margin:'4px 0 0', fontSize:'0.9rem'}}>Track miles driven for tax deductions</p>
+              <h1 style={{fontSize:'1.75rem', fontWeight:'800', color:'var(--text)', margin:0}}>🚗 Mileage Log</h1>
+              <p style={{color:'var(--text-muted)', margin:'4px 0 0', fontSize:'0.9rem'}}>Track miles driven for tax deductions</p>
             </div>
             <button onClick={handlePrint} style={{background:'#0F766E', color:'white', border:'none', borderRadius:'10px', padding:'10px 20px', fontWeight:'700', fontSize:'0.9rem', cursor:'pointer'}}>
               🖨️ Print / Export
@@ -8318,7 +8318,7 @@ function ServicesView({ userId }) {
 
           {/* Table */}
           {loading ? (
-            <div style={{textAlign:'center', padding:'3rem', color:'#6b7280'}}>Loading…</div>
+            <div style={{textAlign:'center', padding:'3rem', color:'var(--text-muted)'}}>Loading…</div>
           ) : filtered.length === 0 ? (
             <div style={{textAlign:'center', padding:'3rem', color:'#6b7280', background:'white', borderRadius:'12px', border:'1.5px solid #e5e7eb'}}>
               No mileage entries for this period.<br/>
@@ -8604,7 +8604,7 @@ function ServicesView({ userId }) {
                 <h3 style={{fontSize: '1.25rem', marginBottom: '1rem', color: 'var(--primary)'}}>
                   📞 Support
                 </h3>
-                <p style={{fontSize: '1.125rem', color: '#1e293b', marginBottom: '0.5rem'}}>
+                <p style={{fontSize: '1.125rem', color: 'var(--text)', marginBottom: '0.5rem'}}>
                   Need help? We're here for you!
                 </p>
                 <a 
@@ -8865,7 +8865,7 @@ function ServicesView({ userId }) {
             <span>
               Google Calendar: {userProfile?.googleCalendarConnected ? 'Connected ✓' : 'Not Connected'}
               {userProfile?.googleCalendarConnected && userProfile?.googleCalendarEmail && (
-                <span style={{marginLeft: '0.5rem', fontSize: '0.8rem', color: '#6b7280', fontWeight: '400'}}>
+                <span style={{marginLeft: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '400'}}>
                   ({userProfile.googleCalendarEmail})
                 </span>
               )}
@@ -12385,7 +12385,7 @@ function CalendarView({ userId }) {
             {totalCancelled > 0 && (
               <div className="stat-card">
                 <div className="stat-label">Cancelled</div>
-                <div className="stat-value" style={{color: '#6b7280'}}>${totalCancelled.toFixed(2)}</div>
+                <div className="stat-value" style={{color: 'var(--text-muted)'}}>${totalCancelled.toFixed(2)}</div>
               </div>
             )}
           </div>
