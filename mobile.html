@@ -385,6 +385,10 @@
         <div class="big-btn-icon" style="background:#0369A1;">🧰</div>
         <div class="big-btn-label">Services</div>
       </button>
+      <button class="big-btn" id="home-business-btn" onclick="openBusinessDashboard()">
+        <div class="big-btn-icon" style="background:#1D4ED8;">📈</div>
+        <div class="big-btn-label">Business Dashboard</div>
+      </button>
       <button class="big-btn" onclick="openDayRoute()">
         <div class="big-btn-icon" style="background:#EA580C;">🗺️</div>
         <div class="big-btn-label">Day Route</div>
@@ -624,6 +628,19 @@
 <!-- ══════════════════════════════════════════ -->
 <!-- SCREEN 6: PAYMENT                         -->
 <!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-business">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Business Dashboard</div>
+    <button onclick="loadBusinessDashboard()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">↻</button>
+  </div>
+  <div class="scroll-body">
+    <div id="business-loading" class="loading-wrap"><div class="spinner"></div></div>
+    <div id="business-error" style="display:none; color:#dc2626; font-size:0.9rem; margin-bottom:12px;"></div>
+    <div id="business-dash"></div>
+  </div>
+</div>
+
 <div class="screen hidden" id="screen-refund">
   <div class="header">
     <button class="back-btn" onclick="goBack()">‹</button>
@@ -1223,6 +1240,7 @@
 <script src="/inventory-catalog.js"></script>
 <script src="/api-auth.js"></script>
 <script src="/lib/pricing.js"></script>
+<script src="/lib/owner-dashboard.js"></script>
 
 <script>
 // ── FIREBASE INIT ──
@@ -1566,6 +1584,7 @@ auth.onAuthStateChanged(async (user) => {
     bootLoading = true;
     renderStatusBanner();
     await resolveBusiness(user); // which business's records to load (own, or the team's)
+    document.getElementById('home-business-btn').style.display = state.teamRole === 'farrier' ? 'none' : '';
     await Promise.allSettled([loadUserProfile(), loadServices(), loadCustomers(), loadAllHorses()]);
     bootLoading = false;
     renderStatusBanner();
@@ -4006,6 +4025,39 @@ function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
     <p style="color:#9ca3af;font-size:12px;margin:0;">Powered by <a href="https://www.farritech.com" style="color:#6b7280;">FarriTech</a></p>
   </div>
 </body></html>`;
+}
+
+// ── BUSINESS DASHBOARD ──
+// Owners and managers: the same numbers as the desktop Business tab (lib/owner-dashboard.js).
+function openBusinessDashboard() {
+  if (state.teamRole === 'farrier') return;
+  goTo('screen-business');
+  loadBusinessDashboard();
+}
+async function loadBusinessDashboard() {
+  const loading = document.getElementById('business-loading'), err = document.getElementById('business-error');
+  loading.style.display = 'flex'; err.style.display = 'none';
+  try {
+    const [invSnap, apptSnap, team] = await Promise.all([
+      db.collection('invoices').where('farrierId', '==', bizId()).get(),
+      db.collection('appointments').where('farrierId', '==', bizId()).get(),
+      netState.online
+        ? fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'team_status' }) }).then(r => r.json()).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    const names = { [bizId()]: 'Owner' };
+    for (const m of (team?.members || [])) names[m.uid] = m.name || m.email;
+    const stats = FarriOwnerDash.compute(
+      invSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      apptSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      { names, ownerId: bizId() });
+    FarriOwnerDash.render(document.getElementById('business-dash'), stats, { dark: false });
+    if (invSnap.metadata.fromCache) { err.textContent = 'Offline: showing what this phone last synced.'; err.style.display = 'block'; }
+  } catch (e) {
+    console.error('Business dashboard error:', e);
+    err.textContent = 'Couldn’t load the dashboard. Please try again.'; err.style.display = 'block';
+  }
+  loading.style.display = 'none';
 }
 
 // ── REFUNDS ──

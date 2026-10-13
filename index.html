@@ -26,6 +26,7 @@
   <script src="/inventory-catalog.js"></script>
   <script src="/api-auth.js"></script>
   <script src="/lib/pricing.js"></script>
+  <script src="/lib/owner-dashboard.js"></script>
   
   <!-- Google API for Calendar -->
   <script src="https://apis.google.com/js/api.js"></script>
@@ -3872,6 +3873,8 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const tabs = [
         { id: 'qrcode', label: 'My QR Code', icon: '📱' },
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        // Owner dashboard: owners and managers (not a team member with the farrier role).
+        ...(window.FarriTeam?.role === 'farrier' ? [] : [{ id: 'business', label: 'Business', icon: '📈' }]),
         { id: 'calendar', label: 'Calendar', icon: '📅' },
         { id: 'appointments', label: 'Appointments', icon: '📋' },
         { id: 'invoices', label: 'Invoices', icon: '💰' },
@@ -3951,6 +3954,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               const navGroups = [
                 { label: '📊 Overview', items: [
                   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+                  ...(window.FarriTeam?.role === 'farrier' ? [] : [{ id: 'business', label: 'Business Dashboard', icon: '📈' }]),
                   { id: 'qrcode', label: 'My QR Code', icon: '📱' },
                   { id: 'about', label: 'About', icon: 'ℹ️' },
                 ]},
@@ -4099,6 +4103,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'inventory' && <InventoryView userId={farrierId} />}
             {tab === 'data' && <DataManagementView userId={farrierId} />}
             {tab === 'reports' && window.FarriTeam?.role !== 'farrier' && <ReportsView userId={farrierId} />}
+            {tab === 'business' && window.FarriTeam?.role !== 'farrier' && <OwnerDashboardView userId={farrierId} />}
             {tab === 'mileage' && <MileageLogView userId={farrierId} userProfile={userProfile} />}
             {tab === 'route' && <RouteSheetView userId={farrierId} userProfile={userProfile} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
@@ -5789,6 +5794,47 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               )}
             </div>
           )}
+        </div>
+      );
+    }
+
+    // Business dashboard for owners and managers — lib/owner-dashboard.js does the math and
+    // drawing (the mobile app's Business Dashboard uses the same file). Read-only.
+    function OwnerDashboardView({ userId }) {
+      const boxRef = React.useRef(null);
+      const [state, setState] = useState({ loading: true, error: '', stamp: 0 });
+      const load = async () => {
+        setState(s => ({ ...s, loading: true, error: '' }));
+        try {
+          const [invSnap, apptSnap, team] = await Promise.all([
+            db.collection('invoices').where('farrierId', '==', userId).get(),
+            db.collection('appointments').where('farrierId', '==', userId).get(),
+            fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'team_status' }) })
+              .then(r => r.json()).catch(() => null),
+          ]);
+          const names = { [userId]: 'Owner' };
+          for (const m of (team?.members || [])) names[m.uid] = m.name || m.email;
+          const stats = window.FarriOwnerDash.compute(
+            invSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            apptSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            { names, ownerId: userId });
+          window.FarriOwnerDash.render(boxRef.current, stats, { dark: true });
+          setState({ loading: false, error: '', stamp: Date.now() });
+        } catch (e) {
+          console.error('Business dashboard error:', e);
+          setState({ loading: false, error: 'Couldn’t load the dashboard. Please try again.', stamp: 0 });
+        }
+      };
+      useEffect(() => { if (userId) load(); }, [userId]);
+      return (
+        <div>
+          <div style={{display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap'}}>
+            <h1 style={{fontSize: '2rem', color: 'var(--primary)', margin: 0}}>Business Dashboard</h1>
+            <button className="btn btn-sm btn-outline" onClick={load} disabled={state.loading} style={{marginLeft: 'auto'}}>{state.loading ? 'Loading…' : '↻ Refresh'}</button>
+          </div>
+          {state.error && <div className="error-message">{state.error}</div>}
+          {state.loading && !state.stamp && <div style={{color: 'var(--text-muted)'}}>Loading your numbers…</div>}
+          <div ref={boxRef} />
         </div>
       );
     }
