@@ -712,6 +712,11 @@
       color: var(--text);
       border-color: rgba(38,131,251,0.45);
     }
+    /* Placeholder text readable on the dark inputs (the browser default nearly vanishes),
+       and on the white pop-ups. The booking page and sign-in screen set their own. */
+    input::placeholder, textarea::placeholder { color: #A9BDD6; opacity: 1; }
+    .modal input::placeholder, .modal textarea::placeholder,
+    .modal-content input::placeholder, .modal-content textarea::placeholder { color: #66788F; }
     input[type="date"] { color-scheme: dark; }
     input[type="date"]::-webkit-calendar-picker-indicator {
       filter: invert(1) opacity(1) brightness(1.5);
