@@ -357,6 +357,10 @@
 
     <div class="section-label">Actions</div>
     <div class="action-grid">
+      <button class="big-btn" onclick="startNewCustomer()">
+        <div class="big-btn-icon green">➕</div>
+        <div class="big-btn-label">New Customer</div>
+      </button>
       <button class="big-btn" onclick="goTo('screen-search')">
         <div class="big-btn-icon">🔍</div>
         <div class="big-btn-label">Find Customer</div>
@@ -365,17 +369,21 @@
         <div class="big-btn-icon" style="background:#92400E;">🐴</div>
         <div class="big-btn-label">Find Horse</div>
       </button>
-      <button class="big-btn" onclick="startNewCustomer()">
-        <div class="big-btn-icon green">➕</div>
-        <div class="big-btn-label">New Customer</div>
+      <button class="big-btn" onclick="goTo('screen-appt-search'); loadApptSearch()">
+        <div class="big-btn-icon" style="background:#7C3AED;">📅</div>
+        <div class="big-btn-label">Find Appointment</div>
       </button>
       <button class="big-btn" onclick="goTo('screen-search'); setTimeout(()=>loadOpenInvoices(),300)">
         <div class="big-btn-icon cyan">💰</div>
         <div class="big-btn-label">Open Invoices</div>
       </button>
-      <button class="big-btn" onclick="goTo('screen-appt-search'); loadApptSearch()">
-        <div class="big-btn-icon" style="background:#7C3AED;">📅</div>
-        <div class="big-btn-label">Find Appointment</div>
+      <button class="big-btn" onclick="goTo('screen-inventory'); loadInventoryList();">
+        <div class="big-btn-icon" style="background:#B45309;">📦</div>
+        <div class="big-btn-label">Inventory</div>
+      </button>
+      <button class="big-btn" onclick="goTo('screen-services-catalog'); loadServicesCatalog();">
+        <div class="big-btn-icon" style="background:#0369A1;">🧰</div>
+        <div class="big-btn-label">Services</div>
       </button>
       <button class="big-btn" onclick="openDayRoute()">
         <div class="big-btn-icon" style="background:#EA580C;">🗺️</div>
@@ -384,14 +392,6 @@
       <button class="big-btn" onclick="goTo('screen-mileage'); loadMileageLog()">
         <div class="big-btn-icon" style="background:#0F766E;">🚗</div>
         <div class="big-btn-label">Mileage Log</div>
-      </button>
-      <button class="big-btn" onclick="goTo('screen-services-catalog'); loadServicesCatalog();">
-        <div class="big-btn-icon" style="background:#0369A1;">🧰</div>
-        <div class="big-btn-label">Services</div>
-      </button>
-      <button class="big-btn" onclick="goTo('screen-inventory'); loadInventoryList();">
-        <div class="big-btn-icon" style="background:#B45309;">📦</div>
-        <div class="big-btn-label">Inventory</div>
       </button>
       <button class="big-btn" onclick="goTo('screen-settings'); loadSettingsScreen();">
         <div class="big-btn-icon" style="background:#475569;">⚙️</div>
