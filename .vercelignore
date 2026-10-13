@@ -1,1 +1,11 @@
+# Kept in the repo, never uploaded to Vercel (smaller deployments = less Deployment Storage).
 scripts
+
+# Not used by the site (nothing references them)
+/49b2b71f-8e6d-46c9-b7f2-90f5986eeec0.png
+/new_farritech_logo.png
+/auth-bg.jpg
+/index.html.bak
+
+# Setup notes for developers, not pages
+*.md
