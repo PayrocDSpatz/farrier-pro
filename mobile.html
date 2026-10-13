@@ -655,7 +655,7 @@
     <div id="card-fields" style="display:none;">
       <div id="ipos-card-fields" style="display:none;">
         <div class="card" style="background:#EBF4FF; border:2px solid #bfdbfe;">
-          <div id="ipos-card-msg" style="font-size:0.85rem; color:var(--text-muted);">Tap Charge to open the iPOSpays card form, type the card number there and press Pay Now. Card details go straight to iPOSpays.</div>
+          <div id="ipos-card-msg" style="font-size:0.85rem; color:var(--text-muted);">Tap the Charge button.</div>
           <iframe id="ipos-card-frame" title="iPOSpays card form" allow="payment" style="display:none; width:100%; height:640px; margin-top:12px; border:1px solid var(--border); border-radius:10px; background:#fff;"></iframe>
           <div id="ipos-card-wait" style="display:none; margin-top:12px; gap:8px; flex-wrap:wrap;">
             <a id="ipos-card-link" href="#" target="_blank" rel="noreferrer" class="btn btn-outline" style="flex:1; text-align:center;">Open in new tab</a>
@@ -5135,7 +5135,7 @@ function chargeCardViaIpos(inv) {
       wait.style.display = 'none';
       frame.style.display = 'none';
       frame.src = 'about:blank';
-      msg.textContent = 'Tap Charge to open the iPOSpays card form, type the card number there and press Pay Now. Card details go straight to iPOSpays.';
+      msg.textContent = 'Tap the Charge button.';
       resolve(result);
     };
     const check = async (manual) => {
