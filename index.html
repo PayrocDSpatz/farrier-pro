@@ -1936,9 +1936,11 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         const isPaid = parseFloat(balanceDue) <= 0;
         const prices = FarriPricing.dualPrices(invoice);
 
-        // Portal pay link — direct to customer portal (they log in and see this invoice)
-        const portalUrl = `${window.location.origin}/customer-portal.html`;
-        const payUrl = buildInvoicePayUrl_(invoice) || portalUrl;
+        // The invoice's own pay link (/pay/{id}). Without a saved one, /pay/{id} still works when
+        // the farrier takes online payments: it opens a fresh Stripe or iPOSpays page. Never the
+        // customer portal (that needs a sign-in). No online payments → no Pay button.
+        const takesOnline = !!(_userProfile?.stripePublishableKey || _userProfile?.ipospaysConnected);
+        const payUrl = buildInvoicePayUrl_(invoice) || (takesOnline && invoice.id ? `${window.location.origin}/pay/${invoice.id}` : "");
 
         // Build services list
         const serviceLines = (invoice.lineItems || invoice.services || []).map(item => {
@@ -1963,7 +1965,7 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
 
   <div style="background:#fff;padding:32px 30px;border:1px solid #e5e7eb;border-top:none;">
     <p style="font-size:16px;color:#374151;">Hi ${firstName},</p>
-    <p style="font-size:15px;color:#4b5563;">Here is your invoice from <strong>${safeText_(_userProfile?.businessName || "your farrier")}</strong>. You can view and pay it online using the button below.</p>
+    <p style="font-size:15px;color:#4b5563;">Here is your invoice from <strong>${safeText_(_userProfile?.businessName || "your farrier")}</strong>. ${payUrl && !isPaid ? "You can view and pay it online using the button below." : "Your invoice details are below."}</p>
 
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:24px 0;">
       <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;margin-bottom:12px;">
@@ -1986,17 +1988,16 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
       </table>` : ""}
     </div>
 
-    ${!isPaid ? `
+    ${!isPaid && payUrl ? `
     <div style="text-align:center;margin:28px 0;">
       <a href="${payUrl}" style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;padding:14px 36px;text-decoration:none;border-radius:8px;font-weight:700;display:inline-block;font-size:16px;letter-spacing:0.3px;">
         💳 Pay Invoice — ${prices.card !== null ? FarriPricing.money(prices.card) : "$" + balanceDue}
       </a>
-      <p style="color:#9ca3af;font-size:12px;margin-top:12px;">Or visit: <a href="${portalUrl}" style="color:#6b7280;">${portalUrl}</a></p>
       ${FarriPricing.altPayHtml(_userProfile, invoice)}
-    </div>` : `
+    </div>` : isPaid ? `
     <div style="background:#f0fdf4;border:1px solid #10b981;border-radius:8px;padding:16px;text-align:center;margin:24px 0;">
       <p style="color:#065f46;font-weight:600;margin:0;">✅ This invoice has been paid in full. Thank you!</p>
-    </div>`}
+    </div>` : FarriPricing.altPayHtml(_userProfile, invoice)}
 
     <p style="color:#6b7280;font-size:13px;">Questions? Reply to this email or contact us directly.</p>
   </div>
