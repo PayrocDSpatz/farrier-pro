@@ -4599,7 +4599,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           <div className="form-group">
             <label>How did you get this customer?</label>
             {editingCustomer?.source === 'qr_booking' ? (
-              <div style={{ padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', background: 'rgba(38,131,251,0.06)', color: '#64748b', fontSize: '0.95rem' }}>
+              <div style={{ padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', background: 'rgba(38,131,251,0.06)', color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                 📲 QR Booking (set by customer)
               </div>
             ) : (
@@ -4635,16 +4635,16 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   👤 {selectedCustomer.name}
                 </h2>
                 {selectedCustomer.farmName && (
-                  <div style={{ fontSize: '1rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.25rem' }}>
+                  <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)', marginBottom: '0.25rem' }}>
                     🏠 {selectedCustomer.farmName}
                   </div>
                 )}
                 {selectedCustomer.managerContact && (
-                  <div style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '0.25rem' }}>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
                     👔 Manager/Contact: {selectedCustomer.managerContact}
                   </div>
                 )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', color: '#1e293b', fontSize: '0.95rem' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', color: 'var(--text)', fontSize: '0.95rem' }}>
                   {selectedCustomer.phone && <span>📞 {fmtPhone(selectedCustomer.phone)}</span>}
                   {selectedCustomer.email && <span>✉️ {selectedCustomer.email}</span>}
                   {(selectedCustomer.address || selectedCustomer.city) && <span>📍 {[selectedCustomer.address, selectedCustomer.city, selectedCustomer.state, selectedCustomer.zip].filter(Boolean).join(', ')}</span>}
@@ -4663,7 +4663,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   </div>
                 )}
                 {selectedCustomer.notes && (
-                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.06)', borderRadius: 8, fontSize: '0.9rem', color: '#444', borderLeft: '3px solid var(--primary)' }}>
+                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.06)', borderRadius: 8, fontSize: '0.9rem', color: 'var(--text)', borderLeft: '3px solid var(--primary)' }}>
                     💬 {selectedCustomer.notes}
                   </div>
                 )}
@@ -4788,7 +4788,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                         {apt.requestedDate || apt.date || '—'} {apt.requestedTime ? `at ${apt.requestedTime}` : ''}
                       </span>
                       {apt.services && apt.services.length > 0 && (
-                        <div style={{ fontSize: '0.8rem', color: '#1e293b', marginTop: '0.2rem' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text)', opacity: 0.85, marginTop: '0.2rem' }}>
                           🔧 {Array.isArray(apt.services) ? apt.services.join(', ') : apt.services}
                         </div>
                       )}
@@ -4856,10 +4856,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           {/* Delete confirm */}
           {confirmDelete && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-              <div style={{ background: 'var(--surface)', color: '#1e293b', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
+              <div style={{ background: 'var(--surface)', color: 'var(--text)', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
                 <h3 style={{ marginBottom: '0.5rem' }}>Delete {confirmDelete.name}?</h3>
-                <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
                   This removes the customer record only. Appointments and invoices are not affected.
                 </p>
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
