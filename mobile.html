@@ -624,6 +624,25 @@
 <!-- ══════════════════════════════════════════ -->
 <!-- SCREEN 6: PAYMENT                         -->
 <!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-refund">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Refund Payment</div>
+  </div>
+  <div class="scroll-body">
+    <div class="card" style="text-align:center; padding:24px 20px;">
+      <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600;" id="refund-invoice-num"></div>
+      <div style="font-size:0.85rem; color:var(--text-muted);" id="refund-customer-name"></div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-top:8px;" id="refund-paid-text"></div>
+    </div>
+    <div class="field"><label>Refund amount</label><input type="number" id="refund-amount" step="0.01" min="0.01" inputmode="decimal"></div>
+    <div class="field"><label>Manager password</label><input type="password" id="refund-password" autocomplete="off"></div>
+    <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;" id="refund-note"></div>
+    <div id="refund-error" style="color:#dc2626; font-size:0.85rem; margin-bottom:12px; display:none;"></div>
+    <button class="btn-danger" id="refund-btn" onclick="confirmRefund()">Refund</button>
+  </div>
+</div>
+
 <div class="screen hidden" id="screen-payment">
   <div class="header">
     <button class="back-btn" onclick="goBack()">‹</button>
@@ -1134,7 +1153,7 @@
 
     <div class="card" style="margin-top:14px;">
       <div class="card-title">💳 iPOSpays Payments</div>
-      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Take pay-link payments through your iPOSpays (Dejavoo) merchant account instead of Stripe. While connected, Pay Now links open an iPOSpays payment page. Refund iPOSpays payments in the iPOSpays portal.</div>
+      <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Take pay-link payments through your iPOSpays (Dejavoo) merchant account instead of Stripe. While connected, Pay Now links and Card payments open an iPOSpays payment page. Refund them from the customer's Invoice History.</div>
       <div id="ipos-status-banner" style="display:none;"></div>
       <div id="ipos-form">
         <div class="field"><label>Environment</label><select id="set-ipos-mode"><option value="sandbox">Sandbox (testing)</option><option value="production">Production (real payments)</option></select></div>
@@ -2040,13 +2059,17 @@ async function loadCustomerDetail(c) {
 
     if (all.length) {
       document.getElementById('cust-inv-section').style.display = 'block';
+      state.customerInvoices = Object.fromEntries(all.map(inv => [inv.id, inv]));
       document.getElementById('cust-inv-list').innerHTML = all.map(inv => `
         <div class="invoice-row ${inv.status}">
           <div class="invoice-row-top">
             <div class="invoice-row-num">#${inv.invoiceNumber}</div>
             <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
           </div>
-          <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · <span class="badge badge-${inv.status === 'paid' ? 'success' : 'warning'}">${inv.status}</span></div>
+          <div class="invoice-row-bottom" style="display:flex; align-items:center; gap:6px;">
+            <span>${fmtDate(inv.createdAt)} · <span class="badge badge-${inv.status === 'paid' ? 'success' : 'warning'}">${inv.status}</span></span>
+            ${canRefundInvoice(inv) ? `<button class="btn-sm" style="margin-left:auto; background:var(--danger-bg); color:var(--danger);" onclick="event.stopPropagation(); openRefund('${inv.id}')">↩️ Refund</button>` : ''}
+          </div>
         </div>
       `).join('');
     }
@@ -3930,6 +3953,95 @@ function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
     <p style="color:#9ca3af;font-size:12px;margin:0;">Powered by <a href="https://www.farritech.com" style="color:#6b7280;">FarriTech</a></p>
   </div>
 </body></html>`;
+}
+
+// ── REFUNDS ──
+// Same rules as the desktop Refund button: card payments taken through Stripe (a pi_ id on the
+// invoice) or iPOSpays (an ipos_ payment) can be refunded, with the manager password. iPOSpays
+// voids it if it hasn't settled yet, otherwise refunds it, and records it on the invoice itself;
+// for Stripe the app records it, like desktop does.
+function invoiceStripePaymentId(inv) {
+  const id = inv.transactionId || inv.stripePaymentIntentId || '';
+  return String(id).startsWith('pi_') ? id : '';
+}
+function invoiceIposPaid(inv) {
+  return (inv.payments || []).some(p => String(p.paymentId || '').startsWith('ipos_'));
+}
+function invoiceRefundable(inv) {
+  const paid = inv.paidAmount || (inv.payments || []).reduce((s, p) => s + (p.amount || 0), 0) || inv.total || 0;
+  return Math.max(0, paid - (inv.refundedAmount || 0));
+}
+function canRefundInvoice(inv) {
+  return (inv.status === 'paid' || inv.status === 'partial')
+    && Boolean(invoiceStripePaymentId(inv) || invoiceIposPaid(inv)) && invoiceRefundable(inv) > 0;
+}
+
+function openRefund(invoiceId) {
+  const inv = state.customerInvoices?.[invoiceId];
+  if (!inv) return;
+  if (!netState.online) { showToast('Refunds need an internet connection', 'error'); return; }
+  state.refundInvoice = inv;
+  const refundable = invoiceRefundable(inv);
+  const ipos = !invoiceStripePaymentId(inv) && invoiceIposPaid(inv);
+  document.getElementById('refund-invoice-num').textContent = '#' + (inv.invoiceNumber || '');
+  document.getElementById('refund-customer-name').textContent = inv.customerName || '';
+  document.getElementById('refund-paid-text').textContent = `Refundable: ${FarriPricing.money(Math.round(refundable * 100))}`;
+  document.getElementById('refund-amount').value = refundable.toFixed(2);
+  document.getElementById('refund-password').value = '';
+  document.getElementById('refund-note').textContent = ipos
+    ? "The money goes back to the customer's card through iPOSpays (voided if it hasn't settled yet). This can't be undone."
+    : "The money goes back to the customer's card through Stripe. This can't be undone.";
+  document.getElementById('refund-error').style.display = 'none';
+  const btn = document.getElementById('refund-btn');
+  btn.disabled = false; btn.textContent = 'Refund';
+  goTo('screen-refund');
+}
+
+async function confirmRefund() {
+  const inv = state.refundInvoice;
+  if (!inv) return;
+  const errEl = document.getElementById('refund-error');
+  const fail = (msg) => { errEl.textContent = msg; errEl.style.display = 'block'; };
+  const refundable = invoiceRefundable(inv);
+  const amt = parseFloat(document.getElementById('refund-amount').value);
+  const password = document.getElementById('refund-password').value;
+  if (!amt || amt <= 0) return fail('Enter a refund amount.');
+  if (amt > refundable + 0.001) return fail(`Refund can't be more than ${FarriPricing.money(Math.round(refundable * 100))}.`);
+  if (!password) return fail('Enter the manager password.');
+  if (!netState.online) return fail('Refunds need an internet connection.');
+  errEl.style.display = 'none';
+  const btn = document.getElementById('refund-btn');
+  btn.disabled = true; btn.textContent = 'Refunding…';
+  try {
+    const stripeId = invoiceStripePaymentId(inv);
+    const ipos = !stripeId && invoiceIposPaid(inv);
+    const res = await fetch('/api/stripe-payment', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ipos
+        ? { action: 'ipospays_refund', invoiceId: inv.id, amount: amt, refundPassword: password }
+        : { action: 'refund', transactionId: stripeId, amount: amt, refundPassword: password }),
+    });
+    const result = await res.json();
+    if (!result.success) { btn.disabled = false; btn.textContent = 'Refund'; return fail(result.error || 'Refund failed.'); }
+    if (!result.recorded) {
+      // Stripe: record it on the invoice, as the desktop app does.
+      const fresh = (await db.collection('invoices').doc(inv.id).get()).data() || {};
+      const refunds = [...(fresh.refunds || []), { amount: amt, refundId: result.refundId, transactionId: stripeId, date: new Date().toISOString() }];
+      const refundedAmount = refunds.reduce((s, r) => s + (r.amount || 0), 0);
+      const fully = refundedAmount >= invoiceRefundable({ ...fresh, refundedAmount: 0 }) - 0.001;
+      await db.collection('invoices').doc(inv.id).update({
+        refunds, refundedAmount,
+        ...(fully ? { status: 'refunded', refundedAt: firebase.firestore.FieldValue.serverTimestamp() } : {}),
+      });
+    }
+    state.refundInvoice = null;
+    showSuccess(result.kind === 'void' ? 'Payment Voided' : 'Payment Refunded',
+      `${FarriPricing.money(Math.round(amt * 100))} back to ${inv.customerName || 'the customer'}'s card · Invoice #${inv.invoiceNumber || ''}`, '↩️');
+  } catch (e) {
+    console.error('Refund error:', e);
+    btn.disabled = false; btn.textContent = 'Refund';
+    fail('Refund failed. Please try again.');
+  }
 }
 
 // ── PAYMENT ──
