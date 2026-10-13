@@ -2237,7 +2237,7 @@ async function ensureFarriTechfile_(uid, profile) {
 
 👤 CUSTOMER INFORMATION:
  Name: ${appointment.customerName}${appointment.farmName ? `\n   Farm/Business: ${appointment.farmName}` : ''}
- Phone: ${appointment.phone}
+ Phone: ${fmtPhone(appointment.phone)}
 ${appointment.email ? `   Email: ${appointment.email}` : ''}
 
 🔧 SERVICES REQUESTED:
@@ -3775,7 +3775,7 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
               {filtered.map(f => (
                 <div key={f.id} className="card" style={{marginBottom:'10px'}}>
                   <div><strong>{f.businessName || '(no business name)'}</strong></div>
-                  <div style={{color:'var(--text-muted)'}}>{f.email || ''} {f.phone ? `• ${f.phone}` : ''}</div>
+                  <div style={{color:'var(--text-muted)'}}>{f.email || ''} {f.phone ? `• ${fmtPhone(f.phone)}` : ''}</div>
                   <div style={{marginTop:'8px'}}>
                     <button className="btn btn-primary" onClick={()=>startSession(f.id)}>
                       Login as this Farrier
@@ -4610,7 +4610,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   </div>
                 )}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', color: '#1e293b', fontSize: '0.95rem' }}>
-                  {selectedCustomer.phone && <span>📞 {selectedCustomer.phone}</span>}
+                  {selectedCustomer.phone && <span>📞 {fmtPhone(selectedCustomer.phone)}</span>}
                   {selectedCustomer.email && <span>✉️ {selectedCustomer.email}</span>}
                   {(selectedCustomer.address || selectedCustomer.city) && <span>📍 {[selectedCustomer.address, selectedCustomer.city, selectedCustomer.state, selectedCustomer.zip].filter(Boolean).join(', ')}</span>}
                 </div>
@@ -4920,7 +4920,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{cust.name || 'Unknown'}{cust.farmName ? ` — ${cust.farmName}` : ''}</div>
                       <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                        {cust.phone && <span>📞 {cust.phone}</span>}
+                        {cust.phone && <span>📞 {fmtPhone(cust.phone)}</span>}
                         {cust.email && <span>✉️ {cust.email}</span>}
                         {matchingHorses(cust).length > 0 && <span style={{ color: 'var(--primary)', fontWeight: 600 }}>🐴 {matchingHorses(cust).join(', ')}</span>}
                       </div>
@@ -5743,7 +5743,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       {c.name}{c.farmName ? <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> — {c.farmName}</span> : ''}
                     </div>
                     <div style={{ fontSize: '0.83rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                      {c.phone && <span style={{ marginRight: '0.75rem' }}>📞 {c.phone}</span>}
+                      {c.phone && <span style={{ marginRight: '0.75rem' }}>📞 {fmtPhone(c.phone)}</span>}
                       {c.address && <span>📍 {[c.address, c.city, c.state].filter(Boolean).join(', ')}</span>}
                     </div>
                     {c.services?.length > 0 && (
@@ -9519,7 +9519,7 @@ function ServicesView({ userId }) {
                   <div style={{marginBottom: '1rem', color: '#475569', textAlign: 'left'}}>
                     <div><strong>Name:</strong> {formData.name}</div>
                     {formData.farmName && <div><strong>Farm:</strong> {formData.farmName}</div>}
-                    <div><strong>Phone:</strong> {formData.phone}</div>
+                    <div><strong>Phone:</strong> {fmtPhone(formData.phone)}</div>
                     {formData.email && <div><strong>Email:</strong> {formData.email}</div>}
                     <div><strong>Horses/Services:</strong> {horseRows.filter(r => r.horseName.trim() || r.services.length > 0).length
                       ? horseRows.filter(r => r.horseName.trim() || r.services.length > 0)
@@ -10741,7 +10741,7 @@ function CalendarView({ userId }) {
                     <div className="appointment-info">
                       <div className="appointment-customer">{apt.customerName}{apt.farmName ? ` — ${apt.farmName}` : ''}</div>
                       <div className="appointment-details">
-                        📞 {apt.phone} {apt.email && `• ✉️ ${apt.email}`}
+                        📞 {fmtPhone(apt.phone)} {apt.email && `• ✉️ ${apt.email}`}
                         {userProfile?.smsEnabled && apt.phone && (() => {
                           const ph = apt.phone.replace(/\D/g,'');
                           const cust = appointments.find ? null : null; // will use Firestore
@@ -11166,7 +11166,7 @@ function CalendarView({ userId }) {
               <div style={{ padding: '0.9rem 1.1rem', background: '#f0f9ff', borderRadius: 10, border: '1.5px solid #bae6fd' }}>
                 <div style={{ fontWeight: 700, color: '#0369a1' }}>👤 {customer.name}{customer.farmName ? ` — ${customer.farmName}` : ''}</div>
                 <div style={{ fontSize: '0.85rem', color: '#334155', marginTop: '0.2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                  {customer.phone && <span>📞 {customer.phone}</span>}
+                  {customer.phone && <span>📞 {fmtPhone(customer.phone)}</span>}
                   {customer.email && <span>✉️ {customer.email}</span>}
                 </div>
               </div>
@@ -11264,7 +11264,7 @@ function CalendarView({ userId }) {
                         style={{ marginTop: 2, width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
                       <div>
                         <div style={{ fontWeight: 600, color: '#16a34a', fontSize: '0.95rem' }}>📱 Send confirmation SMS</div>
-                        <div style={{ fontSize: '0.82rem', color: '#1e293b', marginTop: '0.2rem' }}>Text {customer.phone} with the appointment details.</div>
+                        <div style={{ fontSize: '0.82rem', color: '#1e293b', marginTop: '0.2rem' }}>Text {fmtPhone(customer.phone)} with the appointment details.</div>
                       </div>
                     </label>
                   ) : (
@@ -12004,7 +12004,7 @@ function CalendarView({ userId }) {
                           📱 Notify customer via SMS
                         </div>
                         <div style={{fontSize: '0.82rem', color: '#1e293b', marginTop: '0.2rem'}}>
-                          Sends a text to {appointment.phone} with the updated date &amp; time.
+                          Sends a text to {fmtPhone(appointment.phone)} with the updated date &amp; time.
                         </div>
                       </div>
                     </label>

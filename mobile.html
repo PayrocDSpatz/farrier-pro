@@ -1858,7 +1858,7 @@ async function filterCustomers(q) {
       <div class="avatar">${(c.name||'?')[0].toUpperCase()}</div>
       <div>
         <div class="customer-row-name">${c.name}</div>
-        <div class="customer-row-sub">${[c.farmName, c.phone].filter(Boolean).join(' · ') || 'No contact info'}</div>
+        <div class="customer-row-sub">${[c.farmName, c.phone && fmtPhoneDisplay(c.phone)].filter(Boolean).join(' · ') || 'No contact info'}</div>
       </div>
       <div class="customer-row-arrow">›</div>
     </div>
@@ -2043,7 +2043,7 @@ async function loadCustomerDetail(c) {
     </div>
     <div class="customer-hero-contact">
       ${c.managerContact ? `<div>👔 ${c.managerContact}</div>` : ''}
-      ${c.phone ? `<div>📞 ${c.phone}</div>` : ''}
+      ${c.phone ? `<div>📞 ${fmtPhoneDisplay(c.phone)}</div>` : ''}
       ${c.email ? `<div>✉️ ${c.email}</div>` : ''}
       ${c.notes ? `<div style="margin-top:4px; font-style:italic; opacity:0.8;">📝 ${c.notes}</div>` : ''}
     </div>
