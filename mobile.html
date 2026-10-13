@@ -656,8 +656,9 @@
       <div id="ipos-card-fields" style="display:none;">
         <div class="card" style="background:#EBF4FF; border:2px solid #bfdbfe;">
           <div id="ipos-card-msg" style="font-size:0.85rem; color:var(--text-muted);">Tap Charge to open the iPOSpays card form, type the card number there and press Pay Now. Card details go straight to iPOSpays.</div>
+          <iframe id="ipos-card-frame" title="iPOSpays card form" allow="payment" style="display:none; width:100%; height:640px; margin-top:12px; border:1px solid var(--border); border-radius:10px; background:#fff;"></iframe>
           <div id="ipos-card-wait" style="display:none; margin-top:12px; gap:8px; flex-wrap:wrap;">
-            <a id="ipos-card-link" href="#" target="_blank" rel="noreferrer" class="btn btn-outline" style="flex:1; text-align:center;">Open card form</a>
+            <a id="ipos-card-link" href="#" target="_blank" rel="noreferrer" class="btn btn-outline" style="flex:1; text-align:center;">Open in new tab</a>
             <button type="button" class="btn btn-outline" style="flex:1;" onclick="iposKeyedCheckNow()">Check now</button>
             <button type="button" class="btn btn-outline" style="flex:1;" onclick="iposKeyedStop()">Stop waiting</button>
           </div>
@@ -5096,17 +5097,15 @@ async function chargeCardViaStripe(inv) {
 }
 
 // ── iPOSPAYS KEYED CARD ──
-// With iPOSpays connected the farrier types the card into an iPOSpays payment page opened
-// in a new tab (the card number never touches FarriTech). We then ask the server every few
+// With iPOSpays connected the farrier types the card into an iPOSpays payment page shown in
+// a frame on the payment screen (the card number never touches FarriTech; iPOSpays lets its
+// page be framed — no X-Frame-Options / frame-ancestors, 2026-10-13). We then ask the server every few
 // seconds, and whenever the app comes back into view, until iPOSpays says it went through
 // or was declined. Resolves with { amount } when paid, false otherwise.
 let _iposWait = null;
 
 function chargeCardViaIpos(inv) {
   if (!netState.online) { showToast('Card payments require an internet connection', 'error'); return Promise.resolve(false); }
-  // Open the tab now, while we still have the tap (popup blockers), then point it at the form.
-  const win = window.open('', '_blank');
-  if (win) win.document.write('<p style="font-family:system-ui,sans-serif;padding:2rem">Opening the iPOSpays card form…</p>');
   return new Promise(async (resolve) => {
     let res;
     try {
@@ -5116,23 +5115,26 @@ function chargeCardViaIpos(inv) {
       })).json();
     } catch (e) { res = { success: false, error: 'Could not reach the server.' }; }
     if (!res.success) {
-      if (win) win.close();
       showToast(res.error || 'Could not open the iPOSpays card form', 'error');
       return resolve(false);
     }
-    if (win) win.location.href = res.url;
     const msg = document.getElementById('ipos-card-msg');
     const wait = document.getElementById('ipos-card-wait');
-    msg.textContent = `Waiting for the card payment of $${Number(res.amount).toFixed(2)}… Type the card number into the iPOSpays card form and press Pay Now. This updates by itself.`;
+    const frame = document.getElementById('ipos-card-frame');
+    msg.textContent = `Type the card into the form below and press Pay Now ($${Number(res.amount).toFixed(2)}). This updates by itself when it goes through.`;
     document.getElementById('ipos-card-link').href = res.url;
-    document.getElementById('ipos-card-link').textContent = win ? 'Reopen card form' : 'Open card form';
+    frame.src = res.url;
+    frame.style.display = 'block';
     wait.style.display = 'flex';
+    frame.scrollIntoView({ behavior: 'smooth', block: 'start' });
     const started = Date.now();
     const finish = (result) => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
       _iposWait = null;
       wait.style.display = 'none';
+      frame.style.display = 'none';
+      frame.src = 'about:blank';
       msg.textContent = 'Tap Charge to open the iPOSpays card form, type the card number there and press Pay Now. Card details go straight to iPOSpays.';
       resolve(result);
     };

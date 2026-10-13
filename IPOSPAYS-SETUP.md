@@ -17,10 +17,11 @@ account instead of Stripe, using the iPOSpays **Hosted Payment Page** (HPP).
   (`POST payment.ipospays.{tech,com}/api/v3/iposTransact`, transactionType 2 or 3, by the
   payment's RRN). Partial amounts are always refunds. Refunds done in the iPOSpays portal
   aren't seen by FarriTech.
-- **Keyed cards:** Pay Now on desktop (Invoices) and Card on mobile open an iPOSpays payment page in a
-  new tab for the amount chosen (card price unless waived). The farrier types the card there and presses
-  Pay Now; the app checks with iPOSpays every few seconds (and when the farrier switches back to it) and
-  shows the payment once it's approved. The card number goes straight to iPOSpays, never through
+- **Keyed cards:** Pay Now on desktop (Invoices) and Card on mobile show an iPOSpays payment page in a
+  frame inside FarriTech for the amount chosen (card price unless waived), with a link to open it in a
+  new tab if the frame doesn't load. The farrier types the card there and presses Pay Now; the app checks
+  with iPOSpays every few seconds and shows the payment once it's approved. (iPOSpays' page sends no
+  X-Frame-Options or frame-ancestors, so it can be framed — checked 2026-10-13.) The card number goes straight to iPOSpays, never through
   FarriTech. The payment is recorded as `card_keyed` / `paidVia: ipospays_keyed`. Opening the form closes
   the customer's open pay-link page (a new one is made when they next open the link).
 - **Still Stripe only:** the customer portal.

@@ -12880,7 +12880,8 @@ function CalendarView({ userId }) {
       const useIpos = !!userProfile?.ipospaysConnected;
       const publishableKey = useIpos ? '' : (userProfile?.stripePublishableKey || '');
       const hasStripe = !!publishableKey;
-      // iPOSpays keyed card: { ref, url } of the card form opened in a new tab, while we wait.
+      // iPOSpays keyed card: { ref, url } of the card form shown in this box, while we wait.
+      // (iPOSpays lets its payment page be framed: no X-Frame-Options / frame-ancestors, 2026-10-13.)
       const [iposPage, setIposPage] = useState(null);
       const [iposChecking, setIposChecking] = useState(false);
       const iposDoneRef = React.useRef(false);
@@ -12912,7 +12913,7 @@ function CalendarView({ userId }) {
       }, [invoice.id]);
 
       // While the card form is open, ask every few seconds (and whenever this tab comes back
-      // into view) whether iPOSpays has the payment. Stops after 15 minutes; "Check now" still works.
+      // into view, in case it was opened in its own tab) whether iPOSpays has the payment. Stops after 15 minutes; "Check now" still works.
       React.useEffect(() => {
         if (!iposPage) return;
         const started = Date.now();
@@ -12924,9 +12925,6 @@ function CalendarView({ userId }) {
 
       const openIposCardForm = async () => {
         if (!applyCents || applyCents <= 0) { setError('Please enter a valid amount.'); return; }
-        // Open the tab now, while we still have the click (popup blockers), then point it at the form.
-        const win = window.open('', '_blank');
-        if (win) win.document.write('<p style="font-family:system-ui,sans-serif;padding:2rem">Opening the iPOSpays card form…</p>');
         setProcessing(true);
         setError('');
         try {
@@ -12936,14 +12934,11 @@ function CalendarView({ userId }) {
           });
           const result = await res.json();
           if (!result.success) {
-            if (win) win.close();
             setError(result.error || 'Could not open the iPOSpays card form.');
           } else {
-            if (win) win.location.href = result.url;
-            setIposPage({ ref: result.ref, url: result.url, opened: !!win, amount: result.amount });
+            setIposPage({ ref: result.ref, url: result.url, amount: result.amount });
           }
         } catch (err) {
-          if (win) win.close();
           setError('Could not open the iPOSpays card form. Please try again.');
         }
         setProcessing(false);
@@ -13037,15 +13032,15 @@ function CalendarView({ userId }) {
             {useIpos ? (
               iposPage ? (
                 <>
-                  <div style={{background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1rem', textAlign: 'center'}}>
-                    <div className="spinner" style={{margin: '0 auto 0.75rem'}}></div>
-                    <strong>Waiting for the card payment of ${Number(iposPage.amount).toFixed(2)}…</strong>
-                    <p style={{fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.5rem'}}>
-                      Type the card number into the iPOSpays card form{iposPage.opened ? ' in the new tab' : ''} and press Pay Now. This updates by itself when the payment goes through.
-                    </p>
-                    <a href={iposPage.url} target="_blank" rel="noreferrer" style={{color: 'var(--primary)', fontWeight: 600}}>
-                      {iposPage.opened ? 'Reopen the card form' : 'Open the card form'}
-                    </a>
+                  <iframe
+                    src={iposPage.url}
+                    title="iPOSpays card form"
+                    allow="payment"
+                    style={{width: '100%', height: '640px', maxHeight: '65vh', border: '1px solid var(--border)', borderRadius: '8px', background: '#fff'}}
+                  />
+                  <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem', textAlign: 'center'}}>
+                    Type the card and press Pay Now — this closes by itself when the payment goes through.{' '}
+                    <a href={iposPage.url} target="_blank" rel="noreferrer" style={{color: 'var(--primary)'}}>Form not showing? Open it in a new tab</a>
                   </div>
                   {error && <div className="error-message" style={{marginTop: '1rem'}}>{error}</div>}
                   <div style={{display: 'flex', gap: '0.75rem', marginTop: '1.5rem'}}>
@@ -13067,7 +13062,7 @@ function CalendarView({ userId }) {
                     )}
                   </div>
                   <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>
-                    The iPOSpays card form opens in a new tab. Type the card number there; this window updates when the payment goes through.
+                    The iPOSpays card form opens here. Type the card number into it; this window updates when the payment goes through.
                   </div>
                   {error && <div className="error-message" style={{marginTop: '1rem'}}>{error}</div>}
                   <div style={{display: 'flex', gap: '0.75rem', marginTop: '1.5rem'}}>
