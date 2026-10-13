@@ -126,6 +126,14 @@ export async function patchDoc(path, fields = {}, deleteFields = []) {
   return true;
 }
 
+// Deletes a document (no error if it's already gone).
+export async function deleteDoc(path) {
+  const { idToken } = await serverAuth();
+  const r = await fetch(`${DOCS}/${path}`, { method: 'DELETE', headers: { Authorization: `Bearer ${idToken}` } });
+  if (!r.ok && r.status !== 404) throw new Error(`Firestore delete ${path} failed: ${r.status} (server uid ${cached?.uid}) ${await r.text()}`);
+  return true;
+}
+
 // ── Transactions ──
 // runTransaction(async tx => { const inv = await tx.get('invoices/x'); tx.patch('invoices/x', {...}); })
 // Optimistic: reads are plain reads, and every write is committed together with a
@@ -236,5 +244,6 @@ export async function isFarrier(uid) {
   if (!uid) return false;
   const { uid: serverUid } = await serverAuth();
   if (uid === serverUid) return true;
-  return !!(await getDoc(`farriers/${uid}`));
+  // A farrier with their own profile, or one who works in someone's business (_lib/team.js).
+  return !!(await getDoc(`farriers/${uid}`)) || !!(await getDoc(`businessMembers/${uid}`));
 }
