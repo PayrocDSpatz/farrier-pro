@@ -4697,8 +4697,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                       referral:   { label: 'Referral',   icon: '🤝', bg: '#fdf4ff', color: '#9333ea' },
                       existing:   { label: 'Existing',   icon: '⭐', bg: '#fffbeb', color: '#d97706' },
                       marketing:  { label: 'Marketing',  icon: '📣', bg: '#fff1f2', color: '#e11d48' },
+                      mobile_app: { label: 'Added on Mobile', icon: '📱', bg: '#ecfdf5', color: '#047857' },
                     };
-                    const s = sourceMap[selectedCustomer.source] || { label: selectedCustomer.source, icon: '📌', bg: '#f8fafc', color: '#64748b' };
+                    // Anything else reads as words ("auto_from_confirm" → "Auto from confirm"), not code.
+                    const pretty = String(selectedCustomer.source || '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+                    const s = sourceMap[selectedCustomer.source] || { label: pretty, icon: '📌', bg: '#f8fafc', color: '#475569' };
                     return (
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
