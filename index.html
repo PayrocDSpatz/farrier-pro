@@ -4471,6 +4471,8 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         }
       };
 
+      // "123 Main St, Wellington, FL 33414" from whichever address parts the customer has.
+      const custAddress = (c) => [c.address, c.city, [c.state, c.zip].filter(Boolean).join(' ')].map(x => String(x || '').trim()).filter(Boolean).join(', ');
       const searchQ = search.trim().toLowerCase();
       const matchingHorses = (c) => searchQ ? (horseNamesByCustomer[c.id] || []).filter(n => n.toLowerCase().includes(searchQ)) : [];
       const filtered = customers.filter(c => {
@@ -4480,7 +4482,9 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           (c.farmName || '').toLowerCase().includes(q) ||
           (c.managerContact || '').toLowerCase().includes(q) ||
           (c.email || '').toLowerCase().includes(q) ||
-          (c.phone || '').includes(q);
+          custAddress(c).toLowerCase().includes(q) ||
+          (c.phone || '').includes(q) ||
+          (q.replace(/\D/g, '').length >= 3 && (c.phone || '').replace(/\D/g, '').includes(q.replace(/\D/g, '')));
         const matchSms = smsFilter === 'all' ||
           (smsFilter === 'opted_out' && c.smsOptOut) ||
           (smsFilter === 'opted_in' && !c.smsOptOut);
@@ -4880,7 +4884,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           {/* Filters */}
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <input
-              type="text" placeholder="🔍 Search name, email, phone, horse…"
+              type="text" placeholder="🔍 Search name, phone, email, address, horse…"
               value={search} onChange={e => setSearch(e.target.value)}
               style={{ flex: '1', minWidth: 200, padding: '0.6rem 0.9rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '0.95rem' }}
             />
@@ -4920,8 +4924,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>{cust.name || 'Unknown'}{cust.farmName ? ` — ${cust.farmName}` : ''}</div>
                       <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        {cust.managerContact && <span>👔 {cust.managerContact}</span>}
                         {cust.phone && <span>📞 {fmtPhone(cust.phone)}</span>}
                         {cust.email && <span>✉️ {cust.email}</span>}
+                        {custAddress(cust) && <span>📍 {custAddress(cust)}</span>}
                         {matchingHorses(cust).length > 0 && <span style={{ color: 'var(--primary)', fontWeight: 600 }}>🐴 {matchingHorses(cust).join(', ')}</span>}
                       </div>
                     </div>
