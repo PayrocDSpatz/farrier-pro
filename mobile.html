@@ -385,6 +385,10 @@
         <div class="big-btn-icon" style="background:#0369A1;">🧰</div>
         <div class="big-btn-label">Services</div>
       </button>
+      <button class="big-btn" id="home-business-btn" onclick="openBusinessDashboard()">
+        <div class="big-btn-icon" style="background:#1D4ED8;">📈</div>
+        <div class="big-btn-label">Business Dashboard</div>
+      </button>
       <button class="big-btn" onclick="openDayRoute()">
         <div class="big-btn-icon" style="background:#EA580C;">🗺️</div>
         <div class="big-btn-label">Day Route</div>
@@ -624,6 +628,19 @@
 <!-- ══════════════════════════════════════════ -->
 <!-- SCREEN 6: PAYMENT                         -->
 <!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-business">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Business Dashboard</div>
+    <button onclick="loadBusinessDashboard()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">↻</button>
+  </div>
+  <div class="scroll-body">
+    <div id="business-loading" class="loading-wrap"><div class="spinner"></div></div>
+    <div id="business-error" style="display:none; color:#dc2626; font-size:0.9rem; margin-bottom:12px;"></div>
+    <div id="business-dash"></div>
+  </div>
+</div>
+
 <div class="screen hidden" id="screen-refund">
   <div class="header">
     <button class="back-btn" onclick="goBack()">‹</button>
@@ -1079,6 +1096,13 @@
 
     <div id="settings-saved-banner" style="display:none; background:#f0fdf4; border:2px solid #86efac; border-radius:10px; padding:10px 14px; margin-bottom:14px; color:#16a34a; font-weight:700; font-size:0.88rem;">✅ Saved!</div>
 
+    <!-- Team members (api/_lib/team.js) see this instead of the business settings below. -->
+    <div class="card" id="settings-member-note" style="display:none;">
+      <div class="card-title">👥 <span id="settings-member-biz"></span></div>
+      <div style="font-size:0.9rem; color:var(--text-muted);">You're working in this business as a <strong id="settings-member-role"></strong>. Business settings, payment accounts and the team are managed by the owner.</div>
+    </div>
+
+    <div id="settings-owner-only">
     <div class="card">
       <div class="card-title">🏢 Business Profile</div>
       <div class="field"><label>Business Name *</label><input type="text" id="set-business-name" placeholder="John's Farrier Services"></div>
@@ -1173,6 +1197,7 @@
       <div id="availability-days"></div>
       <button class="btn-secondary" onclick="saveAvailability()" style="margin-top:8px;">Save Availability</button>
     </div>
+    </div><!-- /settings-owner-only -->
 
   </div>
 </div>
@@ -1215,6 +1240,7 @@
 <script src="/inventory-catalog.js"></script>
 <script src="/api-auth.js"></script>
 <script src="/lib/pricing.js"></script>
+<script src="/lib/owner-dashboard.js"></script>
 
 <script>
 // ── FIREBASE INIT ──
@@ -1340,7 +1366,7 @@ window.addEventListener('offline', () => { netState.online = false; renderStatus
 // metadata on one lightweight always-open listener as a real reachability signal.
 function initConnectivityWatcher() {
   if (!state.user) return;
-  db.collection('farriers').doc(state.user.uid).onSnapshot({ includeMetadataChanges: true }, snap => {
+  db.collection('farriers').doc(bizId()).onSnapshot({ includeMetadataChanges: true }, snap => {
     const reachable = !snap.metadata.fromCache;
     if (reachable !== netState.online) {
       netState.online = reachable;
@@ -1509,6 +1535,42 @@ function showToast(msg, type = '') {
 // ── AUTH ──
 let loginInProgress = false;
 
+// ── TEAM (multi-farrier businesses, api/_lib/team.js) ──
+// A farrier on their own works in their own records (bizId() is their uid) and nothing changes
+// for them. A farrier who joined someone's business works in that business's records instead.
+// Mileage and horse photos stay under the farrier's own uid.
+const TEAM_KEY = 'farritech_team';
+function bizId() { return state.farrierId || state.user?.uid; }
+async function resolveBusiness(user) {
+  state.farrierId = user.uid; state.teamRole = 'owner'; state.teamMember = false;
+  const use = (businessId, role) => { state.farrierId = businessId; state.teamRole = role === 'manager' ? 'manager' : 'farrier'; state.teamMember = true; };
+  // Last known answer first, so an offline start still opens the right business.
+  try {
+    const c = JSON.parse(localStorage.getItem(TEAM_KEY) || 'null');
+    if (c && c.uid === user.uid && c.businessId) use(c.businessId, c.role);
+  } catch (e) { /* no cache */ }
+  try {
+    let m = await db.collection('businessMembers').doc(user.uid).get();
+    if (!m.exists && user.email && netState.online) {
+      const inv = await db.collection('businessInvites').doc(user.email.toLowerCase()).get().catch(() => null);
+      if (inv?.exists) {
+        const r = await fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'team_accept' }) })
+          .then(x => x.json()).catch(() => null);
+        if (r?.error) showToast(r.error, 'error');
+        if (r?.joined) m = await db.collection('businessMembers').doc(user.uid).get();
+      }
+    }
+    const md = m.exists ? m.data() : null;
+    if (md?.businessId && md.businessId !== user.uid) {
+      use(md.businessId, md.role);
+      try { localStorage.setItem(TEAM_KEY, JSON.stringify({ uid: user.uid, businessId: md.businessId, role: state.teamRole })); } catch (e) {}
+    } else if (!m.metadata.fromCache) {
+      state.farrierId = user.uid; state.teamRole = 'owner'; state.teamMember = false;
+      try { localStorage.removeItem(TEAM_KEY); } catch (e) {}
+    }
+  } catch (e) { console.warn('Team check skipped:', e.message); }
+}
+
 auth.onAuthStateChanged(async (user) => {
   dbg('onAuthStateChanged: ' + (user ? user.email : 'null'));
   if (user) {
@@ -1521,6 +1583,8 @@ auth.onAuthStateChanged(async (user) => {
     goTo('screen-dashboard', false);
     bootLoading = true;
     renderStatusBanner();
+    await resolveBusiness(user); // which business's records to load (own, or the team's)
+    document.getElementById('home-business-btn').style.display = state.teamRole === 'farrier' ? 'none' : '';
     await Promise.allSettled([loadUserProfile(), loadServices(), loadCustomers(), loadAllHorses()]);
     bootLoading = false;
     renderStatusBanner();
@@ -1530,6 +1594,7 @@ auth.onAuthStateChanged(async (user) => {
     loadDashboard();
   } else {
     state.user = null;
+    state.farrierId = null; state.teamRole = 'owner'; state.teamMember = false;
     document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
     document.getElementById('screen-login').classList.remove('hidden');
     // Only reset the button if we're NOT mid-login (prevents flickering after signout)
@@ -1597,7 +1662,7 @@ async function loadUserProfile() {
   if (!state.user) return;
   try {
     // Main app stores profiles in 'farriers' collection
-    const snap = await db.collection('farriers').doc(state.user.uid).get();
+    const snap = await db.collection('farriers').doc(bizId()).get();
     if (snap.exists) {
       state.userProfile = snap.data();
       // Older accounts kept the Stripe secret key on this profile; have the server move it
@@ -1608,7 +1673,7 @@ async function loadUserProfile() {
       }
       console.log('✅ Profile loaded, Stripe connected:', !!state.userProfile?.stripePublishableKey);
     } else {
-      console.warn('⚠️ No profile found in farriers collection for', state.user.uid);
+      console.warn('⚠️ No profile found in farriers collection for', bizId());
     }
   } catch(e) { console.warn('Profile load error:', e); }
 }
@@ -1617,7 +1682,7 @@ async function loadUserProfile() {
 async function loadServices() {
   if (!state.user) return;
   try {
-    const snap = await db.collection('services').where('farrierId', '==', state.user.uid).where('isActive', '==', true).get();
+    const snap = await db.collection('services').where('farrierId', '==', bizId()).where('isActive', '==', true).get();
     state.services = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (!state.services.length) {
       // Fallback only — matches seedDefaultServicesIfEmpty_ in index.html so a farrier
@@ -1655,9 +1720,9 @@ async function loadCustomers() {
   if (!state.user) return;
   try {
     // No orderBy to avoid needing a composite index
-    const snap = await db.collection('customers').where('farrierId', '==', state.user.uid).get();
+    const snap = await db.collection('customers').where('farrierId', '==', bizId()).get();
     state.customers = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.name||'').localeCompare(b.name||''));
-    console.log('✅ Loaded', state.customers.length, 'customers for', state.user.uid);
+    console.log('✅ Loaded', state.customers.length, 'customers for', bizId());
   } catch(e) {
     console.error('Customers load error:', e);
     // Offline with no cached copy yet looks identical to a real error here — the
@@ -1669,7 +1734,7 @@ async function loadCustomers() {
 async function loadAllHorses() {
   if (!state.user) return;
   try {
-    const snap = await db.collection('horses').where('farrierId', '==', state.user.uid).get();
+    const snap = await db.collection('horses').where('farrierId', '==', bizId()).get();
     state.allHorses = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.name||'').localeCompare(b.name||''));
   } catch(e) {
     console.error('Horses load error:', e);
@@ -1688,7 +1753,7 @@ async function loadDashboard() {
   const today = new Date().toISOString().split('T')[0];
   try {
     const snap = await db.collection('appointments')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('requestedDate', '==', today)
       .get();
     const appts = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.requestedTime||'').localeCompare(b.requestedTime||''));
@@ -1710,7 +1775,7 @@ async function loadDashboard() {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const snap = await db.collection('invoices')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('status', '==', 'paid')
       .get();
     const monthTotal = snap.docs
@@ -1725,7 +1790,7 @@ async function loadDashboard() {
   // Low-stock inventory banner
   try {
     const snap = await db.collection('inventoryItems')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('isConsumable', '==', true)
       .get();
     const lowStock = snap.docs
@@ -1912,7 +1977,7 @@ async function loadOpenInvoices() {
   list.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
     const snap = await db.collection('invoices')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('status', '==', 'outstanding')
       .orderBy('createdAt', 'desc')
       .get();
@@ -1987,7 +2052,7 @@ async function loadCustomerDetail(c) {
   try {
     // Horses
     const hSnap = await db.collection('horses')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('customerId', '==', c.id)
       .get();
     const horses = hSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -2009,7 +2074,7 @@ async function loadCustomerDetail(c) {
   try {
     // Appointments
     const aSnap = await db.collection('appointments')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('customerName', '==', c.name)
       .get();
     const appts = aSnap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -2036,7 +2101,7 @@ async function loadCustomerDetail(c) {
 
     // Invoices
     const iSnap = await db.collection('invoices')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('customerName', '==', c.name)
       .get();
     const invs = iSnap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -2145,7 +2210,7 @@ function startEditInvoice(inv) {
   };
   state.customerHorses = [];
   if (found?.id) {
-    db.collection('horses').where('farrierId', '==', state.user.uid).where('customerId', '==', found.id).get()
+    db.collection('horses').where('farrierId', '==', bizId()).where('customerId', '==', found.id).get()
       .then(snap => { state.customerHorses = snap.docs.map(d => ({ id: d.id, ...d.data() })); })
       .catch(() => {});
   }
@@ -2459,11 +2524,11 @@ async function loadApptSearch() {
     return;
   }
 
-  console.log('🔍 loadApptSearch: uid =', state.user.uid);
+  console.log('🔍 loadApptSearch: uid =', bizId());
 
   try {
     const snap = await db.collection('appointments')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .get();
     allAppts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (allAppts.length === 0) {
@@ -2476,7 +2541,7 @@ async function loadApptSearch() {
     resultsEl.innerHTML = `<div style="padding:16px;font-size:0.78rem;color:#c62828;background:#fff8f8;border-radius:8px;border:1px solid #fca5a5;word-break:break-all;">
       <strong>Error:</strong> ${e.code || 'unknown'}<br>
       <strong>Message:</strong> ${e.message || '—'}<br>
-      <strong>UID:</strong> ${state.user.uid}
+      <strong>UID:</strong> ${bizId()}
     </div>`;
   }
 }
@@ -2555,7 +2620,7 @@ async function loadRouteForDate() {
   document.getElementById('route-summary').textContent = '';
   try {
     const snap = await db.collection('appointments')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('requestedDate', '==', dateStr)
       .get();
     routeAppts = snap.docs
@@ -2912,7 +2977,8 @@ async function createInvoice() {
   // other offline write.
   const docRef = db.collection('invoices').doc();
   const saved = performWrite(() => docRef.set({
-    farrierId: state.user.uid,
+    farrierId: bizId(),
+    performedBy: state.user.uid, // who did the work (per-farrier reports)
     customerName: c.name,
     customerFarmName: c.farmName || '',
     customerEmail: email,
@@ -3117,7 +3183,7 @@ async function loadServicesCatalog() {
   document.getElementById('services-catalog-loading').style.display = 'flex';
   list.innerHTML = '';
   try {
-    const snap = await db.collection('services').where('farrierId', '==', state.user.uid).get();
+    const snap = await db.collection('services').where('farrierId', '==', bizId()).get();
     const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a,b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
     document.getElementById('services-catalog-loading').style.display = 'none';
@@ -3191,7 +3257,7 @@ function saveServiceForm() {
     performWrite(() => db.collection('services').doc(editingId).update(fields));
   } else {
     performWrite(() => db.collection('services').add({
-      farrierId: state.user.uid,
+      farrierId: bizId(),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       ...fields,
     }));
@@ -3219,8 +3285,8 @@ async function deleteServiceForm() {
   btn.disabled = true; btn.textContent = 'Checking history…';
   try {
     const [invSnap, apptSnap] = await Promise.all([
-      db.collection('invoices').where('farrierId', '==', state.user.uid).get(),
-      db.collection('appointments').where('farrierId', '==', state.user.uid).get(),
+      db.collection('invoices').where('farrierId', '==', bizId()).get(),
+      db.collection('appointments').where('farrierId', '==', bizId()).get(),
     ]);
     const usedOnInvoice = invSnap.docs.some(d => (d.data().items || []).some(i => i.serviceId ? i.serviceId === id : i.description === name));
     const usedOnAppt = apptSnap.docs.some(d => (d.data().services || []).includes(name));
@@ -3255,7 +3321,7 @@ async function loadInventoryList() {
   list.innerHTML = '';
   banner.style.display = 'none';
   try {
-    const snap = await db.collection('inventoryItems').where('farrierId', '==', state.user.uid).get();
+    const snap = await db.collection('inventoryItems').where('farrierId', '==', bizId()).get();
     const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a,b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
     document.getElementById('inventory-loading').style.display = 'none';
@@ -3318,7 +3384,7 @@ async function openInventoryCatalog() {
   goTo('screen-inventory-catalog');
   setCatalogTab('fd');
   try {
-    const snap = await db.collection('inventoryItems').where('farrierId', '==', state.user.uid).get();
+    const snap = await db.collection('inventoryItems').where('farrierId', '==', bizId()).get();
     state.catalogOwned = new Set(snap.docs.map(d => inventoryCatalogKey(d.data().name, d.data().size)));
   } catch(e) { /* offline with no cache — just don't grey anything out */ }
   try {
@@ -3508,7 +3574,7 @@ function addSelectedCatalogItems() {
   picks.forEach(fields => {
     batch.set(db.collection('inventoryItems').doc(), {
       ...fields,
-      farrierId: state.user.uid,
+      farrierId: bizId(),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
@@ -3577,7 +3643,7 @@ function saveInventoryItemForm() {
     performWrite(() => db.collection('inventoryItems').doc(editingId).update(fields));
   } else {
     performWrite(() => db.collection('inventoryItems').add({
-      farrierId: state.user.uid,
+      farrierId: bizId(),
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       ...fields,
     }));
@@ -3598,7 +3664,7 @@ function restockInventoryItem(item) {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   }));
   performWrite(() => db.collection('inventoryTransactions').add({
-    farrierId: state.user.uid, itemId: item.id, qtyDelta: qty,
+    farrierId: bizId(), itemId: item.id, qtyDelta: qty,
     type: qty > 0 ? 'restock' : 'manual-adjust',
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
   }));
@@ -3619,6 +3685,12 @@ function restockInventoryItem(item) {
 function loadSettingsScreen() {
   const p = state.userProfile || {};
   document.getElementById('settings-saved-banner').style.display = 'none';
+  document.getElementById('settings-member-note').style.display = state.teamMember ? 'block' : 'none';
+  document.getElementById('settings-owner-only').style.display = state.teamMember ? 'none' : 'block';
+  if (state.teamMember) {
+    document.getElementById('settings-member-biz').textContent = p.businessName || 'Your business';
+    document.getElementById('settings-member-role').textContent = state.teamRole;
+  }
 
   document.getElementById('set-business-name').value = p.businessName || '';
   document.getElementById('set-first-name').value = p.firstName || '';
@@ -3719,7 +3791,7 @@ function saveSettingsProfile() {
   const zelleContact = document.getElementById('set-zelle-contact').value.trim();
   const venmoHandle = document.getElementById('set-venmo-handle').value.trim().replace(/^@/, '');
   state.userProfile = { ...(state.userProfile || {}), zelleVenmoNote, zelleContact, venmoHandle };
-  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+  performWrite(() => db.collection('farriers').doc(bizId()).set({
     businessName,
     firstName,
     lastName,
@@ -3747,7 +3819,7 @@ function saveCardPricing() {
   const rate = Number.isFinite(percent) ? Math.round(percent * 100) / 10000 : FarriPricing.DEFAULT_CARD_PRICE_RATE;
   const suffix = netState.online ? '' : ' (will sync when back online)';
   state.userProfile = { ...(state.userProfile || {}), cardPricingEnabled: enabled, cardPriceRate: rate };
-  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+  performWrite(() => db.collection('farriers').doc(bizId()).set({
     cardPricingEnabled: enabled,
     cardPriceRate: rate,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3758,7 +3830,7 @@ function saveCardPricing() {
 function saveSmsSetting() {
   const smsEnabled = document.getElementById('set-sms-enabled').checked;
   const suffix = netState.online ? '' : ' (will sync when back online)';
-  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+  performWrite(() => db.collection('farriers').doc(bizId()).set({
     smsEnabled,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   }, { merge: true }));
@@ -3767,7 +3839,7 @@ function saveSmsSetting() {
 
 function saveAvailability() {
   const suffix = netState.online ? '' : ' (will sync when back online)';
-  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+  performWrite(() => db.collection('farriers').doc(bizId()).set({
     availability: state.settingsAvailability || DEFAULT_AVAILABILITY,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   }, { merge: true }));
@@ -3817,7 +3889,7 @@ function renderIposStatus(p, message) {
 
 async function saveIposProfile(fields) {
   state.userProfile = { ...(state.userProfile || {}), ...fields };
-  await db.collection('farriers').doc(state.user.uid).set({ ...fields, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  await db.collection('farriers').doc(bizId()).set({ ...fields, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
 }
 
 async function validateAndSaveIpos() {
@@ -3877,7 +3949,7 @@ async function validateAndSaveStripe() {
     });
     const data = await res.json();
     if (data.success) {
-      await db.collection('farriers').doc(state.user.uid).set({
+      await db.collection('farriers').doc(bizId()).set({
         stripePublishableKey: pk,
         stripeAccountName: data.accountName || '',
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3905,7 +3977,7 @@ async function disconnectStripe() {
   } catch (e) { showToast('Could not disconnect Stripe — try again', 'error'); return; }
   const suffix = '';
   state.userProfile = { ...(state.userProfile || {}), stripePublishableKey: '', stripeAccountName: '' };
-  performWrite(() => db.collection('farriers').doc(state.user.uid).set({
+  performWrite(() => db.collection('farriers').doc(bizId()).set({
     stripePublishableKey: '',
     stripeAccountName: '',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3955,6 +4027,39 @@ function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
 </body></html>`;
 }
 
+// ── BUSINESS DASHBOARD ──
+// Owners and managers: the same numbers as the desktop Business tab (lib/owner-dashboard.js).
+function openBusinessDashboard() {
+  if (state.teamRole === 'farrier') return;
+  goTo('screen-business');
+  loadBusinessDashboard();
+}
+async function loadBusinessDashboard() {
+  const loading = document.getElementById('business-loading'), err = document.getElementById('business-error');
+  loading.style.display = 'flex'; err.style.display = 'none';
+  try {
+    const [invSnap, apptSnap, team] = await Promise.all([
+      db.collection('invoices').where('farrierId', '==', bizId()).get(),
+      db.collection('appointments').where('farrierId', '==', bizId()).get(),
+      netState.online
+        ? fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'team_status' }) }).then(r => r.json()).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    const names = { [bizId()]: 'Owner' };
+    for (const m of (team?.members || [])) names[m.uid] = m.name || m.email;
+    const stats = FarriOwnerDash.compute(
+      invSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      apptSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      { names, ownerId: bizId() });
+    FarriOwnerDash.render(document.getElementById('business-dash'), stats, { dark: false });
+    if (invSnap.metadata.fromCache) { err.textContent = 'Offline: showing what this phone last synced.'; err.style.display = 'block'; }
+  } catch (e) {
+    console.error('Business dashboard error:', e);
+    err.textContent = 'Couldn’t load the dashboard. Please try again.'; err.style.display = 'block';
+  }
+  loading.style.display = 'none';
+}
+
 // ── REFUNDS ──
 // Same rules as the desktop Refund button: card payments taken through Stripe (a pi_ id on the
 // invoice) or iPOSpays (an ipos_ payment) can be refunded, with the manager password. iPOSpays
@@ -3972,7 +4077,7 @@ function invoiceRefundable(inv) {
   return Math.max(0, paid - (inv.refundedAmount || 0));
 }
 function canRefundInvoice(inv) {
-  return (inv.status === 'paid' || inv.status === 'partial')
+  return state.teamRole !== 'farrier' && (inv.status === 'paid' || inv.status === 'partial')
     && Boolean(invoiceStripePaymentId(inv) || invoiceIposPaid(inv)) && invoiceRefundable(inv) > 0;
 }
 
@@ -4325,7 +4430,7 @@ async function saveNewCustomer() {
   } else {
     const docRef = db.collection('customers').doc();
     performWrite(() => docRef.set({
-      farrierId: state.user.uid,
+      farrierId: bizId(),
       ...fields,
       source: 'mobile_app',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -4419,7 +4524,7 @@ async function saveHorse() {
   } else {
     const docRef = db.collection('horses').doc();
     const newFields = {
-      farrierId: state.user.uid,
+      farrierId: bizId(),
       customerId: c.id,
       customerName: c.name,
       photos: [],
@@ -4500,8 +4605,8 @@ async function deleteHorse() {
   btn.disabled = true; btn.textContent = 'Checking history…';
   try {
     const [invSnap, apptSnap] = await Promise.all([
-      db.collection('invoices').where('farrierId', '==', state.user.uid).get(),
-      db.collection('appointments').where('farrierId', '==', state.user.uid).get(),
+      db.collection('invoices').where('farrierId', '==', bizId()).get(),
+      db.collection('appointments').where('farrierId', '==', bizId()).get(),
     ]);
     const usedOnInvoice = invSnap.docs.some(d => (d.data().items || []).some(i => i.horseId === h.id));
     const usedOnAppt = apptSnap.docs.some(d => (d.data().horseIds || []).includes(h.id));
@@ -4964,7 +5069,7 @@ async function onApptDateChange(preselectTime = null) {
   let bookedTimes = [];
   try {
     const snap = await db.collection('appointments')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('requestedDate', '==', dateStr)
       .get();
     bookedTimes = snap.docs
@@ -5045,7 +5150,7 @@ function startEditAppointment(appt) {
   renderApptHorsePicker(appt.horseIds || []);
   if (state.customer.id) {
     db.collection('horses')
-      .where('farrierId', '==', state.user.uid)
+      .where('farrierId', '==', bizId())
       .where('customerId', '==', state.customer.id)
       .get()
       .then(hSnap => {
@@ -5109,7 +5214,8 @@ async function saveNewAppointment() {
   } else {
     const docRef = db.collection('appointments').doc();
     performWrite(() => docRef.set({
-      farrierId: state.user.uid,
+      farrierId: bizId(),
+      performedBy: state.user.uid, // who booked it (per-farrier views)
       customerName: state.customer.name,
       customerId: state.customer.id || '',
       farmName: state.customer.farmName || '',

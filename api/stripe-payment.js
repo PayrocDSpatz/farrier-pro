@@ -8,6 +8,7 @@ import {
 } from './_lib/invoice-payments.js';
 import { payPage } from './_lib/pay-page.js';
 import { farrierWebhook } from './_lib/farrier-webhook.js';
+import { businessFor, requireRole, teamAccept, teamInvite, teamRemove, teamSetRole, teamStatus } from './_lib/team.js';
 import { closeIposPages, connectIpospays, createIposPage, disconnectIpospays, getIposCreds, iposCallback, refundIposPayment, syncIposPayment } from './_lib/ipospays.js';
 
 const P = globalThis.FarriPricing;
@@ -34,6 +35,7 @@ export const config = { api: { bodyParser: false } };
 //                                               own accounts post to /api/stripe/webhook/{farrierId} → _lib/farrier-webhook.js)
 //   farrier (signed in)   → ipospays_connect, ipospays_disconnect, ipospays_status, ipospays_refund,
 //                           ipospays_keyed (card form to key a card into), ipospays_check (did it go through?)
+//   farrier (signed in)   → team_status, team_invite, team_remove, team_set_role, team_accept (_lib/team.js)
 //   iPOSpays              → /api/ipospays/callback/{invoiceId} → _lib/ipospays.js (re-checked with iPOSpays before recording)
 //
 // While a farrier has iPOSpays connected, payment_link / waive_card_price, keyed cards
@@ -238,8 +240,22 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    // Everything below acts on the signed-in farrier's own payment accounts.
-    const farrierId = caller.uid;
+    // ── Team (multi-farrier businesses, _lib/team.js) ──
+    if (action === 'team_status') return res.status(200).json({ success: true, ...await teamStatus(caller) });
+    if (action === 'team_invite') return res.status(200).json({ success: true, ...await teamInvite(caller, body) });
+    if (action === 'team_remove') return res.status(200).json({ success: true, ...await teamRemove(caller, body) });
+    if (action === 'team_set_role') return res.status(200).json({ success: true, ...await teamSetRole(caller, body) });
+    if (action === 'team_accept') return res.status(200).json({ success: true, ...await teamAccept(caller) });
+
+    // Everything below acts on the payment accounts of the business the caller works in: their
+    // own (a farrier on their own, or a business owner) or the business they joined. Roles:
+    // owner → everything; manager → also refunds and card-price waivers; farrier → takes payments.
+    const biz = await businessFor(caller);
+    const farrierId = biz.businessId;
+    const OWNER_ONLY = ['ipospays_connect', 'ipospays_disconnect', 'connect', 'validate', 'disconnect', 'set_manager_password', 'deactivate_link'];
+    const MANAGERS = ['ipospays_refund', 'refund', 'waive_card_price'];
+    if (OWNER_ONLY.includes(action)) requireRole(biz, ['owner'], 'change payment settings');
+    if (MANAGERS.includes(action)) requireRole(biz, ['owner', 'manager'], action === 'waive_card_price' ? 'waive the card price' : 'issue refunds');
 
     // ── iPOSpays (Settings → iPOSpays Payments) ──
     if (action === 'ipospays_connect') {

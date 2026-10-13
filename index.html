@@ -26,6 +26,7 @@
   <script src="/inventory-catalog.js"></script>
   <script src="/api-auth.js"></script>
   <script src="/lib/pricing.js"></script>
+  <script src="/lib/owner-dashboard.js"></script>
   
   <!-- Google API for Calendar -->
   <script src="https://apis.google.com/js/api.js"></script>
@@ -2503,7 +2504,7 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
   const [needsSetupWizard, setNeedsSetupWizard] = useState(null);
   useEffect(() => {
     if (!user || !userProfile) { setNeedsSetupWizard(null); return; }
-    if (userProfile.setupCompleted) { setNeedsSetupWizard(false); return; }
+    if (userProfile.setupCompleted || window.FarriTeam?.member) { setNeedsSetupWizard(false); return; }
     (async () => {
       try {
         // Grandfather in any account that already has services configured —
@@ -2621,6 +2622,29 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
         // Default to the signed-in farrier
         let farrierIdToUse = u.uid;
         let supportSessionData = null;
+
+        // Works in someone else's business? (api/_lib/team.js) A farrier on their own has no
+        // membership and nothing changes for them; any failure here falls back to that too.
+        window.FarriTeam = { businessId: u.uid, role: 'owner', member: false };
+        if (!supportSessionId && db) {
+          try {
+            let m = await db.collection('businessMembers').doc(u.uid).get();
+            if (!m.exists && u.email) {
+              const inv = await db.collection('businessInvites').doc(u.email.toLowerCase()).get().catch(() => null);
+              if (inv?.exists) {
+                const r = await fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'team_accept' }) })
+                  .then(x => x.json()).catch(() => null);
+                if (r?.error) alert(r.error);
+                if (r?.joined) m = await db.collection('businessMembers').doc(u.uid).get();
+              }
+            }
+            const md = m.exists ? m.data() : null;
+            if (md?.businessId && md.businessId !== u.uid) {
+              window.FarriTeam = { businessId: md.businessId, role: md.role === 'manager' ? 'manager' : 'farrier', member: true, name: md.name || '' };
+              farrierIdToUse = md.businessId;
+            }
+          } catch (e) { console.warn('Team check skipped:', e.message); }
+        }
 
         // If a support session is present, validate it and switch context
         if (supportSessionId && db) {
@@ -3849,12 +3873,15 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       const tabs = [
         { id: 'qrcode', label: 'My QR Code', icon: '📱' },
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        // Owner dashboard: owners and managers (not a team member with the farrier role).
+        ...(window.FarriTeam?.role === 'farrier' ? [] : [{ id: 'business', label: 'Business', icon: '📈' }]),
         { id: 'calendar', label: 'Calendar', icon: '📅' },
         { id: 'appointments', label: 'Appointments', icon: '📋' },
         { id: 'invoices', label: 'Invoices', icon: '💰' },
         { id: 'customers', label: 'Customers', icon: '👥' },
         { id: 'services', label: 'Services', icon: '🧾' },
-        { id: 'reports', label: 'Reports', icon: '📈' },
+        // Business-wide revenue: not for a team member with the farrier role (api/_lib/team.js).
+        ...(window.FarriTeam?.role === 'farrier' ? [] : [{ id: 'reports', label: 'Reports', icon: '📈' }]),
         { id: 'mileage', label: 'Mileage Log', icon: '🚗' },
         { id: 'route', label: 'Route Sheet', icon: '🗺️' },
         { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -3927,6 +3954,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               const navGroups = [
                 { label: '📊 Overview', items: [
                   { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+                  ...(window.FarriTeam?.role === 'farrier' ? [] : [{ id: 'business', label: 'Business Dashboard', icon: '📈' }]),
                   { id: 'qrcode', label: 'My QR Code', icon: '📱' },
                   { id: 'about', label: 'About', icon: 'ℹ️' },
                 ]},
@@ -3937,7 +3965,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 ]},
                 { label: '💰 Finance', items: [
                   { id: 'invoices', label: 'Invoices', icon: '💰' },
-                  { id: 'reports', label: 'Reports', icon: '📈' },
+                  ...(window.FarriTeam?.role === 'farrier' ? [] : [{ id: 'reports', label: 'Reports', icon: '📈' }]),
                   { id: 'mileage', label: 'Mileage Log', icon: '🚗' },
                 ]},
                 { label: '👥 Clients', items: [
@@ -4074,7 +4102,8 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'services' && <ServicesView userId={farrierId} />}
             {tab === 'inventory' && <InventoryView userId={farrierId} />}
             {tab === 'data' && <DataManagementView userId={farrierId} />}
-            {tab === 'reports' && <ReportsView userId={farrierId} />}
+            {tab === 'reports' && window.FarriTeam?.role !== 'farrier' && <ReportsView userId={farrierId} />}
+            {tab === 'business' && window.FarriTeam?.role !== 'farrier' && <OwnerDashboardView userId={farrierId} />}
             {tab === 'mileage' && <MileageLogView userId={farrierId} userProfile={userProfile} />}
             {tab === 'route' && <RouteSheetView userId={farrierId} userProfile={userProfile} />}
             {tab === 'settings' && <SettingsView user={user} userProfile={userProfile} setUserProfile={setUserProfile} farrierId={farrierId} />}
@@ -5765,6 +5794,47 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               )}
             </div>
           )}
+        </div>
+      );
+    }
+
+    // Business dashboard for owners and managers — lib/owner-dashboard.js does the math and
+    // drawing (the mobile app's Business Dashboard uses the same file). Read-only.
+    function OwnerDashboardView({ userId }) {
+      const boxRef = React.useRef(null);
+      const [state, setState] = useState({ loading: true, error: '', stamp: 0 });
+      const load = async () => {
+        setState(s => ({ ...s, loading: true, error: '' }));
+        try {
+          const [invSnap, apptSnap, team] = await Promise.all([
+            db.collection('invoices').where('farrierId', '==', userId).get(),
+            db.collection('appointments').where('farrierId', '==', userId).get(),
+            fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'team_status' }) })
+              .then(r => r.json()).catch(() => null),
+          ]);
+          const names = { [userId]: 'Owner' };
+          for (const m of (team?.members || [])) names[m.uid] = m.name || m.email;
+          const stats = window.FarriOwnerDash.compute(
+            invSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            apptSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+            { names, ownerId: userId });
+          window.FarriOwnerDash.render(boxRef.current, stats, { dark: true });
+          setState({ loading: false, error: '', stamp: Date.now() });
+        } catch (e) {
+          console.error('Business dashboard error:', e);
+          setState({ loading: false, error: 'Couldn’t load the dashboard. Please try again.', stamp: 0 });
+        }
+      };
+      useEffect(() => { if (userId) load(); }, [userId]);
+      return (
+        <div>
+          <div style={{display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap'}}>
+            <h1 style={{fontSize: '2rem', color: 'var(--primary)', margin: 0}}>Business Dashboard</h1>
+            <button className="btn btn-sm btn-outline" onClick={load} disabled={state.loading} style={{marginLeft: 'auto'}}>{state.loading ? 'Loading…' : '↻ Refresh'}</button>
+          </div>
+          {state.error && <div className="error-message">{state.error}</div>}
+          {state.loading && !state.stamp && <div style={{color: 'var(--text-muted)'}}>Loading your numbers…</div>}
+          <div ref={boxRef} />
         </div>
       );
     }
@@ -8063,8 +8133,9 @@ function ServicesView({ userId }) {
       const loadLogs = async () => {
         setLoading(true);
         try {
+          // Mileage is personal: a team member sees their own (api/_lib/team.js).
           const snap = await db.collection('mileage_logs')
-            .where('farrierId', '==', userId)
+            .where('farrierId', '==', window.FarriTeam?.member ? firebase.auth().currentUser.uid : userId)
             .get();
           const data = snap.docs
             .map(d => ({ id: d.id, ...d.data() }))
@@ -11037,6 +11108,8 @@ function CalendarView({ userId }) {
             requestedTime: time,
             status: 'confirmed',
             source: 'farrier_created',
+            // Who booked it (a team member, or the farrier themself) — for per-farrier views.
+            performedBy: firebase.auth().currentUser?.uid || '',
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           };
           const apptRef = await db.collection('appointments').add(newAppointment);
@@ -12462,7 +12535,7 @@ function CalendarView({ userId }) {
                       >
                         🖨️ Print / PDF
                       </button>
-                      {(invoice.status === 'paid' || invoice.status === 'partial') && (invoiceStripePaymentId(invoice) || invoiceIposPaid(invoice)) && invoiceRefundable(invoice) > 0 && (
+                      {window.FarriTeam?.role !== 'farrier' && (invoice.status === 'paid' || invoice.status === 'partial') && (invoiceStripePaymentId(invoice) || invoiceIposPaid(invoice)) && invoiceRefundable(invoice) > 0 && (
                         <button
                           className="btn btn-sm btn-outline"
                           onClick={() => { setSelectedInvoice(invoice); setShowRefundModal(true); }}
@@ -12506,8 +12579,8 @@ function CalendarView({ userId }) {
                               overflow: 'hidden'
                             }}>
                               {isOpen && item('✏️ Edit', () => setEditingInvoice(invoice))}
-                              {isOpen && FarriPricing.invoiceRate(invoice) > 0 && (userProfile?.stripePublishableKey || userProfile?.ipospaysConnected) && !invoice.cardFeeWaived && item('🏷️ Waive card price & resend', () => waiveCardPrice(invoice, true))}
-                              {isOpen && (userProfile?.stripePublishableKey || userProfile?.ipospaysConnected) && invoice.cardFeeWaived && item('↩️ Undo card price waiver', () => waiveCardPrice(invoice, false))}
+                              {isOpen && window.FarriTeam?.role !== 'farrier' && FarriPricing.invoiceRate(invoice) > 0 && (userProfile?.stripePublishableKey || userProfile?.ipospaysConnected) && !invoice.cardFeeWaived && item('🏷️ Waive card price & resend', () => waiveCardPrice(invoice, true))}
+                              {isOpen && window.FarriTeam?.role !== 'farrier' && (userProfile?.stripePublishableKey || userProfile?.ipospaysConnected) && invoice.cardFeeWaived && item('↩️ Undo card price waiver', () => waiveCardPrice(invoice, false))}
                               {item('✉️ Email', () => emailInvoiceLink(invoice, userProfile))}
                               {invoice.customerPhone && item('📱 SMS', async () => {
                                 const bizName = userProfile?.businessName || 'Your Farrier';
@@ -12690,6 +12763,71 @@ function CalendarView({ userId }) {
     function invoiceRefundable(invoice) {
       const paid = invoice.paidAmount || (invoice.payments || []).reduce((s,p) => s + (p.amount||0), 0) || invoice.total || 0;
       return Math.max(0, paid - (invoice.refundedAmount || 0));
+    }
+
+    // Settings → Team (owners only — see api/_lib/team.js). Farriers added here sign in with their
+    // own login and work in this business: same customers, horses, services and payment accounts.
+    function TeamSettings() {
+      const [team, setTeam] = useState(null);
+      const [form, setForm] = useState({ name: '', email: '', role: 'farrier' });
+      const [busy, setBusy] = useState(false);
+      const [msg, setMsg] = useState(null);
+      const call = async (body) => {
+        const r = await fetch('/api/stripe-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        return r.json();
+      };
+      const load = async () => { try { const d = await call({ action: 'team_status' }); if (d.success) setTeam(d); } catch (e) { /* stays hidden */ } };
+      useEffect(() => { load(); }, []);
+      const act = async (body, ok) => {
+        setBusy(true); setMsg(null);
+        try {
+          const d = await call(body);
+          if (!d.success) setMsg({ ok: false, text: d.error || 'Something went wrong.' });
+          else { if (ok) setMsg({ ok: true, text: typeof ok === 'function' ? ok(d) : ok }); await load(); }
+        } catch (e) { setMsg({ ok: false, text: 'Could not reach FarriTech.' }); }
+        setBusy(false);
+      };
+      if (!team || team.role !== 'owner') return null;
+      const members = team.members || [], invites = team.invites || [];
+      return (
+        <div className="card" style={{marginTop: '1.5rem'}}>
+          <h2>👥 Team</h2>
+          <p style={{color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem'}}>
+            Add the farriers who work for your business. Each signs in with their own login and sees your customers, horses and services;
+            payments go into your payment account. <strong>Managers</strong> can also refund and waive the card price; <strong>farriers</strong> can't.
+            Only you can change payment settings and the team.
+          </p>
+          {members.length === 0 && invites.length === 0 && <p style={{color: 'var(--text-muted)'}}>No one else yet. It's just you.</p>}
+          {members.map(m => (
+            <div key={m.uid} style={{display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0', borderBottom: '1px solid var(--border)', flexWrap: 'wrap'}}>
+              <div style={{flex: 1, minWidth: '180px'}}><strong>{m.name || m.email}</strong>{m.name && <div style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>{m.email}</div>}</div>
+              <select value={m.role} disabled={busy} onChange={(e) => act({ action: 'team_set_role', uid: m.uid, role: e.target.value }, 'Role updated.')}>
+                <option value="farrier">Farrier</option>
+                <option value="manager">Manager</option>
+              </select>
+              <button className="btn btn-sm btn-outline" disabled={busy} onClick={() => { if (confirm(`Remove ${m.name || m.email} from your team? They'll lose access to your business right away.`)) act({ action: 'team_remove', uid: m.uid }, 'Removed.'); }}>Remove</button>
+            </div>
+          ))}
+          {invites.map(i => (
+            <div key={i.email} style={{display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0', borderBottom: '1px solid var(--border)', flexWrap: 'wrap'}}>
+              <div style={{flex: 1, minWidth: '180px'}}><strong>{i.name || i.email}</strong> <span style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>— invited ({i.role}), joins when they next sign in</span></div>
+              <button className="btn btn-sm btn-outline" disabled={busy} onClick={() => act({ action: 'team_remove', email: i.email }, 'Invite cancelled.')}>Cancel invite</button>
+            </div>
+          ))}
+          <div style={{display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem', alignItems: 'flex-end'}}>
+            <div className="form-group" style={{flex: '1 1 160px', margin: 0}}><label>Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Jane Smith" /></div>
+            <div className="form-group" style={{flex: '2 1 220px', margin: 0}}><label>Email *</label><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="jane@example.com" /></div>
+            <div className="form-group" style={{flex: '1 1 120px', margin: 0}}><label>Role</label>
+              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="farrier">Farrier</option><option value="manager">Manager</option></select>
+            </div>
+            <button className="btn btn-primary" disabled={busy || !form.email} onClick={() => act({ action: 'team_invite', ...form }, (d) => {
+              setForm({ name: '', email: '', role: 'farrier' });
+              return d.joined ? `Added. ${form.email} will get an email to set their password (or can sign in with Google).` : `Invited. ${form.email} already has a FarriTech login and joins when they next sign in.`;
+            })}>{busy ? 'Working…' : 'Add to team'}</button>
+          </div>
+          {msg && <div style={{marginTop: '0.75rem', color: msg.ok ? '#16a34a' : '#dc2626'}}>{msg.text}</div>}
+        </div>
+      );
     }
 
     // Settings → Manager Password. Stored hashed on the server (farrierSecrets); guards refunds.
@@ -13798,6 +13936,8 @@ useEffect(() => {
 
             const docRef = await db.collection('invoices').add({
               farrierId: userId,
+              // Who did the work (a team member, or the farrier themself) — for per-farrier reports.
+              performedBy: firebase.auth().currentUser?.uid || '',
               customerId: customerId || '',
               customerName: customerName,
               customerFarmName: customerFarmName,
@@ -13868,7 +14008,7 @@ useEffect(() => {
             if (milesDriven > 0) {
               try {
                 await db.collection('mileage_logs').add({
-                  farrierId:    userId,
+                  farrierId:    window.FarriTeam?.member ? firebase.auth().currentUser.uid : userId,
                   date:         new Date().toISOString().split('T')[0],
                   customerName: customerName,
                   farmName:     customerFarmName || '',
@@ -14523,6 +14663,17 @@ useEffect(() => {
           {successMessage && <div className="success-message">{successMessage}</div>}
           {error && <div className="error-message">{error}</div>}
 
+          {window.FarriTeam?.member && (
+            <div className="card">
+              <h2>👥 {userProfile?.businessName || 'Your business'}</h2>
+              <p style={{color: 'var(--text-muted)'}}>
+                You're working in <strong>{userProfile?.businessName || 'this business'}</strong> as a <strong>{window.FarriTeam.role}</strong>.
+                Business settings, payment accounts and the team are managed by the owner.
+              </p>
+            </div>
+          )}
+
+          {!window.FarriTeam?.member && (<>
           <div className="card">
             <h2>Business Profile</h2>
             <form onSubmit={handleSave}>
@@ -14995,7 +15146,7 @@ useEffect(() => {
           <div className="card" style={{marginTop: '1.5rem'}}>
             <h2>💳 iPOSpays Payments</h2>
             <p style={{color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem'}}>
-              Take pay-link payments through your iPOSpays (Dejavoo) merchant account instead of Stripe. While iPOSpays is connected, the Pay Now links you text and email open an iPOSpays payment page. Keyed cards still use Stripe. The Refund button on an invoice paid through iPOSpays voids or refunds it in iPOSpays.
+              Take payments through your iPOSpays (Dejavoo) merchant account instead of Stripe. While iPOSpays is connected, the Pay Now links you text and email, and cards you key in, open an iPOSpays payment page. The Refund button on an invoice paid through iPOSpays voids or refunds it in iPOSpays.
             </p>
 
             {userProfile?.ipospaysConnected ? (
@@ -15087,6 +15238,9 @@ useEffect(() => {
               </>
             )}
           </div>
+
+          <TeamSettings />
+          </>)}
 
           <div className="card" style={{marginTop: '1.5rem'}}>
             <h2>Account Information</h2>
