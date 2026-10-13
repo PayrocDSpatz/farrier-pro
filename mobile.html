@@ -651,9 +651,19 @@
       <div class="field"><label>Check #</label><input type="text" id="check-number" placeholder="e.g. 1042" inputmode="numeric" style="letter-spacing:2px;"></div>
     </div>
 
-    <!-- Stripe Elements card entry -->
+    <!-- Stripe Elements card entry (or, with iPOSpays connected, the iPOSpays card form) -->
     <div id="card-fields" style="display:none;">
-      <div class="field">
+      <div id="ipos-card-fields" style="display:none;">
+        <div class="card" style="background:#EBF4FF; border:2px solid #bfdbfe;">
+          <div id="ipos-card-msg" style="font-size:0.85rem; color:var(--text-muted);">Tap Charge to open the iPOSpays card form, type the card number there and press Pay Now. Card details go straight to iPOSpays.</div>
+          <div id="ipos-card-wait" style="display:none; margin-top:12px; gap:8px; flex-wrap:wrap;">
+            <a id="ipos-card-link" href="#" target="_blank" rel="noreferrer" class="btn btn-outline" style="flex:1; text-align:center;">Open card form</a>
+            <button type="button" class="btn btn-outline" style="flex:1;" onclick="iposKeyedCheckNow()">Check now</button>
+            <button type="button" class="btn btn-outline" style="flex:1;" onclick="iposKeyedStop()">Stop waiting</button>
+          </div>
+        </div>
+      </div>
+      <div class="field" id="stripe-card-fields">
         <label>Card Details</label>
         <div id="stripe-card-element" style="padding:14px; border:2px solid var(--border); border-radius:10px; background:var(--surface);"></div>
         <div id="stripe-card-error" style="color:#dc2626; font-size:0.82rem; margin-top:6px; display:none;"></div>
@@ -1365,6 +1375,8 @@ renderStatusBanner(); // reflect connectivity immediately, even before login
 
 // ── SCREEN NAVIGATION ──
 function goTo(screenId, pushHistory = true) {
+  // Leaving the payment screen stops waiting on an iPOSpays keyed card (see chargeCardViaIpos).
+  if (screenId !== 'screen-payment' && typeof _iposWait !== 'undefined' && _iposWait) _iposWait.stop();
   const current = document.querySelector('.screen:not(.hidden):not(.slide-left)');
   if (current && pushHistory) {
     state.screenHistory.push(current.id);
@@ -3964,7 +3976,10 @@ function selectPayMethod(method, el) {
   document.getElementById('check-fields').style.display = method === 'check' ? 'block' : 'none';
   document.getElementById('card-fields').style.display  = method === 'card'  ? 'block' : 'none';
   document.getElementById('link-fields').style.display  = method === 'link'  ? 'block' : 'none';
-  if (method === 'card') {
+  const iposCard = method === 'card' && Boolean(state.userProfile?.ipospaysConnected);
+  document.getElementById('ipos-card-fields').style.display = iposCard ? 'block' : 'none';
+  document.getElementById('stripe-card-fields').style.display = iposCard ? 'none' : 'block';
+  if (method === 'card' && !iposCard) {
     loadScriptOnce(STRIPE_SCRIPT_SRC)
       .then(() => setTimeout(initStripeElements, 50))
       .catch(() => showToast('Failed to load payment form', 'error'));
@@ -4068,7 +4083,7 @@ async function confirmPayment() {
       }
       showSuccess('Link Sent!', `Payment link sent via ${sent.join(' & ')} to ${inv.customerName}`);
     } else if (method === 'card') {
-      const charged = await chargeCardViaStripe(inv);
+      const charged = state.userProfile?.ipospaysConnected ? await chargeCardViaIpos(inv) : await chargeCardViaStripe(inv);
       if (!charged) {
         document.getElementById('confirm-pay-btn').disabled = false;
         document.getElementById('pay-saving').style.display = 'none';
@@ -5079,6 +5094,73 @@ async function chargeCardViaStripe(inv) {
   }
   return result;
 }
+
+// ── iPOSPAYS KEYED CARD ──
+// With iPOSpays connected the farrier types the card into an iPOSpays payment page opened
+// in a new tab (the card number never touches FarriTech). We then ask the server every few
+// seconds, and whenever the app comes back into view, until iPOSpays says it went through
+// or was declined. Resolves with { amount } when paid, false otherwise.
+let _iposWait = null;
+
+function chargeCardViaIpos(inv) {
+  if (!netState.online) { showToast('Card payments require an internet connection', 'error'); return Promise.resolve(false); }
+  // Open the tab now, while we still have the tap (popup blockers), then point it at the form.
+  const win = window.open('', '_blank');
+  if (win) win.document.write('<p style="font-family:system-ui,sans-serif;padding:2rem">Opening the iPOSpays card form…</p>');
+  return new Promise(async (resolve) => {
+    let res;
+    try {
+      res = await (await fetch('/api/stripe-payment', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ipospays_keyed', invoiceId: inv.id }),
+      })).json();
+    } catch (e) { res = { success: false, error: 'Could not reach the server.' }; }
+    if (!res.success) {
+      if (win) win.close();
+      showToast(res.error || 'Could not open the iPOSpays card form', 'error');
+      return resolve(false);
+    }
+    if (win) win.location.href = res.url;
+    const msg = document.getElementById('ipos-card-msg');
+    const wait = document.getElementById('ipos-card-wait');
+    msg.textContent = `Waiting for the card payment of $${Number(res.amount).toFixed(2)}… Type the card number into the iPOSpays card form and press Pay Now. This updates by itself.`;
+    document.getElementById('ipos-card-link').href = res.url;
+    document.getElementById('ipos-card-link').textContent = win ? 'Reopen card form' : 'Open card form';
+    wait.style.display = 'flex';
+    const started = Date.now();
+    const finish = (result) => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      _iposWait = null;
+      wait.style.display = 'none';
+      msg.textContent = 'Tap Charge to open the iPOSpays card form, type the card number there and press Pay Now. Card details go straight to iPOSpays.';
+      resolve(result);
+    };
+    const check = async (manual) => {
+      if (!_iposWait) return;
+      try {
+        const r = await (await fetch('/api/stripe-payment', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'ipospays_check', invoiceId: inv.id, ref: res.ref }),
+        })).json();
+        if (!_iposWait) return;
+        if (r.success && r.paid) return finish({ amount: r.amount });
+        if (r.success && r.declined) {
+          showToast(`The card didn't go through${r.message ? ` (${r.message})` : ''}`, 'error');
+          return finish(false);
+        }
+        if (manual) showToast(r.success ? "iPOSpays hasn't confirmed it yet — check again in a moment" : (r.error || 'Could not check the payment'), 'error');
+      } catch (e) { if (manual) showToast('Could not reach the server', 'error'); }
+    };
+    const timer = setInterval(() => { if (Date.now() - started < 15 * 60e3) check(false); }, 4000);
+    const onVisible = () => { if (document.visibilityState === 'visible') check(false); };
+    document.addEventListener('visibilitychange', onVisible);
+    _iposWait = { check, stop: () => finish(false) };
+  });
+}
+function iposKeyedCheckNow() { _iposWait?.check(true); }
+// The payment can still go through after this; it's recorded when iPOSpays reports it.
+function iposKeyedStop() { _iposWait?.stop(); }
 
 // ── CARD PAYMENT RECONCILIATION ──
 // The server now records keyed card payments itself, in the same request as the charge;

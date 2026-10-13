@@ -17,7 +17,13 @@ account instead of Stripe, using the iPOSpays **Hosted Payment Page** (HPP).
   (`POST payment.ipospays.{tech,com}/api/v3/iposTransact`, transactionType 2 or 3, by the
   payment's RRN). Partial amounts are always refunds. Refunds done in the iPOSpays portal
   aren't seen by FarriTech.
-- **Still Stripe only:** keyed card payments and the customer portal.
+- **Keyed cards:** Pay Now on desktop (Invoices) and Card on mobile open an iPOSpays payment page in a
+  new tab for the amount chosen (card price unless waived). The farrier types the card there and presses
+  Pay Now; the app checks with iPOSpays every few seconds (and when the farrier switches back to it) and
+  shows the payment once it's approved. The card number goes straight to iPOSpays, never through
+  FarriTech. The payment is recorded as `card_keyed` / `paidVia: ipospays_keyed`. Opening the form closes
+  the customer's open pay-link page (a new one is made when they next open the link).
+- **Still Stripe only:** the customer portal.
 
 Disconnecting iPOSpays sends pay links back to Stripe.
 
@@ -42,6 +48,9 @@ FarriTech checks the keys with iPOSpays before saving, then stores everything in
 | Make the payment page | `POST payment.ipospays.{tech,com}/api/v3/external-payment-transaction` |
 | Confirm a payment | `GET api.ipospays.{tech,com}/v1/queryPaymentStatus` (Ecom token) |
 | Close a page | `POST payment.ipospays.{tech,com}/api/v1/cancel` |
+
+Keyed cards use the same payment page (`stripe-payment` actions `ipospays_keyed` to make it,
+`ipospays_check` to run Query Payment Status for it).
 
 iPOSpays reports payments to `/api/ipospays/callback/{invoiceId}` (server to server) and sends
 the customer back to `/pay/{invoiceId}?ipos_ref=…`. Neither is trusted on its own: each one
