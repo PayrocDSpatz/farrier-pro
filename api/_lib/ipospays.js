@@ -384,10 +384,13 @@ export async function refundIposPayment(creds, invoiceId, invoice, cents) {
     return { ok: !!r?.ok && Number(resp?.responseCode) === 200, resp, d, status: r?.status };
   };
 
+  // A void request on a payment whose batch has settled isn't declined: iPOSpays approves it
+  // and runs a refund instead (sandbox, 2026-10-13: "VOID" request → "REFUND" in the portal).
+  // So it's only called a void when iPOSpays' answer says so.
   const full = cents === left && already === 0;
   let kind = 'refund';
   let result = full ? await send(2, '') : null;
-  if (result?.ok) kind = 'void';
+  if (result?.ok) kind = answeredKind(result.d) || 'refund';
   else result = await send(3, full ? '' : String(cents));
   if (!result.ok) {
     const why = result.resp?.errResponseMessage || result.resp?.responseMessage || errorText(result.d, result.status ? `HTTP ${result.status}` : 'no response');
@@ -407,6 +410,18 @@ export async function refundIposPayment(creds, invoiceId, invoice, cents) {
     ...(fully ? { status: 'refunded', refundedAt: new Date() } : {}),
   });
   return { kind, amountCents: cents, refundId: String(result.resp.transactionId || '') };
+}
+
+// 'void' or 'refund' if iPOSpays' answer spells out the transaction type it ran, else ''.
+// Numbers are ignored: the answer may just echo the transactionType we sent.
+function answeredKind(d) {
+  const resp = d?.iposhpresponse || d?.iposHPResponse || d?.data || d || {};
+  for (const k of ['transactionType', 'transactionTypeName', 'txnType', 'type', 'transactionTypeDesc']) {
+    const v = String(resp[k] ?? d?.[k] ?? '').toLowerCase();
+    if (/refund|return/.test(v)) return 'refund';
+    if (/void/.test(v)) return 'void';
+  }
+  return '';
 }
 
 // Closes every payment page still on offer for the invoice, so the customer can't pay

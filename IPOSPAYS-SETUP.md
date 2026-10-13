@@ -13,7 +13,7 @@ account instead of Stripe, using the iPOSpays **Hosted Payment Page** (HPP).
 - Recording a cash/check/Zelle/etc. payment, or waiving the card price, cancels the open
   iPOSpays page so the customer can't pay twice.
 - **Refunds:** the Refund button on an invoice paid through iPOSpays (manager password required)
-  voids it if the batch hasn't settled, otherwise refunds it, via iPOS Transact
+  asks iPOSpays to void it (iPOSpays runs a refund instead once the batch has settled), via iPOS Transact
   (`POST payment.ipospays.{tech,com}/api/v3/iposTransact`, transactionType 2 or 3, by the
   payment's RRN). Partial amounts are always refunds. Refunds done in the iPOSpays portal
   aren't seen by FarriTech.
