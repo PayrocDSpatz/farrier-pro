@@ -384,11 +384,18 @@ export async function refundIposPayment(creds, invoiceId, invoice, cents) {
     return { ok: !!r?.ok && Number(resp?.responseCode) === 200, resp, d, status: r?.status };
   };
 
+  // Void only while the payment is still in the open batch. A void request on a settled
+  // payment isn't declined: iPOSpays approves it and runs a refund (sandbox, 2026-10-13), and
+  // its answer just echoes transactionType 2, so the batch has to be checked first.
   const full = cents === left && already === 0;
+  const unsettled = full ? await inOpenBatch(creds, rrn) : false;
   let kind = 'refund';
-  let result = full ? await send(2, '') : null;
-  if (result?.ok) kind = 'void';
-  else result = await send(3, full ? '' : String(cents));
+  let result = null;
+  if (unsettled) {
+    result = await send(2, '');
+    if (result.ok) kind = 'void';
+  }
+  if (!result?.ok) result = await send(3, full ? '' : String(cents));
   if (!result.ok) {
     const why = result.resp?.errResponseMessage || result.resp?.responseMessage || errorText(result.d, result.status ? `HTTP ${result.status}` : 'no response');
     throw new PaymentError(`iPOSpays didn’t take the refund: ${why}. You can refund it in the iPOSpays portal instead.`, 400);
@@ -407,6 +414,30 @@ export async function refundIposPayment(creds, invoiceId, invoice, cents) {
     ...(fully ? { status: 'refunded', refundedAt: new Date() } : {}),
   });
   return { kind, amountCents: cents, refundId: String(result.resp.transactionId || '') };
+}
+
+// Is the payment with this RRN still in the merchant's open (unsettled) batch, and not voided?
+// iPOS Transact "openbatch" (transactionType 9) lists it under batch_profiles[].batch_details[].
+// Any failure counts as "no", so the payment gets a refund rather than a void.
+async function inOpenBatch(creds, rrn) {
+  try {
+    const r = await fetch(`${hosts(creds.mode).payment}/api/v3/iposTransact`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', token: await authToken(creds) },
+      body: JSON.stringify({
+        merchantAuthentication: { merchantId: creds.tpn, transactionReferenceId: newReferenceId() },
+        transactionRequest: { transactionType: 9 },
+      }),
+    });
+    const d = await readJson(r);
+    const batch = d.iposhpresponse || d.iposHPResponse || d.data || d;
+    const details = (batch?.batch_profiles || []).flatMap(p => p?.batch_details || []);
+    const found = details.find(t => String(t?.rrn || '') === rrn);
+    console.log('iPOSpays open batch:', r.status, details.length, 'transactions, payment', found ? `found (voidFlag ${found.voidFlag})` : 'not found');
+    return !!found && String(found.voidFlag || 'N').toUpperCase() !== 'Y';
+  } catch (e) {
+    console.warn('iPOSpays open batch check failed:', e.message);
+    return false;
+  }
 }
 
 // Closes every payment page still on offer for the invoice, so the customer can't pay
