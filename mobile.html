@@ -745,12 +745,6 @@
     <div class="field"><label>Manager / Contact</label><input type="text" id="nc-manager-contact" placeholder="Barn manager or on-site contact name"></div>
     <div class="field"><label>Phone</label><input type="tel" id="nc-phone" placeholder="(555) 555-5555" autocomplete="tel" inputmode="tel" oninput="formatPhoneInput(this)"></div>
     <div class="field"><label>Email</label><input type="email" id="nc-email" placeholder="jane@example.com" autocomplete="email"></div>
-    <!-- Other people to reach for this customer (customers/{id}.contacts) -->
-    <div class="field">
-      <label>Other Contacts <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
-      <div id="nc-contacts"></div>
-      <button type="button" class="btn-sm" style="background:var(--bg); border:2px solid var(--border); color:var(--blue);" onclick="addNcContact()">+ Add contact</button>
-    </div>
     <div class="field">
       <label>Address <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
       <div id="cust-address-pac-container" style="width:100%;"></div>
@@ -765,6 +759,12 @@
       </div>
     </div>
     <div class="field"><label>Horse Name(s) / Notes</label><textarea id="nc-notes" placeholder="Horse names, special instructions…"></textarea></div>
+    <!-- Other people to reach for this customer (customers/{id}.contacts) -->
+    <div class="field">
+      <label>Other Contacts <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+      <div id="nc-contacts"></div>
+      <button type="button" class="btn-sm" style="background:var(--bg); border:2px solid var(--border); color:var(--blue);" onclick="addNcContact()">+ Add contact</button>
+    </div>
     <button class="btn-primary" id="nc-save-btn" onclick="saveNewCustomer()">Save Customer</button>
     <div style="margin-top:8px;"></div>
     <button class="btn-secondary" onclick="goBack()">Cancel</button>
@@ -2051,8 +2051,8 @@ async function loadCustomerDetail(c) {
       ${c.managerContact ? `<div>👔 ${c.managerContact}</div>` : ''}
       ${c.phone ? `<div>📞 ${fmtPhoneDisplay(c.phone)}</div>` : ''}
       ${c.email ? `<div>✉️ ${c.email}</div>` : ''}
-      ${(Array.isArray(c.contacts) ? c.contacts : []).map(k => `<div>👥 ${[k.name, k.role].filter(Boolean).join(' · ')}${k.phone ? ` · <a href="tel:${String(k.phone).replace(/\D/g, '')}" style="color:inherit;">${fmtPhoneDisplay(k.phone)}</a>` : ''}</div>`).join('')}
       ${c.notes ? `<div style="margin-top:4px; font-style:italic; opacity:0.8;">📝 ${c.notes}</div>` : ''}
+      ${(Array.isArray(c.contacts) ? c.contacts : []).map(k => `<div>👥 ${[k.name, k.role].filter(Boolean).join(' · ')}${k.phone ? ` · <a href="tel:${String(k.phone).replace(/\D/g, '')}" style="color:inherit;">${fmtPhoneDisplay(k.phone)}</a>` : ''}</div>`).join('')}
     </div>
   `;
 

@@ -4532,28 +4532,6 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             </div>
           ))}
 
-          {/* Other contacts: barn manager, spouse, trainer, vet… */}
-          <div className="form-group">
-            <label>Other Contacts</label>
-            {formContacts.map((c, i) => {
-              const setField = (k, v) => setFormContacts(prev => prev.map((x, j) => j === i ? { ...x, [k]: v } : x));
-              const inp = { padding: '0.6rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '0.95rem', boxSizing: 'border-box', minWidth: 0 };
-              return (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1.3fr auto', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                  <input type="text" value={c.name} placeholder="Name" onChange={e => setField('name', e.target.value)} style={inp} />
-                  <input type="text" value={c.role} placeholder="Role (e.g. Trainer)" list="contact-roles" onChange={e => setField('role', e.target.value)} style={inp} />
-                  <input type="tel" value={fmtPhone(c.phone)} placeholder="Phone" onChange={e => setField('phone', e.target.value.replace(/\D/g, '').slice(0, 11))} style={inp} />
-                  <input type="email" value={c.email} placeholder="Email (optional)" onChange={e => setField('email', e.target.value)} style={inp} />
-                  <button type="button" className="btn btn-sm btn-outline" title="Remove contact" onClick={() => setFormContacts(prev => prev.filter((_, j) => j !== i))}>✕</button>
-                </div>
-              );
-            })}
-            <datalist id="contact-roles">
-              {['Barn manager', 'Spouse', 'Trainer', 'Rider', 'Vet', 'Groom', 'Owner', 'Other'].map(r => <option key={r} value={r} />)}
-            </datalist>
-            <button type="button" className="btn btn-sm btn-outline" onClick={() => setFormContacts(prev => [...prev, { name: '', role: '', phone: '', email: '' }])}>+ Add contact</button>
-          </div>
-
           {/* Address with Google Places Autocomplete */}
           <div className="form-group">
             <label>Street Address</label>
@@ -4594,6 +4572,28 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             <textarea value={formNotes} placeholder="Horse names, special instructions, preferences…"
               onChange={e => setFormNotes(e.target.value)} rows={3}
               style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', resize: 'vertical', boxSizing: 'border-box' }} />
+          </div>
+
+          {/* Other contacts: barn manager, spouse, trainer, vet… */}
+          <div className="form-group">
+            <label>Other Contacts</label>
+            {formContacts.map((c, i) => {
+              const setField = (k, v) => setFormContacts(prev => prev.map((x, j) => j === i ? { ...x, [k]: v } : x));
+              const inp = { padding: '0.6rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '0.95rem', boxSizing: 'border-box', minWidth: 0 };
+              return (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1.3fr auto', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                  <input type="text" value={c.name} placeholder="Name" onChange={e => setField('name', e.target.value)} style={inp} />
+                  <input type="text" value={c.role} placeholder="Role (e.g. Trainer)" list="contact-roles" onChange={e => setField('role', e.target.value)} style={inp} />
+                  <input type="tel" value={fmtPhone(c.phone)} placeholder="Phone" onChange={e => setField('phone', e.target.value.replace(/\D/g, '').slice(0, 11))} style={inp} />
+                  <input type="email" value={c.email} placeholder="Email (optional)" onChange={e => setField('email', e.target.value)} style={inp} />
+                  <button type="button" className="btn btn-sm btn-outline" title="Remove contact" onClick={() => setFormContacts(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                </div>
+              );
+            })}
+            <datalist id="contact-roles">
+              {['Barn manager', 'Spouse', 'Trainer', 'Rider', 'Vet', 'Groom', 'Owner', 'Other'].map(r => <option key={r} value={r} />)}
+            </datalist>
+            <button type="button" className="btn btn-sm btn-outline" onClick={() => setFormContacts(prev => [...prev, { name: '', role: '', phone: '', email: '' }])}>+ Add contact</button>
           </div>
           {/* Source — hide the qr_booking option for manual entry; show as read-only if editing a qr_booking customer */}
           <div className="form-group">
@@ -4649,6 +4649,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   {selectedCustomer.email && <span>✉️ {selectedCustomer.email}</span>}
                   {(selectedCustomer.address || selectedCustomer.city) && <span>📍 {[selectedCustomer.address, selectedCustomer.city, selectedCustomer.state, selectedCustomer.zip].filter(Boolean).join(', ')}</span>}
                 </div>
+                {selectedCustomer.notes && (
+                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.06)', borderRadius: 8, fontSize: '0.9rem', color: 'var(--text)', borderLeft: '3px solid var(--primary)' }}>
+                    💬 {selectedCustomer.notes}
+                  </div>
+                )}
                 {Array.isArray(selectedCustomer.contacts) && selectedCustomer.contacts.length > 0 && (
                   <div style={{ marginTop: '0.75rem' }}>
                     <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>Other contacts</div>
@@ -4660,11 +4665,6 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                         {c.email && <a href={`mailto:${c.email}`} style={{ color: 'var(--primary)' }}>✉️ {c.email}</a>}
                       </div>
                     ))}
-                  </div>
-                )}
-                {selectedCustomer.notes && (
-                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.06)', borderRadius: 8, fontSize: '0.9rem', color: 'var(--text)', borderLeft: '3px solid var(--primary)' }}>
-                    💬 {selectedCustomer.notes}
                   </div>
                 )}
                 <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
