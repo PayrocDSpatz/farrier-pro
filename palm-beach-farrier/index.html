@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palm Beach Farrier Supply</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Horseshoes, nails, pads and farrier tools in Wellington, Florida. 1.5 miles from the show grounds. Open at 7 AM, year round.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a working shop's counter sheet. Iron-ink header band, steel-paper body,
+   left-aligned slab headings, stock-tag labels in mono, brass reserved for small marks. */
+:root {
+  --paper: #eef0ec;        /* steel-grey paper, slight green bias */
+  --paper-2: #e2e6e0;      /* recessed panels */
+  --ink: #1d2320;          /* forged iron */
+  --ink-soft: #4b544f;     /* secondary text */
+  --rule: #c5ccc5;         /* hairlines */
+  --palm: #2e4a3b;         /* deep palm green: primary */
+  --palm-ink: #f2f4ef;     /* text on palm */
+  --brass: #9a7433;        /* brass accent, small doses */
+  --band: #1d2320;         /* header/footer band */
+  --band-fg: #e7ebe5;
+  --band-soft: #a9b3ac;
+  --hatch: rgba(29,35,32,.07);
+
+  --f-display: "Zilla Slab", "Rockwell", "Roboto Slab", Georgia, serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.55rem;
+  --step-3: 2.1rem;
+  --step-4: clamp(2.4rem, 5.5vw, 3.6rem);
+  --wrap: 72rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #161a18; --paper-2: #1e2421; --ink: #e6ebe6; --ink-soft: #a6b0aa;
+    --rule: #333b37; --palm: #7fae93; --palm-ink: #0f1311; --brass: #c9a25b;
+    --band: #0e1110; --band-fg: #e6ebe6; --band-soft: #8f9a94; --hatch: rgba(230,235,230,.06);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #161a18; --paper-2: #1e2421; --ink: #e6ebe6; --ink-soft: #a6b0aa;
+  --rule: #333b37; --palm: #7fae93; --palm-ink: #0f1311; --brass: #c9a25b;
+  --band: #0e1110; --band-fg: #e6ebe6; --band-soft: #8f9a94; --hatch: rgba(230,235,230,.06);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 var(--step-0)/1.6 var(--f-body);
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; border-radius: 2px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; line-height: 1.12; text-wrap: balance; margin: 0; }
+p { margin: 0; }
+
+.wrap {
+  max-width: var(--wrap); margin-inline: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.tag {
+  font: 500 .74rem/1 var(--f-mono); letter-spacing: .09em; text-transform: uppercase;
+  color: var(--brass);
+}
+.btn {
+  display: inline-flex; align-items: center; gap: .5rem;
+  font: 600 .95rem/1 var(--f-body); text-decoration: none;
+  padding: .85rem 1.2rem; border-radius: 3px; border: 1.5px solid transparent;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.btn-primary { background: var(--palm); color: var(--palm-ink); }
+.btn-primary:hover { background: var(--ink); color: var(--paper); }
+.btn-ghost { border-color: currentColor; }
+.btn-ghost:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* ---------- Header band ---------- */
+.band { background: var(--band); color: var(--band-fg); }
+.topline {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem 1.5rem;
+  padding-block: .5rem; font-size: .85rem; color: var(--band-soft);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.topline strong { color: var(--band-fg); font-weight: 500; }
+.topline a { text-decoration: none; color: var(--band-fg); }
+.nav {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding-block: 1rem;
+}
+.brand { display: flex; align-items: center; gap: .75rem; text-decoration: none; min-width: 0; }
+.brand svg { flex: none; color: var(--brass); }
+.brand-name { font: 700 1.3rem/1 var(--f-display); letter-spacing: .01em; }
+.brand-sub { display: block; font: 500 .68rem/1.2 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--band-soft); margin-top: .3rem; }
+.nav-links { display: flex; align-items: center; gap: 1.6rem; list-style: none; margin: 0; padding: 0; font-size: .95rem; }
+.nav-links a { text-decoration: none; color: var(--band-soft); }
+.nav-links a:hover { color: var(--band-fg); }
+.nav .btn { background: var(--band-fg); color: var(--band); }
+.nav .btn:hover { background: var(--brass); color: var(--band); }
+@media (max-width: 760px) { .nav-links li:not(.nav-call) { display: none; } }
+
+/* ---------- Hero ---------- */
+.hero { background: var(--band); color: var(--band-fg); padding-bottom: 3.5rem; }
+.hero-grid {
+  display: grid; grid-template-columns: 1.05fr 1fr; gap: 2.5rem; align-items: center;
+  padding-top: 2rem;
+}
+.hero-copy { display: grid; gap: 1.25rem; min-width: 0; }
+.hero h1 { font-size: var(--step-4); font-weight: 700; }
+.hero h1 em { font-style: normal; color: var(--brass); }
+.hero p.lede { font-size: var(--step-1); color: var(--band-soft); max-width: 34rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .5rem; }
+.hero .btn-ghost { color: var(--band-fg); }
+.hero .btn-ghost:hover { background: var(--band-fg); color: var(--band); border-color: var(--band-fg); }
+.hero .btn-primary { background: var(--brass); color: #16130d; }
+.hero .btn-primary:hover { background: var(--band-fg); color: var(--band); }
+@media (max-width: 860px) { .hero-grid { grid-template-columns: 1fr; } }
+
+/* ---------- Photo slots ---------- */
+.photo {
+  position: relative; overflow: hidden; border-radius: 3px;
+  background: var(--paper-2);
+  background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 11px);
+  aspect-ratio: 4 / 3; max-width: 100%;
+  display: grid; place-items: center;
+}
+.band .photo { background-color: #2a312d; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 1px, transparent 1px 11px); }
+.photo > span {
+  font: 500 .72rem/1.3 var(--f-mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-soft); text-align: center; padding: 1rem;
+}
+.band .photo > span { color: var(--band-soft); }
+.photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.photo.tall { aspect-ratio: 4 / 5; }
+.photo.wide { aspect-ratio: 16 / 9; }
+
+/* ---------- Facts strip ---------- */
+.facts { border-bottom: 1px solid var(--rule); }
+.facts ul {
+  list-style: none; margin: 0; padding-block: 1.4rem;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem 2rem;
+}
+.facts li { display: grid; gap: .2rem; }
+.facts b { font: 600 var(--step-2)/1 var(--f-display); }
+.facts span { font-size: .88rem; color: var(--ink-soft); }
+@media (max-width: 760px) { .facts ul { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------- Sections ---------- */
+section.block { padding-block: 4.5rem; }
+.head { display: grid; gap: .7rem; margin-bottom: 2.25rem; max-width: 42rem; }
+.head h2 { font-size: var(--step-3); }
+.head p { color: var(--ink-soft); }
+
+/* Stock list: reads like a parts counter, not a card wall */
+.stock { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 3rem; border-top: 2px solid var(--ink); }
+.stock article {
+  display: grid; grid-template-columns: 3.2rem 1fr; gap: .25rem 1rem;
+  padding-block: 1.4rem; border-bottom: 1px solid var(--rule); min-width: 0;
+}
+.stock .code { font: 500 .78rem/1.6 var(--f-mono); color: var(--brass); letter-spacing: .06em; padding-top: .2rem; }
+.stock h3 { font-size: var(--step-1); }
+.stock p { grid-column: 2; color: var(--ink-soft); font-size: .95rem; }
+.stock .terms { grid-column: 2; display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; padding: 0; list-style: none; }
+.stock .terms li {
+  font: 500 .72rem/1 var(--f-mono); letter-spacing: .04em;
+  padding: .38rem .5rem; border: 1px solid var(--rule); border-radius: 2px; color: var(--ink-soft);
+}
+.stock-note { margin-top: 1.25rem; font-size: .9rem; color: var(--ink-soft); }
+@media (max-width: 760px) { .stock { grid-template-columns: 1fr; } }
+
+/* Order ahead */
+.order { background: var(--palm); color: var(--palm-ink); }
+.order-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: start; }
+.order h2 { font-size: var(--step-3); }
+.order .tag { color: inherit; opacity: .75; }
+.order p, .order .head p { color: inherit; opacity: .9; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: s; }
+.steps li {
+  counter-increment: s; display: grid; grid-template-columns: 2.4rem 1fr; gap: 1rem;
+  padding-block: 1.1rem; border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+}
+.steps li::before { content: counter(s); font: 600 var(--step-2)/1 var(--f-display); opacity: .7; }
+.steps b { display: block; font-weight: 600; margin-bottom: .15rem; }
+.order .btn { background: var(--palm-ink); color: var(--palm); }
+.order .btn:hover { background: var(--ink); color: var(--paper); }
+@media (max-width: 760px) { .order-grid { grid-template-columns: 1fr; gap: 1.5rem; } }
+
+/* Shop photos */
+.gallery { display: grid; grid-template-columns: 2fr 1fr 1fr; grid-template-rows: auto auto; gap: .75rem; }
+.gallery .photo:first-child { grid-row: span 2; aspect-ratio: auto; min-height: 100%; }
+@media (max-width: 760px) {
+  .gallery { grid-template-columns: 1fr 1fr; }
+  .gallery .photo:first-child { grid-column: span 2; grid-row: auto; aspect-ratio: 16/9; }
+}
+
+/* Clinics */
+.clinic { display: grid; grid-template-columns: 1fr 1.1fr; gap: 3rem; align-items: center; }
+.clinic-copy { display: grid; gap: 1rem; min-width: 0; }
+.clinic h2 { font-size: var(--step-3); }
+.clinic p { color: var(--ink-soft); max-width: 36rem; }
+@media (max-width: 860px) { .clinic { grid-template-columns: 1fr; gap: 1.5rem; } }
+
+/* Visit */
+.visit { background: var(--paper-2); }
+.visit-grid { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 2.5rem; }
+.visit h3 { font-size: var(--step-1); margin-bottom: .9rem; }
+.visit address { font-style: normal; line-height: 1.7; }
+.visit .muted { color: var(--ink-soft); font-size: .9rem; }
+.contact-list { display: grid; gap: .65rem; margin: 0; }
+.contact-list div { display: grid; grid-template-columns: 4.2rem 1fr; gap: .75rem; align-items: baseline; }
+.contact-list dt { font: 500 .72rem/1.6 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.contact-list dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.copy-btn {
+  margin-left: .4rem; font: 500 .7rem/1 var(--f-mono); letter-spacing: .06em; text-transform: uppercase;
+  background: none; border: 1px solid var(--rule); color: var(--ink-soft); border-radius: 2px;
+  padding: .3rem .45rem; cursor: pointer; vertical-align: middle;
+}
+.copy-btn:hover { border-color: var(--ink); color: var(--ink); }
+.hours { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.hours td { padding: .5rem 0; border-bottom: 1px solid var(--rule); }
+.hours td:last-child { text-align: right; }
+.hours tr.today td { font-weight: 600; }
+.hours tr.today td:first-child::after { content: "Today"; margin-left: .5rem; font: 500 .65rem/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--brass); }
+.visit .actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.25rem; }
+@media (max-width: 900px) { .visit-grid { grid-template-columns: 1fr 1fr; } .visit-grid > :first-child { grid-column: span 2; } }
+@media (max-width: 600px) { .visit-grid { grid-template-columns: 1fr; } .visit-grid > :first-child { grid-column: auto; } }
+
+/* Footer */
+footer.band { padding-block: 2rem; font-size: .85rem; }
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; color: var(--band-soft); }
+.foot strong { color: var(--band-fg); font-family: var(--f-display); font-size: 1rem; }
+</style>
+</head>
+<body>
+
+<header class="band">
+  <div class="wrap topline">
+    <span><strong>Open at 7 AM</strong> · Mon–Fri 7–5 · Sat 7–12 in season</span>
+    <span>3500 Fairlane Farms Rd #13, Wellington · <a href="tel:+15612045022">(561) 204-5022</a></span>
+  </div>
+  <nav class="wrap nav" aria-label="Main">
+    <a class="brand" href="#top" aria-label="Palm Beach Farrier Supply home">
+      <!-- Horseshoe mark: toe at top, eight nail holes -->
+      <svg width="38" height="38" viewBox="0 0 40 40" aria-hidden="true">
+        <path d="M9 36 C4 30 3 22 5 15 C8 6 14 3 20 3 C26 3 32 6 35 15 C37 22 36 30 31 36 L26 36 C29 30 30 23 28 17 C26 11 23 9 20 9 C17 9 14 11 12 17 C10 23 11 30 14 36 Z" fill="currentColor"/>
+        <g fill="var(--band)"><circle cx="7.6" cy="27" r="1"/><circle cx="7.4" cy="21" r="1"/><circle cx="9" cy="15" r="1"/><circle cx="12.5" cy="10" r="1"/><circle cx="27.5" cy="10" r="1"/><circle cx="31" cy="15" r="1"/><circle cx="32.6" cy="21" r="1"/><circle cx="32.4" cy="27" r="1"/></g>
+      </svg>
+      <span>
+        <span class="brand-name">Palm Beach Farrier Supply</span>
+        <span class="brand-sub">Wellington, Florida · Since 2003</span>
+      </span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#stock">What we stock</a></li>
+      <li><a href="#order">Order ahead</a></li>
+      <li><a href="#clinics">Clinics</a></li>
+      <li><a href="#visit">Hours &amp; directions</a></li>
+      <li class="nav-call"><a class="btn" href="tel:+15612045022">Call the shop</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero band">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <span class="tag">Farrier supply · Wellington, FL</span>
+        <h1>Shoes, nails and tools for the working farrier. <em>Open at seven.</em></h1>
+        <p class="lede">We're a farrier supply shop 1.5 miles east of the Wellington show grounds, open all year. Pick up what you need on the way to the barn, or call ahead and we'll have it pulled.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#order">Call in an order</a>
+          <a class="btn btn-ghost" href="#visit">Hours &amp; directions</a>
+        </div>
+      </div>
+      <figure class="photo tall" data-photo="hero" style="margin:0">
+        <span>Photo · Shop counter or storefront</span>
+      </figure>
+    </div>
+  </section>
+
+  <div class="facts">
+    <div class="wrap"><ul>
+      <li><b>7:00 AM</b><span>Doors open, Monday to Saturday</span></li>
+      <li><b>1.5 mi</b><span>East of the show grounds</span></li>
+      <li><b>Year round</b><span>Open through the season and the summer</span></li>
+      <li><b>Since 2003</b><span>Serving farriers in Palm Beach County</span></li>
+    </ul></div>
+  </div>
+
+  <section class="block" id="stock">
+    <div class="wrap">
+      <div class="head">
+        <span class="tag">What we stock</span>
+        <h2>Shoeing supplies, from the nail to the anvil</h2>
+        <p>Here's what's on the shelves in an average week. Stock changes with the season, so if you need a particular size or pattern, call and we'll check before you drive over.</p>
+      </div>
+
+      <div class="stock">
+        <article>
+          <span class="code">HS</span>
+          <h3>Horseshoes</h3>
+          <p>Steel and aluminum, front and hind, in keg sizes. Sport horse, hunter/jumper and pleasure patterns.</p>
+          <ul class="terms"><li>Steel</li><li>Aluminum</li><li>Fronts &amp; hinds</li><li>Clipped &amp; unclipped</li></ul>
+        </article>
+        <article>
+          <span class="code">NL</span>
+          <h3>Nails</h3>
+          <p>Boxed nails by head style and size for every shoe we carry.</p>
+          <ul class="terms"><li>E-head</li><li>City head</li><li>Slim blade</li><li>Sizes 3–6</li></ul>
+        </article>
+        <article>
+          <span class="code">PD</span>
+          <h3>Pads &amp; packing</h3>
+          <p>Full and rim pads, wedges, and pour-in and putty packing for sole support.</p>
+          <ul class="terms"><li>Full pads</li><li>Rim pads</li><li>Wedges</li><li>Pour-in</li></ul>
+        </article>
+        <article>
+          <span class="code">HT</span>
+          <h3>Hand tools</h3>
+          <p>Rasps, nippers, pull-offs, clinchers, hoof knives, hammers and nail cutters.</p>
+          <ul class="terms"><li>Rasps</li><li>Nippers</li><li>Knives</li><li>Driving hammers</li></ul>
+        </article>
+        <article>
+          <span class="code">FG</span>
+          <h3>Forge &amp; anvil</h3>
+          <p>Forges, anvils, stands, tongs, pritchels and fullers for the truck or the shop.</p>
+          <ul class="terms"><li>Gas forges</li><li>Anvils</li><li>Tongs</li><li>Stands</li></ul>
+        </article>
+        <article>
+          <span class="code">HC</span>
+          <h3>Hoof care &amp; adhesives</h3>
+          <p>Glue-on adhesives, hoof repair, sole hardeners, thrush treatments and dressings.</p>
+          <ul class="terms"><li>Adhesives</li><li>Hoof repair</li><li>Thrush care</li><li>Sole hardener</li></ul>
+        </article>
+        <article>
+          <span class="code">AP</span>
+          <h3>Aprons &amp; gear</h3>
+          <p>Shoeing aprons, gloves, tool boxes and the small parts you go through every week.</p>
+          <ul class="terms"><li>Aprons</li><li>Gloves</li><li>Tool boxes</li></ul>
+        </article>
+        <article>
+          <span class="code">SO</span>
+          <h3>Special orders</h3>
+          <p>If we don't stock it, ask. We can order specialty and therapeutic shoes, tools and parts.</p>
+          <ul class="terms"><li>Therapeutic shoes</li><li>Specialty sizes</li></ul>
+        </article>
+      </div>
+      <p class="stock-note">Brands and sizes vary. Call (561) 204-5022 to check what's in stock today.</p>
+    </div>
+  </section>
+
+  <section class="block order" id="order">
+    <div class="wrap order-grid">
+      <div class="head" style="margin:0">
+        <span class="tag">Order ahead</span>
+        <h2>Call it in. Pick it up on your way out.</h2>
+        <p>During show season the day starts early. Call in your order and we'll have it pulled and bagged when you get here.</p>
+        <div style="margin-top:.75rem"><a class="btn" href="tel:+15612045022">Call (561) 204-5022</a></div>
+      </div>
+      <ol class="steps">
+        <li><span><b>Call or email the shop</b>Tell us the shoe pattern and size, nail size and count, and anything else you need.</span></li>
+        <li><span><b>We pull your order</b>We confirm what's in stock and suggest a substitute if something isn't.</span></li>
+        <li><span><b>Pick up from 7 AM</b>Your order is waiting at the counter at 3500 Fairlane Farms Rd, Suite 13.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="head">
+        <span class="tag">The shop</span>
+        <h2>Inside Palm Beach Farrier Supply</h2>
+      </div>
+      <div class="gallery">
+        <figure class="photo" data-photo="shop-1" style="margin:0"><span>Photo · Shelves of shoes</span></figure>
+        <figure class="photo" data-photo="shop-2" style="margin:0"><span>Photo · Nails &amp; tools</span></figure>
+        <figure class="photo" data-photo="shop-3" style="margin:0"><span>Photo · Forge or anvil</span></figure>
+        <figure class="photo" data-photo="shop-4" style="margin:0"><span>Photo · Farrier at work</span></figure>
+        <figure class="photo" data-photo="shop-5" style="margin:0"><span>Photo · The team</span></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="clinics" style="padding-top:0">
+    <div class="wrap clinic">
+      <figure class="photo wide" data-photo="clinic" style="margin:0"><span>Photo · Clinic or demonstration</span></figure>
+      <div class="clinic-copy">
+        <span class="tag">Clinics</span>
+        <h2>Clinics for working farriers</h2>
+        <p>We host an annual clinic at the shop, with visiting clinicians, demonstrations and time to talk shop with other farriers in the area.</p>
+        <p>Call or email to be added to the list for the next one.</p>
+        <div><a class="btn btn-ghost" href="mailto:palmbeachfs@comcast.net?subject=Clinic%20list">Join the clinic list</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block visit" id="visit">
+    <div class="wrap">
+      <div class="head">
+        <span class="tag">Hours &amp; directions</span>
+        <h2>Visit the shop</h2>
+      </div>
+      <div class="visit-grid">
+        <div>
+          <h3>Location</h3>
+          <address>
+            Palm Beach Farrier Supply, Inc.<br>
+            3500 Fairlane Farms Rd, Suite 13<br>
+            Wellington, FL 33414
+          </address>
+          <p class="muted" style="margin-top:.6rem">In Fairlane Farms, 1.5 miles east of the show grounds.</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://www.google.com/maps/search/?api=1&amp;query=3500+Fairlane+Farms+Rd+13+Wellington+FL+33414" target="_blank" rel="noopener">Get directions</a>
+          </div>
+        </div>
+        <div>
+          <h3>Hours</h3>
+          <table class="hours" id="hours">
+            <tbody>
+              <tr data-day="1"><td>Monday</td><td>7:00 – 5:00</td></tr>
+              <tr data-day="2"><td>Tuesday</td><td>7:00 – 5:00</td></tr>
+              <tr data-day="3"><td>Wednesday</td><td>7:00 – 5:00</td></tr>
+              <tr data-day="4"><td>Thursday</td><td>7:00 – 5:00</td></tr>
+              <tr data-day="5"><td>Friday</td><td>7:00 – 5:00</td></tr>
+              <tr data-day="6"><td>Saturday</td><td>7:00 – 12:00</td></tr>
+              <tr data-day="0"><td>Sunday</td><td>Closed</td></tr>
+            </tbody>
+          </table>
+          <p class="muted" style="margin-top:.6rem">Saturday hours run during the winter season. Call to check summer Saturdays.</p>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <dl class="contact-list">
+            <div><dt>Phone</dt><dd><a href="tel:+15612045022">(561) 204-5022</a><button class="copy-btn" type="button" data-copy="(561) 204-5022">Copy</button></dd></div>
+            <div><dt>Email</dt><dd><a href="mailto:palmbeachfs@comcast.net">palmbeachfs@comcast.net</a><button class="copy-btn" type="button" data-copy="palmbeachfs@comcast.net">Copy</button></dd></div>
+            <div><dt>Fax</dt><dd>(561) 204-5021</dd></div>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="band">
+  <div class="wrap foot">
+    <span><strong>Palm Beach Farrier Supply</strong> · 3500 Fairlane Farms Rd #13, Wellington, FL 33414</span>
+    <span>© <span id="yr">2026</span> Palm Beach Farrier Supply, Inc.</span>
+  </div>
+</footer>
+
+<script>
+  // Highlight today's row in the hours table.
+  (function () {
+    var row = document.querySelector('#hours tr[data-day="' + new Date().getDay() + '"]');
+    if (row) row.classList.add('today');
+    document.getElementById('yr').textContent = new Date().getFullYear();
+  })();
+
+  // Photo slots: drop images/<name>.jpg (e.g. images/hero.jpg) next to this page
+  // and it replaces the matching placeholder. Missing files leave the placeholder.
+  document.querySelectorAll('.photo[data-photo]').forEach(function (slot) {
+    var name = slot.getAttribute('data-photo');
+    var img = new Image();
+    img.alt = slot.textContent.replace('Photo ·', '').trim();
+    img.onload = function () { slot.appendChild(img); };
+    img.src = 'images/' + name + '.jpg';
+  });
+
+  // Copy buttons for the phone number and email.
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = btn.getAttribute('data-copy');
+      var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      }
+    });
+  });
+</script>
+</body>
+</html>
