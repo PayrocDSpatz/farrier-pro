@@ -14,3 +14,6 @@ Web-sized copies of the shop photos (max 1600px, location/EXIF data stripped).
 | `storefront.jpg` | Suite 13 entrance                  | Hours & directions      |
 
 To swap a photo, replace the file with one of the same name.
+
+`logo.png` is the shop logo with the white background removed. Its script lettering is black, so the
+Palm Beach version always shows it on a white plate.
