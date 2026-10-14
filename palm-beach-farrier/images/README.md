@@ -1,15 +1,16 @@
 # Photos
 
-Drop JPGs here with these exact names and they replace the matching placeholder automatically. No HTML edits needed.
+Web-sized copies of the shop photos (max 1600px, location/EXIF data stripped).
 
-| File            | Where it shows                     | Best shape         |
-|-----------------|------------------------------------|--------------------|
-| `hero.jpg`      | Top of page, beside the headline   | Portrait (4:5)     |
-| `shop-1.jpg`    | Shop gallery, large left photo     | Any, crops to fill |
-| `shop-2.jpg`    | Shop gallery                       | Landscape (4:3)    |
-| `shop-3.jpg`    | Shop gallery                       | Landscape (4:3)    |
-| `shop-4.jpg`    | Shop gallery                       | Landscape (4:3)    |
-| `shop-5.jpg`    | Shop gallery                       | Landscape (4:3)    |
-| `clinic.jpg`    | Clinics section                    | Wide (16:9)        |
+| File             | Shows                              | Used in                 |
+|------------------|------------------------------------|-------------------------|
+| `hero.jpg`       | Wall of aluminum shoes             | Top of page             |
+| `shop-1.jpg`     | Tool pegboard and nail bins        | Shop gallery (large)    |
+| `shop-2.jpg`     | Warehouse aisles                   | Shop gallery            |
+| `shop-3.jpg`     | Gas forge on the counter           | Shop gallery            |
+| `shop-4.jpg`     | Shoeing aprons                     | Shop gallery            |
+| `shop-5.jpg`     | ACR aluminum shoe board            | Shop gallery            |
+| `clinic.jpg`     | Showroom shoe display tree         | Clinics section         |
+| `storefront.jpg` | Suite 13 entrance                  | Hours & directions      |
 
-Keep each file under about 500 KB (around 1600px on the long side) so the page loads quickly.
+To swap a photo, replace the file with one of the same name.

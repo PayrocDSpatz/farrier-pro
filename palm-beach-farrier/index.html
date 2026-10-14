@@ -283,8 +283,8 @@ footer.band { padding-block: 2rem; font-size: .85rem; }
           <a class="btn btn-ghost" href="#visit">Hours &amp; directions</a>
         </div>
       </div>
-      <figure class="photo tall" data-photo="hero" style="margin:0">
-        <span>Photo · Shop counter or storefront</span>
+      <figure class="photo tall" style="margin:0">
+        <img src="images/hero.jpg" alt="Wall of aluminum horseshoes on display racks inside the shop" width="1200" height="1600">
       </figure>
     </div>
   </section>
@@ -311,7 +311,7 @@ footer.band { padding-block: 2rem; font-size: .85rem; }
           <span class="code">HS</span>
           <h3>Horseshoes</h3>
           <p>Steel and aluminum, front and hind, in keg sizes. Sport horse, hunter/jumper and pleasure patterns.</p>
-          <ul class="terms"><li>Steel</li><li>Aluminum</li><li>Fronts &amp; hinds</li><li>Clipped &amp; unclipped</li></ul>
+          <ul class="terms"><li>Steel</li><li>Aluminum</li><li>ACR</li><li>Fronts &amp; hinds</li><li>Clipped &amp; unclipped</li></ul>
         </article>
         <article>
           <span class="code">NL</span>
@@ -383,18 +383,18 @@ footer.band { padding-block: 2rem; font-size: .85rem; }
         <h2>Inside Palm Beach Farrier Supply</h2>
       </div>
       <div class="gallery">
-        <figure class="photo" data-photo="shop-1" style="margin:0"><span>Photo · Shelves of shoes</span></figure>
-        <figure class="photo" data-photo="shop-2" style="margin:0"><span>Photo · Nails &amp; tools</span></figure>
-        <figure class="photo" data-photo="shop-3" style="margin:0"><span>Photo · Forge or anvil</span></figure>
-        <figure class="photo" data-photo="shop-4" style="margin:0"><span>Photo · Farrier at work</span></figure>
-        <figure class="photo" data-photo="shop-5" style="margin:0"><span>Photo · The team</span></figure>
+        <figure class="photo" style="margin:0"><img src="images/shop-1.jpg" alt="Pegboard of nippers, pull-offs and tongs beside bins of nails" width="1200" height="1600" loading="lazy"></figure>
+        <figure class="photo" style="margin:0"><img src="images/shop-2.jpg" alt="Warehouse aisles stacked with boxed shoes and nails" width="1600" height="823" loading="lazy"></figure>
+        <figure class="photo" style="margin:0"><img src="images/shop-3.jpg" alt="Stainless steel gas forge on the shop counter" width="1200" height="1600" loading="lazy"></figure>
+        <figure class="photo" style="margin:0"><img src="images/shop-4.jpg" alt="Leather shoeing aprons hanging on a rack" width="1200" height="1600" loading="lazy"></figure>
+        <figure class="photo" style="margin:0"><img src="images/shop-5.jpg" alt="ACR aluminum horseshoe display board" width="1600" height="1200" loading="lazy"></figure>
       </div>
     </div>
   </section>
 
   <section class="block" id="clinics" style="padding-top:0">
     <div class="wrap clinic">
-      <figure class="photo wide" data-photo="clinic" style="margin:0"><span>Photo · Clinic or demonstration</span></figure>
+      <figure class="photo wide" style="margin:0"><img src="images/clinic.jpg" alt="The showroom floor with a display tree of horseshoes" width="1600" height="800" loading="lazy"></figure>
       <div class="clinic-copy">
         <span class="tag">Clinics</span>
         <h2>Clinics for working farriers</h2>
@@ -419,7 +419,8 @@ footer.band { padding-block: 2rem; font-size: .85rem; }
             3500 Fairlane Farms Rd, Suite 13<br>
             Wellington, FL 33414
           </address>
-          <p class="muted" style="margin-top:.6rem">In Fairlane Farms, 1.5 miles east of the show grounds.</p>
+          <p class="muted" style="margin-top:.6rem">In Fairlane Farms, 1.5 miles east of the show grounds. Look for the HORSESHOE sign over Suite 13.</p>
+          <figure class="photo" style="margin:1rem 0 0"><img src="images/storefront.jpg" alt="Shop entrance at Suite 13 with the HORSESHOE sign and Palm Beach Farrier Supply logo on the door" width="1600" height="1200" loading="lazy"></figure>
           <div class="actions">
             <a class="btn btn-primary" href="https://www.google.com/maps/search/?api=1&amp;query=3500+Fairlane+Farms+Rd+13+Wellington+FL+33414" target="_blank" rel="noopener">Get directions</a>
           </div>
@@ -466,16 +467,6 @@ footer.band { padding-block: 2rem; font-size: .85rem; }
     if (row) row.classList.add('today');
     document.getElementById('yr').textContent = new Date().getFullYear();
   })();
-
-  // Photo slots: drop images/<name>.jpg (e.g. images/hero.jpg) next to this page
-  // and it replaces the matching placeholder. Missing files leave the placeholder.
-  document.querySelectorAll('.photo[data-photo]').forEach(function (slot) {
-    var name = slot.getAttribute('data-photo');
-    var img = new Image();
-    img.alt = slot.textContent.replace('Photo ·', '').trim();
-    img.onload = function () { slot.appendChild(img); };
-    img.src = 'images/' + name + '.jpg';
-  });
 
   // Copy buttons for the phone number and email.
   document.querySelectorAll('.copy-btn').forEach(function (btn) {
