@@ -815,6 +815,7 @@
       <div class="field" style="flex:1;"><label>Shoeing Cycle (weeks)</label><input type="number" id="hf-cycle" min="1" placeholder="6"></div>
       <div class="field" style="flex:1;"><label>Shoe Size</label><input type="text" id="hf-shoe-size" placeholder="00"></div>
     </div>
+    <div class="field"><label>Last Service Date</label><input type="date" id="hf-last-service"></div>
     <div class="field"><label>Shoe Type</label><input type="text" id="hf-shoe-type" placeholder="Steel, aluminum, barefoot…"></div>
     <div class="field"><label>Gait Notes</label><textarea id="hf-gait" placeholder="Interfering, forging, stance…" rows="2"></textarea></div>
     <div class="field"><label>Hoof Notes</label><textarea id="hf-hoof" placeholder="Sole thickness, wall quality…" rows="2"></textarea></div>
@@ -842,6 +843,10 @@
     <div class="card">
       <div class="card-title">Profile</div>
       <div id="horse-detail-profile"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🕘 Service History</div>
+      <div id="horse-detail-history"></div>
     </div>
     <div class="card">
       <div class="card-title">Photos</div>
@@ -2071,6 +2076,7 @@ async function loadCustomerDetail(c) {
             <div>
               <div class="customer-row-name">${h.name || 'Unnamed'}</div>
               <div class="customer-row-sub">${[h.breed, h.color].filter(Boolean).join(' · ') || 'No details yet'}</div>
+              ${h.lastServiceDate ? `<div class="customer-row-sub">🕘 Last serviced ${fmtDate(h.lastServiceDate)}${fmtNextDue(h) ? ` · Due ${fmtNextDue(h)}` : ''}</div>` : ''}
             </div>
             <div class="customer-row-arrow">›</div>
           </div>
@@ -4501,7 +4507,8 @@ function startNewHorse(customer, returnTo = '') {
   state.editingHorseId = null;
   document.getElementById('horse-form-title').textContent = 'New Horse';
   document.getElementById('hf-save-btn').textContent = 'Save Horse';
-  ['hf-name','hf-breed','hf-dob','hf-color','hf-cycle','hf-shoe-size','hf-shoe-type','hf-gait','hf-hoof','hf-issues'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['hf-name','hf-breed','hf-dob','hf-color','hf-cycle','hf-last-service','hf-shoe-size','hf-shoe-type','hf-gait','hf-hoof','hf-issues'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('hf-last-service').dataset.original = '';
   document.getElementById('hf-sex').value = '';
   resetNewHorsePhotoIdentify();
   document.getElementById('hf-photo-identify-section').style.display = '';
@@ -4519,6 +4526,8 @@ function startEditHorse(h) {
   document.getElementById('hf-sex').value = h.sex || '';
   document.getElementById('hf-color').value = h.color || '';
   document.getElementById('hf-cycle').value = h.shoeingCycleWeeks || '';
+  document.getElementById('hf-last-service').value = toDateInputValue(h.lastServiceDate);
+  document.getElementById('hf-last-service').dataset.original = document.getElementById('hf-last-service').value;
   document.getElementById('hf-shoe-size').value = h.shoeSize || '';
   document.getElementById('hf-shoe-type').value = h.shoeType || '';
   document.getElementById('hf-gait').value = h.gaitNotes || '';
@@ -4553,6 +4562,16 @@ async function saveHorse() {
     knownIssues: document.getElementById('hf-issues').value.trim(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
+  // Last Service Date is entered by hand for a horse serviced before it was in the
+  // app (e.g. a new client's horse shod last week elsewhere). Invoices keep it current
+  // after that, so it's only written when the farrier actually changed it here.
+  const lastSvcInput = document.getElementById('hf-last-service');
+  if (lastSvcInput.value !== (lastSvcInput.dataset.original || '')) {
+    const [y, m, d] = lastSvcInput.value.split('-').map(Number);
+    fields.lastServiceDate = lastSvcInput.value
+      ? firebase.firestore.Timestamp.fromDate(new Date(y, m - 1, d, 12))
+      : null;
+  }
 
   const suffix = netState.online ? '' : ' (will sync when back online)';
   if (editingId) {
@@ -4612,7 +4631,8 @@ function renderHorseProfileCard(h) {
   document.getElementById('horse-detail-name').textContent = h.name || 'Horse';
   const rows = [
     ['Owner', h.customerName],
-    ['Last Service', h.lastServiceName ? `${h.lastServiceName} · ${fmtDate(h.lastServiceDate)}` : ''],
+    ['Last Service', h.lastServiceDate ? [h.lastServiceName, fmtDate(h.lastServiceDate)].filter(Boolean).join(' · ') : ''],
+    ['Next Due', fmtNextDue(h)],
     ['Breed', h.breed], ['Date of Birth', h.dob], ['Sex', h.sex], ['Color / Markings', h.color],
     ['Shoeing Cycle', h.shoeingCycleWeeks ? `${h.shoeingCycleWeeks} weeks` : ''],
     ['Shoe Size', h.shoeSize], ['Shoe Type', h.shoeType],
@@ -4627,7 +4647,41 @@ function openHorseDetail(h) {
   state.currentHorse = h;
   renderHorseProfileCard(h);
   renderHorsePhotoGrid();
+  renderHorseServiceHistory(h);
   goTo('screen-horse-detail');
+}
+
+// Every invoice with a line for this horse, newest first — answers "when did you
+// last do Biscuit?" without paging through invoices. Lines match by horseId, or by
+// name for older lines saved before horses had ids.
+async function renderHorseServiceHistory(h) {
+  const el = document.getElementById('horse-detail-history');
+  el.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">Loading…</div>`;
+  const name = String(h.name || '').trim().toLowerCase();
+  let visits = [];
+  try {
+    const snap = await db.collection('invoices')
+      .where('farrierId', '==', bizId())
+      .where('customerName', '==', h.customerName || state.customer?.name || '')
+      .get();
+    visits = snap.docs.map(d => ({ id: d.id, ...d.data() })).map(inv => {
+      const lines = (inv.items || []).filter(it => it.horseId
+        ? it.horseId === h.id
+        : (name && String(it.horseName || '').trim().toLowerCase() === name));
+      return lines.length ? { inv, lines } : null;
+    }).filter(Boolean)
+      .sort((a, b) => (b.inv.createdAt?.toMillis?.() || 0) - (a.inv.createdAt?.toMillis?.() || 0));
+  } catch (e) { console.error('Error loading horse history:', e); }
+  if (state.currentHorse?.id !== h.id) return; // user moved on to another horse
+  el.innerHTML = visits.length
+    ? visits.map(({ inv, lines }) => `
+        <div class="info-row">
+          <div class="info-row-label">${fmtDate(inv.createdAt)}</div>
+          <div class="info-row-value">${escapeHtml(lines.map(l => l.description).filter(Boolean).join(', ') || '—')}
+            <div style="color:var(--text-muted); font-size:0.78rem;">$${lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0).toFixed(2)}${inv.invoiceNumber ? ` · #${escapeHtml(inv.invoiceNumber)}` : ''}</div>
+          </div>
+        </div>`).join('')
+    : `<div style="color:var(--text-muted); font-size:0.85rem;">${h.lastServiceDate ? `Last serviced ${fmtDate(h.lastServiceDate)}${h.lastServiceName ? ' · ' + escapeHtml(h.lastServiceName) : ''}` : 'No invoiced services for this horse yet'}</div>`;
 }
 
 // A horse that's appeared on a real invoice or appointment is service/billing
@@ -5561,6 +5615,23 @@ function fmtTime(t) {
   const [h, m] = t.split(':');
   const hr = parseInt(h);
   return `${hr > 12 ? hr - 12 : hr || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
+}
+
+// YYYY-MM-DD for a <input type="date">, in local time.
+function toDateInputValue(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  if (isNaN(d)) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Last service + shoeing cycle → next due date, flagged when it's already passed.
+function fmtNextDue(h) {
+  if (!h.lastServiceDate || !h.shoeingCycleWeeks) return '';
+  const last = h.lastServiceDate.toDate ? h.lastServiceDate.toDate() : new Date(h.lastServiceDate);
+  if (isNaN(last)) return '';
+  const due = new Date(last.getTime() + h.shoeingCycleWeeks * 7 * 86400000);
+  return fmtDate(due) + (due < new Date() ? ' ⚠️ overdue' : '');
 }
 
 function fmtDate(ts) {

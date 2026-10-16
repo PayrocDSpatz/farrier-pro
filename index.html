@@ -4761,19 +4761,31 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {customerDetail.horses.map(h => (
+                  {customerDetail.horses.map(h => {
+                    const last = horseServiceHistory(h, customerDetail.invoices)[0];
+                    const horseDate = toJsDate(h.lastServiceDate);
+                    const useInvoice = last?.date && !(horseDate && horseDate - last.date > 86400000);
+                    const lastDate = useInvoice ? last.date : horseDate;
+                    const lastWhat = useInvoice ? last.lines.map(l => l.description).filter(Boolean).join(', ') : (h.lastServiceName || '');
+                    const due = nextDueDate(lastDate, h.shoeingCycleWeeks);
+                    return (
                     <div key={h.id} onClick={() => setHorseModal({ horse: h })}
                       style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.08)', borderRadius: 8, cursor: 'pointer', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <div>
                         <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{h.name || 'Unnamed'}</span>
                         {h.breed && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}> — {h.breed}</span>}
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                          {lastDate ? <>🕘 Last serviced {fmtServiceDate(lastDate)}{lastWhat ? ` · ${lastWhat}` : ''}</> : 'No service on record yet'}
+                          {due && <span style={{ color: due < new Date() ? '#ef4444' : 'inherit' }}> · Due {fmtServiceDate(due)}{due < new Date() ? ' (overdue)' : ''}</span>}
+                        </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                         {(h.photos || []).length > 0 && <span>📷 {h.photos.length}</span>}
                         <span>›</span>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -4915,6 +4927,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               userId={userId}
               onClose={() => setHorseModal(null)}
               onSaved={() => refreshHorses()}
+              history={horseServiceHistory(horseModal.horse, customerDetail?.invoices)}
             />
           )}
         </div>
@@ -11364,7 +11377,38 @@ function CalendarView({ userId }) {
       });
     }
 
-    function HorseEditModal({ horse, customer, userId, onClose, onSaved }) {
+    // A horse's service history, newest first, built from the customer's invoices:
+    // one entry per invoice that has a line for this horse. Lines are matched by
+    // horseId, or by name for older lines saved before horses had ids.
+    function horseServiceHistory(horse, invoices) {
+      if (!horse) return [];
+      const name = String(horse.name || '').trim().toLowerCase();
+      return (invoices || []).map(inv => {
+        const lines = (inv.items || []).filter(it => it.horseId
+          ? it.horseId === horse.id
+          : (name && String(it.horseName || '').trim().toLowerCase() === name));
+        if (!lines.length) return null;
+        const date = inv.createdAt?.toDate ? inv.createdAt.toDate() : (inv.createdAt ? new Date(inv.createdAt) : null);
+        return { id: inv.id, date, invoiceNumber: inv.invoiceNumber, status: inv.status, lines };
+      }).filter(Boolean).sort((a, b) => (b.date || 0) - (a.date || 0));
+    }
+
+    const fmtServiceDate = (d) => d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
+    const toJsDate = (ts) => !ts ? null : (ts.toDate ? ts.toDate() : new Date(ts));
+    // YYYY-MM-DD for a date input, in local time.
+    const toDateInputValue = (ts) => {
+      const d = toJsDate(ts);
+      return d && !isNaN(d) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '';
+    };
+    // Last service + shoeing cycle (weeks) → next due date, or null if either is missing.
+    const nextDueDate = (lastServiceDate, cycleWeeks) => {
+      const last = toJsDate(lastServiceDate);
+      if (!last || isNaN(last) || !cycleWeeks) return null;
+      return new Date(last.getTime() + parseInt(cycleWeeks) * 7 * 86400000);
+    };
+
+    function HorseEditModal({ horse, customer, userId, onClose, onSaved, history = [] }) {
       // savedHorse becomes non-null once the horse actually has a Firestore doc —
       // for a brand-new horse that's only true after the first Save, which is what
       // unlocks the Photos section below (a photo needs a horseId to attach to).
@@ -11375,6 +11419,10 @@ function CalendarView({ userId }) {
       const [sex, setSex] = useState(horse?.sex || '');
       const [color, setColor] = useState(horse?.color || '');
       const [shoeingCycleWeeks, setShoeingCycleWeeks] = useState(horse?.shoeingCycleWeeks || '');
+      // Entered by hand for a horse serviced before it was in the app (e.g. a new
+      // client's horse shod last week elsewhere); invoices keep it current after that.
+      const initialLastService = toDateInputValue(horse?.lastServiceDate);
+      const [lastServiceInput, setLastServiceInput] = useState(initialLastService);
       const [shoeSize, setShoeSize] = useState(horse?.shoeSize || '');
       const [shoeType, setShoeType] = useState(horse?.shoeType || '');
       const [gaitNotes, setGaitNotes] = useState(horse?.gaitNotes || '');
@@ -11397,6 +11445,12 @@ function CalendarView({ userId }) {
             gaitNotes: gaitNotes.trim(), hoofNotes: hoofNotes.trim(), knownIssues: knownIssues.trim(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           };
+          if (lastServiceInput !== initialLastService) {
+            const [y, m, d] = lastServiceInput.split('-').map(Number);
+            payload.lastServiceDate = lastServiceInput
+              ? firebase.firestore.Timestamp.fromDate(new Date(y, m - 1, d, 12))
+              : null;
+          }
           if (savedHorse?.id) {
             await db.collection('horses').doc(savedHorse.id).update(payload);
             setSavedHorse(prev => ({ ...prev, ...payload }));
@@ -11465,6 +11519,30 @@ function CalendarView({ userId }) {
               <button className="btn btn-sm btn-outline" onClick={onClose}>✕ Close</button>
             </div>
 
+            {savedHorse?.id && (
+              <div style={{ marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid var(--border)' }}>
+                <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', color: 'var(--primary)' }}>🕘 Service History</h3>
+                {history.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No invoiced services for this horse yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 260, overflowY: 'auto' }}>
+                    {history.map(v => (
+                      <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(38,131,251,0.08)', borderRadius: 8, fontSize: '0.875rem' }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{fmtServiceDate(v.date)}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{v.lines.map(l => l.description).filter(Boolean).join(', ') || '—'}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <div>${v.lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0).toFixed(2)}</div>
+                          {v.invoiceNumber && <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>#{v.invoiceNumber}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {[
               { label: 'Name *', val: name, set: setName, ph: 'Biscuit' },
               { label: 'Breed', val: breed, set: setBreed, ph: 'Quarter Horse' },
@@ -11490,6 +11568,25 @@ function CalendarView({ userId }) {
                   <option value="Gelding" style={{background:'#1e2d45', color:'#e8f0fe'}}>Gelding</option>
                   <option value="Stallion" style={{background:'#1e2d45', color:'#e8f0fe'}}>Stallion</option>
                 </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.75rem' }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Last Service Date</label>
+                <input type="date" value={lastServiceInput} onChange={e => setLastServiceInput(e.target.value)} style={inputStyle} />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Next Due</label>
+                {(() => {
+                  const [y, m, d] = (lastServiceInput || '').split('-').map(Number);
+                  const due = nextDueDate(lastServiceInput ? new Date(y, m - 1, d, 12) : null, shoeingCycleWeeks);
+                  return (
+                    <div style={{ ...inputStyle, border: '2px dashed var(--border)', color: due && due < new Date() ? '#ef4444' : 'var(--text-muted)' }}>
+                      {due ? `${fmtServiceDate(due)}${due < new Date() ? ' — overdue' : ''}` : 'Set last service + cycle'}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
