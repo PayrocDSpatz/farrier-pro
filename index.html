@@ -27,6 +27,7 @@
   <script src="/api-auth.js"></script>
   <script src="/lib/pricing.js"></script>
   <script src="/lib/owner-dashboard.js"></script>
+  <script src="/lib/horse-history.js"></script>
   
   <!-- Google API for Calendar -->
   <script src="https://apis.google.com/js/api.js"></script>
@@ -3884,6 +3885,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         { id: 'appointments', label: 'Appointments', icon: '📋' },
         { id: 'invoices', label: 'Invoices', icon: '💰' },
         { id: 'customers', label: 'Customers', icon: '👥' },
+        { id: 'horses', label: 'Horses', icon: '🐴' },
         { id: 'services', label: 'Services', icon: '🧾' },
         // Business-wide revenue: not for a team member with the farrier role (api/_lib/team.js).
         ...(window.FarriTeam?.role === 'farrier' ? [] : [{ id: 'reports', label: 'Reports', icon: '📈' }]),
@@ -3975,6 +3977,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 ]},
                 { label: '👥 Clients', items: [
                   { id: 'customers', label: 'Customers', icon: '👥' },
+                  { id: 'horses', label: 'Horses', icon: '🐴' },
                 ]},
                 { label: '⚙️ Manage', items: [
                   { id: 'services', label: 'Services', icon: '🧾' },
@@ -4103,6 +4106,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'appointments' && <AppointmentsView userId={farrierId} userProfile={userProfile} />}
             {tab === 'invoices' && <InvoicesView userId={farrierId} userProfile={userProfile} />}
             {tab === 'customers' && <CustomersView userId={farrierId} userProfile={userProfile} />}
+            {tab === 'horses' && <HorsesView userId={farrierId} />}
             {tab === 'sponsors' && isSponsorAdmin && <SponsorBannersView />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
             {tab === 'inventory' && <InventoryView userId={farrierId} />}
@@ -5017,6 +5021,258 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   <button className="btn btn-sm" style={{ background: '#ef4444', color: '#fff' }} onClick={() => deleteCustomer(confirmDelete)}>🗑️ Delete</button>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ─────────────────────────────────────────
+    // HORSES VIEW — find a horse by its name or its owner's name (an owner match
+    // lists all of that customer's horses), then see its whole history: last and
+    // next service, every appointment and every invoice line for that horse
+    // (lib/horse-history.js decides what belongs to it).
+    // ─────────────────────────────────────────
+    function HorsesView({ userId }) {
+      const [horses, setHorses] = useState([]);
+      const [customersById, setCustomersById] = useState({});
+      const [appointments, setAppointments] = useState([]);
+      const [invoices, setInvoices] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [search, setSearch] = useState('');
+      const [selected, setSelected] = useState(null);
+      const [editHorse, setEditHorse] = useState(null);
+
+      const load = async () => {
+        if (!db || !userId) return;
+        setLoading(true);
+        try {
+          // Appointments and invoices don't index horse ids, so pull the farrier's docs
+          // and match client-side (same as mobile.html's deleteHorse()).
+          const [hSnap, cSnap, aSnap, iSnap] = await Promise.all([
+            db.collection('horses').where('farrierId', '==', userId).get(),
+            db.collection('customers').where('farrierId', '==', userId).get(),
+            db.collection('appointments').where('farrierId', '==', userId).get(),
+            db.collection('invoices').where('farrierId', '==', userId).get(),
+          ]);
+          const custs = {};
+          cSnap.docs.forEach(d => { custs[d.id] = { id: d.id, ...d.data() }; });
+          const list = hSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setCustomersById(custs);
+          setHorses(list);
+          setAppointments(aSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setInvoices(iSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          setSelected(prev => prev ? (list.find(h => h.id === prev.id) || null) : prev);
+        } catch (e) {
+          console.error('Error loading horses:', e);
+        }
+        setLoading(false);
+      };
+
+      useEffect(() => { load(); }, [userId]);
+
+      const ownerName = (h) => customersById[h.customerId]?.name || h.customerName || 'No owner';
+
+      const fmtDay = (d) => d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+      const fmtMoney = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+      const statusColor = { pending: '#f59e0b', confirmed: '#10b981', cancelled: '#ef4444', invoiced: '#6366f1', completed: '#10b981' };
+      const invStatusColor = { paid: '#10b981', outstanding: '#ef4444', partial: '#f59e0b' };
+      const pill = (text, color) => (
+        <span style={{ padding: '0.15rem 0.6rem', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, background: `${color}22`, color, textTransform: 'capitalize' }}>{text}</span>
+      );
+      const rowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.9rem', background: 'rgba(38,131,251,0.08)', borderRadius: 8, flexWrap: 'wrap', gap: '0.5rem' };
+
+      // ── HORSE DETAIL ──
+      if (selected) {
+        const hist = window.FarriHorseHistory.build(selected, appointments, invoices);
+        const owner = customersById[selected.customerId];
+        const next = hist.nextService;
+        const profile = [
+          ['Breed', selected.breed], ['Color', selected.color], ['Sex', selected.sex], ['Date of Birth', selected.dob],
+          ['Shoeing Cycle', selected.shoeingCycleWeeks ? `${selected.shoeingCycleWeeks} weeks` : ''],
+          ['Shoe Size', selected.shoeSize], ['Shoe Type', selected.shoeType],
+          ['Gait Notes', selected.gaitNotes], ['Hoof Notes', selected.hoofNotes], ['Known Issues', selected.knownIssues],
+        ].filter(([, v]) => v);
+
+        return (
+          <div>
+            <button className="btn btn-sm btn-outline" onClick={() => setSelected(null)} style={{ marginBottom: '1rem' }}>← Back to Horses</button>
+
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h2 style={{ margin: '0 0 0.25rem', color: 'var(--primary)', fontSize: '1.6rem' }}>🐴 {selected.name || 'Unnamed'}</h2>
+                  <div style={{ fontSize: '0.95rem', color: 'var(--text)' }}>
+                    👤 {ownerName(selected)}
+                    {owner?.farmName && <span style={{ color: 'var(--text-muted)' }}> · 🏠 {owner.farmName}</span>}
+                    {owner?.phone && <span style={{ color: 'var(--text-muted)' }}> · 📞 {fmtPhone(owner.phone)}</span>}
+                  </div>
+                </div>
+                <button className="btn btn-sm btn-outline" onClick={() => setEditHorse(selected)}>✏️ Edit Horse</button>
+              </div>
+              {profile.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.5rem 1rem', marginTop: '1rem' }}>
+                  {profile.map(([label, v]) => (
+                    <div key={label}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+                      <div style={{ fontSize: '0.92rem', color: 'var(--text)', whiteSpace: 'pre-wrap' }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(selected.photos || []).length > 0 && (
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+                  {selected.photos.map((p, i) => (
+                    <a key={p.storagePath || i} href={p.url} target="_blank" rel="noopener noreferrer">
+                      <img src={p.url} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, display: 'block' }} />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+              {[
+                { icon: '🔧', label: 'Last Service', val: hist.lastService ? fmtDay(hist.lastService.date) : 'None yet', sub: hist.lastService?.label, color: '#10b981' },
+                { icon: '📅', label: next?.estimated ? (next.overdue ? 'Next Service (overdue)' : 'Next Service (estimated)') : 'Next Service',
+                  val: next ? fmtDay(next.date) : 'Not scheduled',
+                  sub: next ? next.label : (selected.shoeingCycleWeeks ? '' : 'Set a shoeing cycle to estimate'),
+                  color: next?.overdue ? '#ef4444' : '#2683FB' },
+                { icon: '📋', label: 'Appointments', val: hist.appointments.length, color: '#8b5cf6' },
+                { icon: '💰', label: 'Billed for this horse', val: fmtMoney(hist.totalBilled), sub: `${hist.invoices.length} invoice${hist.invoices.length === 1 ? '' : 's'}`, color: '#f59e0b' },
+              ].map(s => (
+                <div key={s.label} style={{ background: 'var(--surface)', borderRadius: 12, padding: '1rem 1.25rem', boxShadow: '0 2px 12px rgba(0,0,0,0.3)', border: `2px solid ${s.color}22` }}>
+                  <div style={{ fontSize: '1.4rem' }}>{s.icon}</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 700, color: s.color }}>{s.val}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#8ab4d8' }}>{s.label}</div>
+                  {s.sub && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{s.sub}</div>}
+                </div>
+              ))}
+            </div>
+
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <h2 style={{ marginBottom: '1rem', fontSize: '1.1rem', color: 'var(--primary)' }}>📋 Appointments</h2>
+              {hist.appointments.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem', fontSize: '0.9rem' }}>No appointments for this horse yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {hist.appointments.map(apt => (
+                    <div key={apt.id} style={rowStyle}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{fmtDay(apt.date)} {apt.requestedTime ? `at ${apt.requestedTime}` : ''}</span>
+                        {hist.upcoming.includes(apt) && <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#2683FB', fontWeight: 700 }}>UPCOMING</span>}
+                        {apt.horseServices.length > 0 && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text)', opacity: 0.85, marginTop: '0.2rem' }}>🔧 {apt.horseServices.join(', ')}</div>
+                        )}
+                        {apt.comments && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>💬 {apt.comments}</div>}
+                      </div>
+                      {pill(apt.status || 'pending', statusColor[apt.status] || '#94a3b8')}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="card">
+              <h2 style={{ marginBottom: '1rem', fontSize: '1.1rem', color: 'var(--primary)' }}>💰 Invoices</h2>
+              {hist.invoices.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem', fontSize: '0.9rem' }}>No invoices for this horse yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {hist.invoices.map(inv => (
+                    <div key={inv.id} style={rowStyle}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Invoice #{inv.invoiceNumber || inv.id.slice(-6).toUpperCase()}</span>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{fmtDay(inv.date)}</div>
+                        {inv.horseLines.map((l, i) => (
+                          <div key={i} style={{ fontSize: '0.8rem', color: 'var(--text)', opacity: 0.85 }}>
+                            🔧 {l.description || 'Service'}{Number(l.qty) > 1 ? ` × ${l.qty}` : ''} — {fmtMoney((Number(l.amount) || 0) * (Number(l.qty) || 1))}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 700, fontSize: '1rem' }}>{fmtMoney(inv.horseTotal)}</div>
+                        {inv.horseTotal !== Number(inv.total) && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>of {fmtMoney(inv.total)} invoice</div>}
+                        {pill(inv.status || 'outstanding', invStatusColor[inv.status] || '#94a3b8')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {editHorse && (
+              <HorseEditModal
+                horse={editHorse}
+                customer={{ id: editHorse.customerId || '', name: ownerName(editHorse) }}
+                userId={userId}
+                onClose={() => setEditHorse(null)}
+                onSaved={() => load()}
+              />
+            )}
+          </div>
+        );
+      }
+
+      // ── HORSE LIST ── search matches the horse's name or its owner's name / farm, so
+      // typing a customer's name lists all of that customer's horses.
+      const q = search.trim().toLowerCase();
+      const filtered = horses.filter(h => {
+        if (!q) return true;
+        const owner = customersById[h.customerId];
+        return [h.name, ownerName(h), owner?.farmName, h.breed].some(v => String(v || '').toLowerCase().includes(q));
+      });
+      const groups = {};
+      filtered.forEach(h => { (groups[ownerName(h)] = groups[ownerName(h)] || []).push(h); });
+      const owners = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+      owners.forEach(o => groups[o].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))));
+
+      return (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <h2 style={{ margin: 0, color: 'var(--primary)' }}>🐴 Horses ({filtered.length})</h2>
+          </div>
+          <input
+            type="text" placeholder="🔍 Search by horse name or customer name…" autoFocus
+            value={search} onChange={e => setSearch(e.target.value)}
+            style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid var(--border)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box', marginBottom: '1.25rem' }}
+          />
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>⏳ Loading horses…</div>
+          ) : owners.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+              {horses.length === 0 ? 'No horses on file yet. Add horses from a customer\'s record.' : 'No horses or customers match your search.'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {owners.map(o => (
+                <div key={o}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
+                    👤 {o} · {groups[o].length} horse{groups[o].length === 1 ? '' : 's'}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    {groups[o].map(h => {
+                      const hist = window.FarriHorseHistory.build(h, appointments, invoices);
+                      return (
+                        <div key={h.id} onClick={() => setSelected(h)} style={{ ...rowStyle, cursor: 'pointer' }}>
+                          <div>
+                            <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{h.name || 'Unnamed'}</span>
+                            {h.breed && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}> — {h.breed}</span>}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', flexWrap: 'wrap' }}>
+                            <span>Last: {hist.lastService ? fmtDay(hist.lastService.date) : '—'}</span>
+                            <span style={{ color: hist.nextService?.overdue ? '#ef4444' : undefined }}>
+                              Next: {hist.nextService ? fmtDay(hist.nextService.date) + (hist.nextService.estimated ? '*' : '') : '—'}
+                            </span>
+                            <span>›</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>* estimated from the last service and the horse's shoeing cycle</div>
             </div>
           )}
         </div>
