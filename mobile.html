@@ -446,7 +446,7 @@
   <div style="padding:12px 16px 0; flex-shrink:0; background:var(--bg);">
     <div class="search-wrap" style="margin-bottom:8px;">
       <span class="search-icon">🔍</span>
-      <input class="search-input" id="horse-search-input" type="search" placeholder="Horse name…" oninput="filterHorses(this.value)" autocomplete="off">
+      <input class="search-input" id="horse-search-input" type="search" placeholder="Horse or customer name…" oninput="filterHorses(this.value)" autocomplete="off">
     </div>
   </div>
   <div class="scroll-body" style="padding-top:8px;">
@@ -842,6 +842,10 @@
     <div class="card">
       <div class="card-title">Profile</div>
       <div id="horse-detail-profile"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Service History</div>
+      <div id="horse-detail-history"></div>
     </div>
     <div class="card">
       <div class="card-title">Photos</div>
@@ -1247,6 +1251,7 @@
 <script src="/api-auth.js"></script>
 <script src="/lib/pricing.js"></script>
 <script src="/lib/owner-dashboard.js"></script>
+<script src="/lib/horse-history.js"></script>
 
 <script>
 // ── FIREBASE INIT ──
@@ -4628,6 +4633,55 @@ function openHorseDetail(h) {
   renderHorseProfileCard(h);
   renderHorsePhotoGrid();
   goTo('screen-horse-detail');
+  loadHorseHistory(h);
+}
+
+// Last/next service plus every appointment and invoice line for this horse
+// (lib/horse-history.js decides what belongs to it). Same pull-and-filter as
+// deleteHorse() below; offline it reads whatever the Firestore cache holds.
+async function loadHorseHistory(h) {
+  const el = document.getElementById('horse-detail-history');
+  el.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  try {
+    const [aSnap, iSnap] = await Promise.all([
+      db.collection('appointments').where('farrierId', '==', bizId()).get(),
+      db.collection('invoices').where('farrierId', '==', bizId()).get(),
+    ]);
+    if (state.currentHorse?.id !== h.id) return; // moved on to another horse meanwhile
+    const hist = FarriHorseHistory.build(h,
+      aSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      iSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const last = hist.lastService, next = hist.nextService;
+    const nextLabel = next ? (next.estimated ? (next.overdue ? 'Next Service (overdue)' : 'Next Service (est.)') : 'Next Service') : 'Next Service';
+    const rows = [
+      ['Last Service', last ? `${fmtDate(last.date)}${last.label ? ' · ' + esc(last.label) : ''}` : 'None yet'],
+      [nextLabel, next ? `${next.overdue ? '<span style="color:var(--danger);font-weight:700;">' : ''}${fmtDate(next.date)}${next.overdue ? '</span>' : ''}${next.label ? ' · ' + esc(next.label) : ''}`
+        : (h.shoeingCycleWeeks ? 'Not scheduled' : 'Not scheduled — set a shoeing cycle to estimate')],
+      ['Billed', `$${hist.totalBilled.toFixed(2)} on ${hist.invoices.length} invoice${hist.invoices.length === 1 ? '' : 's'}`],
+    ];
+    const apptHtml = hist.appointments.map(a => `
+      <div class="appt-row">
+        <div class="appt-row-top">${a.date ? fmtDate(a.date) : esc(a.requestedDate)} ${a.requestedTime ? '@ ' + fmtTime(a.requestedTime) : ''} <span class="badge badge-${a.status === 'cancelled' ? 'danger' : a.status === 'confirmed' ? 'success' : 'warning'}">${esc(a.status || 'pending')}</span></div>
+        <div class="appt-row-bottom">${esc(a.horseServices.join(', ')) || '—'}</div>
+      </div>`).join('');
+    const invHtml = hist.invoices.map(inv => `
+      <div class="invoice-row ${esc(inv.status)}">
+        <div class="invoice-row-top">
+          <div class="invoice-row-num">#${esc(inv.invoiceNumber || inv.id.slice(-6).toUpperCase())}</div>
+          <div class="invoice-row-amount">$${inv.horseTotal.toFixed(2)}</div>
+        </div>
+        <div class="invoice-row-bottom">${fmtDate(inv.date)} · ${esc(inv.horseLines.map(l => l.description).filter(Boolean).join(', ') || 'Service')} · <span class="badge badge-${inv.status === 'paid' ? 'success' : 'warning'}">${esc(inv.status || 'outstanding')}</span></div>
+      </div>`).join('');
+    el.innerHTML = rows.map(([label, v]) => `<div class="info-row"><div class="info-row-label">${label}</div><div class="info-row-value">${v}</div></div>`).join('')
+      + `<div class="section-label" style="margin-top:12px;">📋 Appointments (${hist.appointments.length})</div>`
+      + (apptHtml || '<div style="color:var(--text-muted); font-size:0.85rem;">No appointments for this horse yet</div>')
+      + `<div class="section-label" style="margin-top:12px;">📑 Invoices (${hist.invoices.length})</div>`
+      + (invHtml || '<div style="color:var(--text-muted); font-size:0.85rem;">No invoices for this horse yet</div>');
+  } catch (e) {
+    console.error('Horse history error:', e);
+    el.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">Couldn't load history${netState.online ? '' : ' while offline'}.</div>`;
+  }
 }
 
 // A horse that's appeared on a real invoice or appointment is service/billing
