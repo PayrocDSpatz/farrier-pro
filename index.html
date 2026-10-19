@@ -2160,6 +2160,15 @@ async function ensureFarriTechfile_(uid, profile) {
     if (!snap.exists) {
       throw new Error("Farrier profile was not created. This is usually a Firestore Rules/Permissions issue.");
     }
+    // A new profile (only signups pass createdAt): text FarriTech's owner. The server sends
+    // it once per farrier, so a retry or recovery can't double up.
+    if (profile && profile.createdAt) {
+      fetch("/api/send-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alert: "new_signup" }),
+      }).catch(() => {});
+    }
     return snap.data();
   } catch (e) {
     const code = e?.code || "";
