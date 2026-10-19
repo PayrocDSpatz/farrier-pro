@@ -2127,6 +2127,20 @@ async function seedDefaultServicesIfEmpty_(userId) {
   console.log("✅ Default services seeded");
 }
 
+// Fire-and-forget: never blocks or fails signup.
+function notifyNewSignup_(uid) {
+  const user = auth && auth.currentUser;
+  if (!user || user.uid !== uid) return;
+  user.getIdToken()
+    .then(token => fetch('/api/send-sms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ action: 'new-signup' }),
+      keepalive: true,
+    }))
+    .catch(e => console.warn('Signup alert failed:', e));
+}
+
 // Ensures the farrier profile doc exists and surfaces permission/config errors clearly
 async function ensureFarriTechfile_(uid, profile) {
   if (!db || !uid) throw new Error("Firestore is not initialized.");
@@ -2147,6 +2161,9 @@ async function ensureFarriTechfile_(uid, profile) {
     if (!snap.exists) {
       throw new Error("Farrier profile was not created. This is usually a Firestore Rules/Permissions issue.");
     }
+    // Every new-account path passes createdAt; text/email the FarriTech owner about it.
+    // The server sends at most one alert per account, so a repeat call is harmless.
+    if (profile && profile.createdAt) notifyNewSignup_(uid);
     return snap.data();
   } catch (e) {
     const code = e?.code || "";

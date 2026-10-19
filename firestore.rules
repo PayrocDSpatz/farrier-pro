@@ -87,6 +87,8 @@ match /sponsorBanners/{bannerId} {
       // Only the owning farrier can update or delete
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.farrierId;
       allow read, update, delete: if isTeamOf(resource.data.farrierId);
+      // The daily stats email (api/daily-stats.js) counts bookings across farriers.
+      allow read: if isServer();
     }
 
     match /customers/{customerId} {

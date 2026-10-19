@@ -7,11 +7,15 @@
 //   1. Add this file to your farrier-pro repo at /api/daily-stats.js
 //   2. Update vercel.json to add the cron config (see bottom of file)
 //   3. Ensure these env vars are set in Vercel:
-//        FIREBASE_API_KEY       — your Firebase Web API key
+//        SERVER_AUTH_EMAIL / SERVER_AUTH_PASSWORD — the server user (api/_lib/firebase-rest.js);
+//                                 the rules only let it, not anonymous callers, read
+//                                 invoices and appointments across farriers
 //        FIREBASE_PROJECT_ID    — farrier-pro
 //        RESEND_API_KEY         — your Resend API key
 //        STATS_EMAIL_TO         — david@dasdigitalai.com
 //        CRON_SECRET            — any random string you pick (e.g. openssl rand -hex 32)
+
+import { serverAuth } from './_lib/firebase-rest.js';
 
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'farrier-pro';
 const BASE_URL   = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
@@ -32,12 +36,15 @@ function val(field) {
   return null;
 }
 
-async function runQuery(structuredQuery, apiKey) {
+async function runQuery(structuredQuery) {
+  // Runs as the server user: an anonymous query over invoices or appointments is denied
+  // by the rules, and one denied query used to fail the whole email.
+  const { idToken } = await serverAuth();
   const res = await fetch(
-    `${BASE_URL}:runQuery?key=${apiKey}`,
+    `${BASE_URL}:runQuery`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
       body: JSON.stringify({ structuredQuery }),
     }
   );
@@ -50,7 +57,7 @@ async function runQuery(structuredQuery, apiKey) {
 }
 
 // Query a collection for docs where `field` is between two timestamps
-async function queryByDateRange(collection, field, startISO, endISO, apiKey) {
+async function queryByDateRange(collection, field, startISO, endISO) {
   return runQuery({
     from: [{ collectionId: collection }],
     where: {
@@ -74,18 +81,29 @@ async function queryByDateRange(collection, field, startISO, endISO, apiKey) {
         ],
       },
     },
-  }, apiKey);
+  });
 }
 
 // Count all docs in a collection (no filter) — used for totals
-async function countAll(collection, apiKey) {
-  const docs = await runQuery({ from: [{ collectionId: collection }] }, apiKey);
+async function countAll(collection) {
+  const docs = await runQuery({ from: [{ collectionId: collection }] });
   return docs.length;
+}
+
+// A section that can't be read shows as empty (and is named in the email) instead of
+// stopping the whole report.
+function orEmpty(promise, label, failures, empty = []) {
+  return promise.catch(err => {
+    console.error(`daily-stats: ${label} failed:`, err.message);
+    failures.push(label);
+    return empty;
+  });
 }
 
 // ─── STATS COLLECTION ────────────────────────────────────────────────────────
 
-async function collectStats(apiKey) {
+async function collectStats() {
+  const failures = [];
   // Yesterday in UTC — Vercel runs at 13:00 UTC = 8 AM ET (EST) / 9 AM ET (EDT)
   const now       = new Date();
   const todayUTC  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -106,13 +124,13 @@ async function collectStats(apiKey) {
   ] = await Promise.all([
     // New paid subscribers — farriers whose subscription activated yesterday
     // createdAt is a timestamp on the farriers collection
-    queryByDateRange('farriers',     'createdAt',  startISO, endISO, apiKey),
+    orEmpty(queryByDateRange('farriers',     'createdAt',  startISO, endISO), 'signups', failures),
     // Leads — landing page form submissions (leads collection)
-    queryByDateRange('leads',        'createdAt',  startISO, endISO, apiKey),
+    orEmpty(queryByDateRange('leads',        'createdAt',  startISO, endISO), 'leads', failures),
     // Bookings submitted by customers yesterday
-    queryByDateRange('appointments', 'createdAt',  startISO, endISO, apiKey),
+    orEmpty(queryByDateRange('appointments', 'createdAt',  startISO, endISO), 'bookings', failures),
     // Invoices paid yesterday
-    queryByDateRange('invoices',     'paidAt',     startISO, endISO, apiKey),
+    orEmpty(queryByDateRange('invoices',     'paidAt',     startISO, endISO), 'revenue', failures),
   ]);
 
   // Revenue: sum paidAmount on invoices paid yesterday
@@ -123,15 +141,15 @@ async function collectStats(apiKey) {
 
   // All-time totals for context
   const [totalFarriers, totalLeads, totalBookings] = await Promise.all([
-    countAll('farriers',     apiKey),
-    countAll('leads',        apiKey),
-    countAll('appointments', apiKey),
+    orEmpty(countAll('farriers'),     'total farriers', failures, 0),
+    orEmpty(countAll('leads'),        'total leads',    failures, 0),
+    orEmpty(countAll('appointments'), 'total bookings', failures, 0),
   ]);
 
   // Active logins — we don't have a lastLoginAt field yet, so we'll check
   // for farriers who have a lastSeen / lastActive field updated yesterday.
   // If the field doesn't exist yet, this returns 0 gracefully.
-  const activeLoginDocs = await queryByDateRange('farriers', 'lastSeen', startISO, endISO, apiKey)
+  const activeLoginDocs = await queryByDateRange('farriers', 'lastSeen', startISO, endISO)
     .catch(() => []);
 
   return {
@@ -146,6 +164,12 @@ async function collectStats(apiKey) {
     totalFarriers,
     totalLeads,
     totalBookings,
+    failures,
+    signupDetails: newSignupDocs.slice(0, 20).map(d => ({
+      business: val(d.document.fields?.businessName) || '—',
+      name:     [val(d.document.fields?.firstName), val(d.document.fields?.lastName)].filter(Boolean).join(' ') || '—',
+      email:    val(d.document.fields?.email) || '—',
+    })),
     // Pass lead details for the table
     leadDetails: newLeadDocs.slice(0, 10).map(d => ({
       name:  val(d.document.fields?.name)  || val(d.document.fields?.fullName) || '—',
@@ -194,6 +218,22 @@ function buildEmailHTML(s) {
             <td style="padding:8px 12px;color:#0f172a;font-weight:600;border-bottom:1px solid #e2e8f0;">${l.name}</td>
             <td style="padding:8px 12px;color:#2563eb;border-bottom:1px solid #e2e8f0;"><a href="mailto:${l.email}" style="color:#2563eb;text-decoration:none;">${l.email}</a></td>
             <td style="padding:8px 12px;color:#475569;border-bottom:1px solid #e2e8f0;">${l.phone}</td>
+          </tr>`).join('')}
+      </table>`;
+
+  const signupsTable = s.signupDetails.length === 0
+    ? `<p style="color:#94a3b8;font-size:13px;text-align:center;padding:16px 0;">No new signups yesterday.</p>`
+    : `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin-top:8px;">
+        <tr style="background:#1e3a5f;">
+          <th style="color:#fff;font-weight:700;padding:8px 12px;text-align:left;border-radius:6px 0 0 0;">Business</th>
+          <th style="color:#fff;font-weight:700;padding:8px 12px;text-align:left;">Name</th>
+          <th style="color:#fff;font-weight:700;padding:8px 12px;text-align:left;border-radius:0 6px 0 0;">Email</th>
+        </tr>
+        ${s.signupDetails.map((f, i) => `
+          <tr style="${rowStyle(i)}">
+            <td style="padding:8px 12px;color:#0f172a;font-weight:600;border-bottom:1px solid #e2e8f0;">${f.business}</td>
+            <td style="padding:8px 12px;color:#475569;border-bottom:1px solid #e2e8f0;">${f.name}</td>
+            <td style="padding:8px 12px;color:#2563eb;border-bottom:1px solid #e2e8f0;"><a href="mailto:${f.email}" style="color:#2563eb;text-decoration:none;">${f.email}</a></td>
           </tr>`).join('')}
       </table>`;
 
@@ -251,8 +291,19 @@ function buildEmailHTML(s) {
       </td></tr>
     </table>
 
-    <!-- LEADS TABLE -->
+    ${s.failures.length ? `
+    <div style="margin-bottom:20px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;font-size:13px;color:#991b1b;">
+      ⚠️ Couldn't read: ${s.failures.join(', ')} — those numbers show as 0. Check the Vercel logs for /api/daily-stats.
+    </div>` : ''}
+
+    <!-- SIGNUPS TABLE -->
     <div style="font-size:15px;font-weight:800;color:#0f172a;margin-bottom:6px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;">
+      🆕 New Signups <span style="font-size:13px;font-weight:500;color:#94a3b8;">(${s.newSignups} yesterday)</span>
+    </div>
+    ${signupsTable}
+
+    <!-- LEADS TABLE -->
+    <div style="font-size:15px;font-weight:800;color:#0f172a;margin:20px 0 6px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;">
       📋 New Leads <span style="font-size:13px;font-weight:500;color:#94a3b8;">(${s.newLeads} yesterday)</span>
     </div>
     ${leadsTable}
@@ -334,12 +385,10 @@ export default async function handler(req, res) {
     }
   }
 
-  const apiKey = process.env.FIREBASE_API_KEY;
-  if (!apiKey)      return res.status(500).json({ ok: false, error: 'Missing FIREBASE_API_KEY' });
   if (!RESEND_KEY)  return res.status(500).json({ ok: false, error: 'Missing RESEND_API_KEY' });
 
   try {
-    const stats  = await collectStats(apiKey);
+    const stats  = await collectStats();
     const result = await sendStatsEmail(stats);
     console.log('Daily stats email sent:', result.id);
     return res.status(200).json({ ok: true, emailId: result.id, stats: {
@@ -348,6 +397,7 @@ export default async function handler(req, res) {
       activeLogins: stats.activeLogins,
       newBookings:  stats.newBookings,
       revenue:      stats.revenue,
+      failures:     stats.failures,
     }});
   } catch (err) {
     console.error('daily-stats error:', err);
