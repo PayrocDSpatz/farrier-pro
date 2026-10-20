@@ -21,18 +21,19 @@
   <style>
     :root {
       --primary: #2683FB;
-      --primary-light: #46C5FF;
-      --bg: #0D1320;
-      --surface: #162032;
-      --surface-2: #1c2940;
-      --text: #E8F0FE;
-      --text-muted: #7A9CC0;
-      --border: rgba(38,131,251,0.25);
-      --warning: #f59e0b;
-      --error: #ef4444;
-      --ok: #22c55e;
-      --note-bg: rgba(245,158,11,0.12);
-      --note-border: rgba(245,158,11,0.4);
+      --primary-light: #1d4ed8;
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --surface-2: #eef2f7;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --input-border: #cbd5e1;
+      --warning: #d97706;
+      --error: #dc2626;
+      --ok: #16a34a;
+      --note-bg: #fffbeb;
+      --note-border: #fcd34d;
     }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
@@ -40,30 +41,37 @@
     button { font-family: inherit; cursor: pointer; }
     input, select, textarea {
       font-family: inherit; font-size: 0.95rem; width: 100%;
-      background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 0.55rem 0.7rem;
+      background: #ffffff; color: var(--text); border: 1px solid var(--input-border); border-radius: 8px; padding: 0.55rem 0.7rem;
     }
-    input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 0.8; }
+    input::placeholder, textarea::placeholder { color: #94a3b8; opacity: 1; }
     textarea { resize: vertical; min-height: 90px; }
     label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem; }
 
-    .btn { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 8px; padding: 0.5rem 0.9rem; font-size: 0.9rem; font-weight: 500; white-space: nowrap; }
+    .btn { border: 1px solid var(--input-border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 0.5rem 0.9rem; font-size: 0.9rem; font-weight: 500; white-space: nowrap; }
     .btn:hover { border-color: var(--primary); }
     .btn:disabled { opacity: 0.5; cursor: default; }
-    .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-light)); border: none; color: #fff; font-weight: 600; }
+    .btn-primary { background: var(--primary); border: 1px solid var(--primary); color: #fff; font-weight: 600; }
+    .btn-primary:hover { background: #1d6fe0; }
     .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
     .btn-link { background: none; border: none; color: var(--primary-light); padding: 0; }
 
     .shell { display: flex; flex-direction: column; min-height: 100vh; }
-    .topbar { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.25rem; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; flex-wrap: wrap; }
+    .topbar { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.25rem; background: var(--primary); color: #fff; box-shadow: 0 2px 8px rgba(15,23,42,0.12); position: sticky; top: 0; z-index: 10; flex-wrap: wrap; }
     .brand { font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; }
     .tabs { display: flex; gap: 0.25rem; }
-    .tab { background: none; border: none; color: var(--text-muted); padding: 0.45rem 0.8rem; border-radius: 8px; font-size: 0.95rem; font-weight: 500; }
-    .tab.active { background: var(--surface-2); color: var(--text); }
+    .tab { background: none; border: none; color: rgba(255,255,255,0.8); padding: 0.45rem 0.8rem; border-radius: 8px; font-size: 0.95rem; font-weight: 500; }
+    .tab:hover { color: #fff; }
+    .tab.active { background: rgba(255,255,255,0.2); color: #fff; font-weight: 600; }
+    .topbar .who { color: rgba(255,255,255,0.85); }
+    .topbar .btn { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.45); color: #fff; }
+    .topbar .btn:hover { background: rgba(255,255,255,0.28); }
+    .topbar .btn-primary { background: #fff; border-color: #fff; color: var(--primary); }
+    .topbar .btn-primary:hover { background: #eff6ff; }
     .spacer { flex: 1; }
     .who { color: var(--text-muted); font-size: 0.85rem; }
 
     .main { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; flex: 1; min-height: 0; }
-    .list-pane { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; height: calc(100vh - 58px); }
+    .list-pane { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; height: calc(100vh - 58px); }
     .detail-pane { padding: 1.25rem; overflow-y: auto; height: calc(100vh - 58px); }
     .list-tools { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; border-bottom: 1px solid var(--border); }
     .chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
@@ -71,8 +79,8 @@
     .chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
     .list { overflow-y: auto; flex: 1; }
     .row { padding: 0.75rem 0.9rem; border-bottom: 1px solid var(--border); cursor: pointer; }
-    .row:hover { background: var(--surface); }
-    .row.selected { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--primary); }
+    .row:hover { background: #f8fafc; }
+    .row.selected { background: #eff6ff; box-shadow: inset 3px 0 0 var(--primary); }
     .row-top { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
     .row-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .row-sub { color: var(--text-muted); font-size: 0.82rem; margin-top: 0.15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -81,7 +89,7 @@
     .empty { color: var(--text-muted); padding: 1.5rem; text-align: center; }
 
     .badge { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 999px; border: 1px solid; white-space: nowrap; }
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 1rem; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.04); }
     .card h3 { margin: 0 0 0.75rem; font-size: 1rem; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
     .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
@@ -93,14 +101,14 @@
 
     .thread { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1rem; }
     .msg { max-width: 80%; padding: 0.6rem 0.8rem; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); white-space: pre-wrap; overflow-wrap: anywhere; }
-    .msg.out { align-self: flex-end; background: rgba(38,131,251,0.15); }
+    .msg.out { align-self: flex-end; background: #eff6ff; border-color: #bfdbfe; }
     .msg.in { align-self: flex-start; }
     .msg.internal { align-self: stretch; max-width: none; background: var(--note-bg); border-color: var(--note-border); }
     .msg-meta { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.25rem; }
     .composer { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem; }
     .composer-kinds { display: flex; gap: 0.3rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
 
-    .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+    .modal-back { position: fixed; inset: 0; background: rgba(15,23,42,0.45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
     .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; }
     .modal h2 { margin: 0 0 1rem; font-size: 1.15rem; }
     .field { margin-bottom: 0.75rem; }
@@ -153,24 +161,24 @@
     // Texts the farrier sends back are logged onto their open ticket by api/twilio-webhook.js.
 
     const STAGES = [
-      { id: 'new', label: 'New signup', color: '#46C5FF' },
-      { id: 'onboarding', label: 'Onboarding', color: '#a78bfa' },
-      { id: 'active', label: 'Active', color: '#22c55e' },
-      { id: 'at_risk', label: 'At risk', color: '#f59e0b' },
-      { id: 'prospect', label: 'Prospect', color: '#94a3b8' },
-      { id: 'churned', label: 'Churned', color: '#ef4444' },
+      { id: 'new', label: 'New signup', color: '#0284c7' },
+      { id: 'onboarding', label: 'Onboarding', color: '#7c3aed' },
+      { id: 'active', label: 'Active', color: '#16a34a' },
+      { id: 'at_risk', label: 'At risk', color: '#d97706' },
+      { id: 'prospect', label: 'Prospect', color: '#64748b' },
+      { id: 'churned', label: 'Churned', color: '#dc2626' },
     ];
     const STATUSES = [
-      { id: 'open', label: 'Open', color: '#46C5FF' },
-      { id: 'pending', label: 'Waiting on farrier', color: '#f59e0b' },
-      { id: 'resolved', label: 'Resolved', color: '#22c55e' },
-      { id: 'closed', label: 'Closed', color: '#94a3b8' },
+      { id: 'open', label: 'Open', color: '#2563eb' },
+      { id: 'pending', label: 'Waiting on farrier', color: '#d97706' },
+      { id: 'resolved', label: 'Resolved', color: '#16a34a' },
+      { id: 'closed', label: 'Closed', color: '#64748b' },
     ];
     const PRIORITIES = [
-      { id: 'low', label: 'Low', color: '#94a3b8' },
-      { id: 'normal', label: 'Normal', color: '#46C5FF' },
-      { id: 'high', label: 'High', color: '#f59e0b' },
-      { id: 'urgent', label: 'Urgent', color: '#ef4444' },
+      { id: 'low', label: 'Low', color: '#64748b' },
+      { id: 'normal', label: 'Normal', color: '#2563eb' },
+      { id: 'high', label: 'High', color: '#d97706' },
+      { id: 'urgent', label: 'Urgent', color: '#dc2626' },
     ];
     const CATEGORIES = ['Onboarding', 'Billing', 'Payments', 'Bug', 'How-to', 'Feature request', 'Account', 'Other'];
     const KINDS = [
@@ -641,7 +649,7 @@
                     <div className="row-sub">{[f.contactName, fmtPhone(f.phone), [f.city, f.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || f.email}</div>
                     <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.35rem' }}>
                       <Badge item={byId(STAGES, f.stage)} />
-                      {open > 0 && <span className="badge" style={{ color: '#46C5FF', borderColor: '#46C5FF' }}>{open} open ticket{open > 1 ? 's' : ''}</span>}
+                      {open > 0 && <span className="badge" style={{ color: '#2563eb', borderColor: '#2563eb' }}>{open} open ticket{open > 1 ? 's' : ''}</span>}
                     </div>
                   </div>
                 );
