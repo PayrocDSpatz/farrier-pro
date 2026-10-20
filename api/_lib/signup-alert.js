@@ -1,14 +1,14 @@
-// api/notify-signup.js
 // Texts the FarriTech owner when a new farrier account is created.
 //
-// The browser calls this right after it writes the new farriers/{uid} profile, with the
+// Served as /api/notify-signup — vercel.json rewrites that to api/send-sms (Vercel's
+// Hobby plan caps a deployment at 12 functions). The browser calls it right after it writes the new farriers/{uid} profile, with the
 // new user's ID token. The server checks the profile really exists and was just created,
 // marks it signupNotifiedAt (so a retry or a second tab never texts twice), then sends
 // the SMS through Twilio.
 //
 // Env vars: SIGNUP_ALERT_PHONE (one or more numbers, comma-separated), plus the
 // TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_MESSAGING_SERVICE_SID used by send-sms.
-import { callerFromRequest, runTransaction } from './_lib/firebase-rest.js';
+import { callerFromRequest, runTransaction } from './firebase-rest.js';
 
 // Only profiles created this recently count as a new signup — stops an old account
 // from texting the owner just by calling this endpoint.
@@ -43,7 +43,7 @@ async function sendSms(to, body) {
   return data.sid;
 }
 
-export default async function handler(req, res) {
+export async function notifySignup(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');

@@ -15,6 +15,10 @@
       "destination": "/api/stripe-payment?iposCallback=:invoiceId"
     },
     {
+      "source": "/api/notify-signup",
+      "destination": "/api/send-sms?signupAlert=1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
