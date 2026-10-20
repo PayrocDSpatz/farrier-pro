@@ -10320,243 +10320,275 @@ function ServicesView({ userId }) {
 }
 
 function CalendarView({ userId }) {
-      const [currentDate, setCurrentDate] = useState(new Date());
+      // Month / Week / Day calendar of the farrier's appointments, plus the horses actually
+      // worked on each day. "Horses done" comes from that day's invoice lines (one per horse),
+      // topped up with horses on that day's completed/invoiced appointments that no invoice
+      // line already covers.
+      const [view, setView] = useState('month');
+      const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); });
       const [appointments, setAppointments] = useState([]);
+      const [invoices, setInvoices] = useState([]);
       const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        loadAppointments();
-      }, []);
-
-      const loadAppointments = async () => {
-        if (db) {
+        if (!db || !userId) { setLoading(false); return; }
+        (async () => {
           try {
-            const snapshot = await db.collection('appointments')
-              .where('farrierId', '==', userId)
-              .get();
-            
-            const appointmentData = snapshot.docs.map(doc => {
-              const data = doc.data();
-              
-              // Clean up time format: convert "HH:MM:SS" to "HH:MM"
-              if (data.requestedTime && data.requestedTime.includes(':')) {
-                const timeParts = data.requestedTime.split(':');
-                if (timeParts.length === 3) {
-                  data.requestedTime = `${timeParts[0]}:${timeParts[1]}`;
-                }
-              }
-          
-              return {
-                id: doc.id,
-                ...data
-              };
-            });
-            
-            setAppointments(appointmentData);
-            console.log('✅ Loaded appointments for calendar:', appointmentData.length);
+            const [aSnap, iSnap] = await Promise.all([
+              db.collection('appointments').where('farrierId', '==', userId).get(),
+              db.collection('invoices').where('farrierId', '==', userId).get(),
+            ]);
+            setAppointments(aSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setInvoices(iSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           } catch (error) {
-            console.error('❌ Error loading appointments:', error);
+            console.error('❌ Error loading calendar:', error);
           }
+          setLoading(false);
+        })();
+      }, [userId]);
+
+      const pad = (n) => String(n).padStart(2, '0');
+      const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+      const todayKey = keyOf(new Date());
+      const toDate = (v) => v?.toDate ? v.toDate() : (typeof v?.seconds === 'number' ? new Date(v.seconds * 1000) : (v ? new Date(v) : null));
+      const fmtTime = (t) => {
+        if (!t || !t.includes(':')) return '';
+        const [h, m] = t.split(':').map(Number);
+        return `${h % 12 || 12}:${pad(m || 0)} ${h >= 12 ? 'PM' : 'AM'}`;
+      };
+      const norm = (s) => String(s || '').trim().toLowerCase();
+
+      // Horses booked on an appointment: per-horse requests, else the plain horse names.
+      const horsesOf = (a) => {
+        if (Array.isArray(a.horseRequests) && a.horseRequests.length) {
+          return a.horseRequests.map(r => ({ name: r.horseName || 'Horse', services: r.services || [] }));
         }
-        setLoading(false);
+        return (a.horseNames || []).map(n => ({ name: n, services: a.services || [] }));
       };
 
-      // Count appointments by date
-      const getAppointmentCounts = () => {
-        const counts = {};
-        appointments.forEach(apt => {
-          if (apt.requestedDate) {
-            const date = apt.requestedDate; // Format: "2026-02-15"
-            if (!counts[date]) {
-              counts[date] = { confirmed: 0, pending: 0, total: 0 };
-            }
-            counts[date].total++;
-            // Handle status - if not set or 'pending', treat as pending
-            const status = apt.status || 'pending';
-            
-            if (status === 'confirmed') {
-              counts[date].confirmed++;
-            } else {
-              // Treat everything else (pending, undefined, null) as pending
-              counts[date].pending++;
-            }
-            
-            console.log(`📅 Date: ${date}, Status: ${status}, Counts:`, counts[date]);
-          }
+      const byDay = React.useMemo(() => {
+        const days = {};
+        const day = (k) => (days[k] = days[k] || { appts: [], done: [] });
+        appointments.forEach(a => {
+          if (!a.requestedDate) return;
+          day(a.requestedDate).appts.push(a);
         });
-        console.log('📊 Final appointment counts:', counts);
-        return counts;
+        Object.values(days).forEach(d => d.appts.sort((x, y) => String(x.requestedTime || '99').localeCompare(String(y.requestedTime || '99'))));
+
+        // Horses done: invoice lines on the invoice's date…
+        invoices.forEach(inv => {
+          if (inv.status === 'cancelled') return;
+          const d = toDate(inv.createdAt);
+          if (!d || isNaN(d)) return;
+          const k = keyOf(d);
+          const perHorse = {};
+          (inv.items || []).forEach(it => {
+            const horse = String(it.horseName || '').trim();
+            if (!horse) return;
+            const id = norm(horse);
+            perHorse[id] = perHorse[id] || { horse, customer: inv.customerName || '', farm: inv.customerFarmName || '', services: [], invoiceNumber: inv.invoiceNumber || '' };
+            const svc = it.serviceNameSnapshot || it.description || it.serviceName;
+            if (svc) perHorse[id].services.push(svc);
+          });
+          Object.values(perHorse).forEach(h => day(k).done.push(h));
+        });
+        // …plus horses on completed/invoiced appointments that day not already listed.
+        Object.entries(days).forEach(([k, d]) => {
+          d.appts.forEach(a => {
+            if (!(a.status === 'completed' || a.status === 'invoiced' || a.invoiced)) return;
+            horsesOf(a).forEach(h => {
+              const dup = d.done.some(x => norm(x.horse) === norm(h.name) && norm(x.customer) === norm(a.customerName));
+              if (!dup) d.done.push({ horse: h.name, customer: a.customerName || '', farm: a.farmName || '', services: h.services, invoiceNumber: '' });
+            });
+          });
+        });
+        return days;
+      }, [appointments, invoices]);
+
+      const dayData = (k) => byDay[k] || { appts: [], done: [] };
+      const live = (a) => a.status !== 'cancelled';
+
+      // ── navigation ──
+      const step = (dir) => {
+        if (view === 'month') setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + dir, 1));
+        else setCursor(addDays(cursor, dir * (view === 'week' ? 7 : 1)));
+      };
+      const goToday = () => { const d = new Date(); setCursor(new Date(d.getFullYear(), d.getMonth(), d.getDate())); };
+      const openDay = (d) => { setCursor(d); setView('day'); };
+      const weekStart = addDays(cursor, -cursor.getDay());
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const title = view === 'month'
+        ? `${monthNames[cursor.getMonth()]} ${cursor.getFullYear()}`
+        : view === 'week'
+          ? `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${addDays(weekStart, 6).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+          : cursor.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+      const statusStyle = (s) => ({
+        confirmed: { bg: '#dcfce7', fg: '#166534', label: 'Confirmed' },
+        completed: { bg: '#dbeafe', fg: '#1e40af', label: 'Completed' },
+        invoiced: { bg: '#e0e7ff', fg: '#3730a3', label: 'Invoiced' },
+        cancelled: { bg: '#fee2e2', fg: '#991b1b', label: 'Cancelled' },
+      }[s] || { bg: '#fef3c7', fg: '#92400e', label: s ? s[0].toUpperCase() + s.slice(1) : 'Pending' });
+      const pill = (bg, fg, text) => <span style={{ background: bg, color: fg, borderRadius: 999, padding: '0.1rem 0.5rem', fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{text}</span>;
+      const horseCount = (k) => dayData(k).done.length;
+
+      // ── Month ──
+      const renderMonth = () => {
+        const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+        const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+        const cells = [];
+        for (let i = 0; i < first.getDay(); i++) cells.push(<div key={`e${i}`} className="calendar-day" style={{ aspectRatio: 'auto', minHeight: 96 }} />);
+        for (let i = 1; i <= daysInMonth; i++) {
+          const d = new Date(cursor.getFullYear(), cursor.getMonth(), i);
+          const k = keyOf(d);
+          const appts = dayData(k).appts.filter(live);
+          const confirmed = appts.filter(a => a.status === 'confirmed').length;
+          const other = appts.length - confirmed;
+          const horses = horseCount(k);
+          cells.push(
+            <div key={k} className="calendar-day" onClick={() => openDay(d)} title="Open this day"
+              style={{ aspectRatio: 'auto', minHeight: 96, flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', padding: '0.4rem', gap: '0.25rem' }}>
+              <div style={{ alignSelf: 'flex-end', fontWeight: 700, width: 26, height: 26, lineHeight: '26px', textAlign: 'center', borderRadius: '50%',
+                background: k === todayKey ? 'var(--primary)' : 'transparent', color: k === todayKey ? '#fff' : 'var(--text)' }}>{i}</div>
+              {confirmed > 0 && pill('#dcfce7', '#166534', `✓ ${confirmed} confirmed`)}
+              {other > 0 && pill('#fef3c7', '#92400e', `⏳ ${other} ${other === 1 ? 'appt' : 'appts'}`)}
+              {horses > 0 && pill('#dbeafe', '#1e40af', `🐴 ${horses} done`)}
+            </div>
+          );
+        }
+        return (
+          <div className="calendar-grid">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="calendar-day header" style={{ aspectRatio: 'auto', padding: '0.5rem' }}>{day}</div>)}
+            {cells}
+          </div>
+        );
       };
 
-      const appointmentCounts = getAppointmentCounts();
-      
-      const daysInMonth = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth() + 1,
-        0
-      ).getDate();
-
-      const firstDay = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        1
-      ).getDay();
-
-      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'];
-
-      const days = [];
-      for (let i = 0; i < firstDay; i++) {
-        days.push(<div key={`empty-${i}`} className="calendar-day"></div>);
-      }
-      for (let i = 1; i <= daysInMonth; i++) {
-        const isToday = i === new Date().getDate() && 
-                        currentDate.getMonth() === new Date().getMonth() &&
-                        currentDate.getFullYear() === new Date().getFullYear();
-        
-        // Format date to match appointment requestedDate format (YYYY-MM-DD)
-        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-        const counts = appointmentCounts[dateStr];
-        
-        days.push(
-          <div 
-            key={i} 
-            className={`calendar-day ${isToday ? 'today' : ''}`}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              padding: '0.5rem',
-              minHeight: '80px',
-              position: 'relative'
-            }}
-          >
-            <div style={{fontWeight: '600', marginBottom: '0.25rem'}}>{i}</div>
-            {counts && counts.total > 0 && (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.25rem',
-                fontSize: '0.75rem',
-                width: '100%',
-                alignItems: 'center'
-              }}>
-                {counts.confirmed > 0 && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                    padding: '0.25rem 0.5rem',
-                    background: '#dcfce7',
-                    color: '#166534',
-                    borderRadius: '6px',
-                    fontWeight: '700',
-                    fontSize: '0.75rem'
-                  }}>
-                    ✓ {counts.confirmed}
-                  </div>
-                )}
-                {counts.pending > 0 && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                    padding: '0.25rem 0.5rem',
-                    background: '#2a2010',
-                    color: '#92400e',
-                    borderRadius: '6px',
-                    fontWeight: '700',
-                    fontSize: '0.75rem'
-                  }}>
-                    ⏳ {counts.pending}
-                  </div>
-                )}
+      const apptCard = (a, compact) => {
+        const st = statusStyle(a.status);
+        const horses = horsesOf(a);
+        return (
+          <div key={a.id} style={{ border: '1px solid var(--border)', borderLeft: `4px solid ${st.fg}`, borderRadius: 8, padding: compact ? '0.4rem 0.5rem' : '0.75rem 1rem', background: 'var(--surface)', opacity: a.status === 'cancelled' ? 0.55 : 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: compact ? '0.8rem' : '1rem', textDecoration: a.status === 'cancelled' ? 'line-through' : 'none' }}>
+                {fmtTime(a.requestedTime) && <span style={{ color: 'var(--primary)' }}>{fmtTime(a.requestedTime)} </span>}
+                {a.customerName || 'Customer'}
+              </strong>
+              {!compact && pill(st.bg, st.fg, st.label)}
+            </div>
+            {!compact && a.farmName && <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{a.farmName}</div>}
+            {!compact && (a.address || a.city) && <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>📍 {[a.address, a.city, a.state].filter(Boolean).join(', ')}</div>}
+            {horses.length > 0 ? (
+              <div style={{ fontSize: compact ? '0.75rem' : '0.88rem', marginTop: '0.2rem' }}>
+                {horses.map((h, i) => (
+                  <div key={i}>🐴 <strong>{h.name}</strong>{!compact && h.services.length ? <span style={{ color: 'var(--text-muted)' }}> — {h.services.join(', ')}</span> : null}</div>
+                ))}
               </div>
+            ) : (
+              (a.numberOfHorses || (a.services || []).length) ? (
+                <div style={{ fontSize: compact ? '0.75rem' : '0.88rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                  {a.numberOfHorses ? `🐴 ${a.numberOfHorses} horse${a.numberOfHorses == 1 ? '' : 's'}` : ''}{!compact && (a.services || []).length ? ` · ${a.services.join(', ')}` : ''}
+                </div>
+              ) : null
             )}
           </div>
         );
-      }
+      };
+
+      const doneList = (done, compact) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? '0.15rem' : '0.4rem' }}>
+          {done.map((h, i) => (
+            <div key={i} style={{ fontSize: compact ? '0.75rem' : '0.9rem', background: compact ? 'transparent' : '#f0f9ff', border: compact ? 'none' : '1px solid #dbeafe', borderRadius: 8, padding: compact ? 0 : '0.5rem 0.75rem' }}>
+              ✅ <strong>{h.horse}</strong>
+              <span style={{ color: 'var(--text-muted)' }}> · {h.customer}{!compact && h.farm ? ` (${h.farm})` : ''}</span>
+              {!compact && h.services.length > 0 && <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: 2 }}>{h.services.join(', ')}{h.invoiceNumber ? ` · Invoice #${h.invoiceNumber}` : ''}</div>}
+            </div>
+          ))}
+        </div>
+      );
+
+      // ── Week ──
+      const renderWeek = () => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.5rem', overflowX: 'auto' }}>
+          {Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map(d => {
+            const k = keyOf(d);
+            const { appts, done } = dayData(k);
+            return (
+              <div key={k} style={{ minWidth: 130, border: '1px solid var(--border)', borderRadius: 10, background: k === todayKey ? '#eff6ff' : '#f8fafc', display: 'flex', flexDirection: 'column' }}>
+                <button onClick={() => openDay(d)} title="Open this day"
+                  style={{ background: 'none', border: 'none', borderBottom: '1px solid var(--border)', padding: '0.5rem', cursor: 'pointer', textAlign: 'center', fontFamily: 'inherit' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: k === todayKey ? 'var(--primary)' : 'var(--text)' }}>{d.getDate()}</div>
+                </button>
+                <div style={{ padding: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: 1 }}>
+                  {appts.map(a => apptCard(a, true))}
+                  {!appts.length && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.5rem 0' }}>No appointments</div>}
+                </div>
+                {done.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--border)', padding: '0.4rem', background: '#f0f9ff', borderRadius: '0 0 10px 10px' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', marginBottom: 2 }}>🐴 {done.length} done</div>
+                    {doneList(done, true)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      );
+
+      // ── Day ──
+      const renderDay = () => {
+        const { appts, done } = dayData(keyOf(cursor));
+        const booked = appts.filter(live).reduce((n, a) => n + (horsesOf(a).length || Number(a.numberOfHorses) || 0), 0);
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: '1.25rem' }} className="ft-day-grid">
+            <div>
+              <h3 style={{ margin: '0 0 0.75rem' }}>📋 Appointments ({appts.filter(live).length}){booked ? <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.9rem' }}> · {booked} horse{booked === 1 ? '' : 's'} booked</span> : null}</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {appts.map(a => apptCard(a, false))}
+                {!appts.length && <p style={{ color: 'var(--text-muted)' }}>No appointments this day.</p>}
+              </div>
+            </div>
+            <div>
+              <h3 style={{ margin: '0 0 0.75rem' }}>🐴 Horses done ({done.length})</h3>
+              {done.length ? doneList(done, false) : <p style={{ color: 'var(--text-muted)' }}>No horses recorded as done this day. They appear here once they're on an invoice, or the appointment is marked completed.</p>}
+            </div>
+          </div>
+        );
+      };
+
+      const viewBtn = (id, label) => (
+        <button className={`btn btn-sm ${view === id ? 'btn-primary' : 'btn-outline'}`} onClick={() => setView(id)}>{label}</button>
+      );
 
       return (
         <div>
-          <h1 style={{marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)'}}>Calendar</h1>
-          
+          <style>{`@media (max-width: 900px) { .ft-day-grid { grid-template-columns: 1fr !important; } }`}</style>
+          <h1 style={{ marginBottom: '1.5rem', fontSize: '2rem', color: 'var(--primary)' }}>Calendar</h1>
           <div className="calendar">
-            <div className="calendar-header">
-              <h2 className="calendar-title">
-                {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-              </h2>
-              <div className="calendar-nav">
-                <button className="btn btn-sm btn-outline" onClick={() => {
-                  const newDate = new Date(currentDate);
-                  newDate.setMonth(newDate.getMonth() - 1);
-                  setCurrentDate(newDate);
-                }}>
-                  ←
-                </button>
-                <button className="btn btn-sm btn-outline" onClick={() => {
-                  const newDate = new Date(currentDate);
-                  newDate.setMonth(newDate.getMonth() + 1);
-                  setCurrentDate(newDate);
-                }}>
-                  →
-                </button>
+            <div className="calendar-header" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
+              <h2 className="calendar-title" style={{ margin: 0 }}>{title}</h2>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '0.25rem' }}>{viewBtn('month', 'Month')}{viewBtn('week', 'Week')}{viewBtn('day', 'Day')}</div>
+                <div className="calendar-nav">
+                  <button className="btn btn-sm btn-outline" onClick={() => step(-1)} aria-label="Previous">←</button>
+                  <button className="btn btn-sm btn-outline" onClick={goToday}>Today</button>
+                  <button className="btn btn-sm btn-outline" onClick={() => step(1)} aria-label="Next">→</button>
+                </div>
               </div>
             </div>
-
-            <div className="calendar-grid">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="calendar-day header">{day}</div>
-              ))}
-              {days}
-            </div>
+            {loading ? <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
+              : view === 'month' ? renderMonth() : view === 'week' ? renderWeek() : renderDay()}
           </div>
-
-          {/* Legend */}
-          <div style={{
-            marginTop: '1rem',
-            padding: '1rem',
-            background: '#f9fafb',
-            borderRadius: '8px',
-            display: 'flex',
-            gap: '1.5rem',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexWrap: 'wrap'
-          }}>
-            <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-              <div style={{
-                padding: '0.25rem 0.5rem',
-                background: '#dcfce7',
-                color: '#166534',
-                borderRadius: '4px',
-                fontSize: '0.75rem',
-                fontWeight: '600'
-              }}>
-                ✓ {appointments.filter(a => (a.status || 'pending').toLowerCase() === 'confirmed').length}
-              </div>
-              <span style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Confirmed</span>
+          {view === 'month' && (
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              <span>{pill('#dcfce7', '#166534', '✓')} Confirmed</span>
+              <span>{pill('#fef3c7', '#92400e', '⏳')} Other appointments</span>
+              <span>{pill('#dbeafe', '#1e40af', '🐴')} Horses done</span>
+              <span>Click a day to see it in detail.</span>
             </div>
-
-            <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-              <div style={{
-                padding: '0.25rem 0.5rem',
-                background: '#2a2010',
-                color: '#92400e',
-                borderRadius: '4px',
-                fontSize: '0.75rem',
-                fontWeight: '600'
-              }}>
-                ⏳ {appointments.filter(a => (a.status || 'pending').toLowerCase() !== 'confirmed').length}
-              </div>
-              <span style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>Pending</span>
-            </div>
-
-            <div style={{fontSize: '0.875rem', color: 'var(--text-muted)'}}>
-              {appointments.length} total appointment{appointments.length !== 1 ? 's' : ''}
-            </div>
-          </div>
+          )}
         </div>
       );
     }
