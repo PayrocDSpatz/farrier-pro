@@ -1502,6 +1502,71 @@
     0 18px 46px rgba(14,165,233,0.3) !important;
   transform: translateY(-2px) !important;
 }
+
+/* ── Desktop light theme ──
+   The signed-in desktop app (FarrierDashboard → .ft-desktop) is light. Everything else on
+   this page keeps its own look: the sign-in screen (.ft-auth-shell), the customer booking
+   page (.booking-page). The mobile app (mobile.html) and support desk are separate pages.
+   The rules above were written for the old dark theme; these override them inside .ft-desktop. */
+body:has(.ft-desktop) { background: #f1f5f9; }
+.ft-desktop {
+  --bg: #f1f5f9;
+  --surface: #ffffff;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --border: #cbd5e1;
+  --secondary: #e2e8f0;
+  --primary-light: #1d4ed8; /* was a pale cyan, too faint as text on white */
+  --accent: #2563eb;
+  background: var(--bg);
+  color: var(--text);
+}
+.ft-desktop .card,
+.ft-desktop .stat-card,
+.ft-desktop .calendar,
+.ft-desktop .appointment-item {
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.05);
+}
+.ft-desktop .appointment-item:hover { border-color: #93c5fd; box-shadow: 0 4px 16px rgba(38,131,251,0.15); }
+.ft-desktop .card .appointment-item { background: #f8fafc; }
+.ft-desktop .card h3,
+.ft-desktop .card h4 { color: #1d4ed8; }
+.ft-desktop .stat-label { color: #64748b; }
+.ft-desktop .tab.active { text-shadow: none; }
+.ft-desktop .btn-primary:hover { border-color: var(--primary-light); }
+.ft-desktop .btn-secondary { color: #1e293b; }
+
+/* Inputs: white with a gray border instead of dark fills */
+.ft-desktop input[type="date"], .ft-desktop input[type="time"], .ft-desktop input[type="number"],
+.ft-desktop input[type="text"], .ft-desktop input[type="email"], .ft-desktop input[type="tel"],
+.ft-desktop input[type="search"], .ft-desktop input[type="password"], .ft-desktop input:not([type]),
+.ft-desktop textarea, .ft-desktop select,
+.ft-desktop .form-group input, .ft-desktop .form-group textarea, .ft-desktop .form-group select {
+  background: #ffffff;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+.ft-desktop input::placeholder, .ft-desktop textarea::placeholder { color: #94a3b8; }
+.ft-desktop input:disabled, .ft-desktop textarea:disabled, .ft-desktop select:disabled { background: #f1f5f9; color: #64748b; -webkit-text-fill-color: #64748b; opacity: 1; }
+.ft-desktop input[type="date"] { color-scheme: light; }
+.ft-desktop input[type="date"]::-webkit-calendar-picker-indicator { filter: none; opacity: 0.6; }
+
+/* Calendar */
+.ft-desktop .calendar-grid,
+.ft-desktop .calendar-day { border-color: #e2e8f0; }
+.ft-desktop .calendar-day.header { color: #1d4ed8; background: #eff6ff; }
+.ft-desktop .calendar-day:not(.header):hover { background: #eff6ff; }
+.ft-desktop .calendar-day.has-appointment { background: #dbeafe; color: #1d4ed8; }
+.ft-desktop .calendar-day.today { background: var(--primary); color: #fff; }
+
+/* Status badges and messages: light tints */
+.ft-desktop .badge-success { background: #dcfce7; color: #166534; border-color: #86efac; }
+.ft-desktop .badge-warning { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.ft-desktop .badge-secondary { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.ft-desktop .badge-pending { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
+.ft-desktop .success-message { background: #f0fdf4; color: #166534; border-color: #86efac; }
+.ft-desktop .error-message { background: #fef2f2; }
 </style>
 
   <!-- Google Places Autocomplete (Address accuracy for Smart Route) -->
@@ -2836,7 +2901,7 @@ if (support) {
       {/* Inactivity Warning Modal */}
       {showInactivityWarning && (
         <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center'}}>
-          <div style={{background:'var(--surface)', color:'var(--text)', borderRadius:'12px', padding:'2rem', maxWidth:'420px', width:'90%', textAlign:'center', border:'2px solid rgba(38,131,251,0.45)', boxShadow:'0 20px 60px rgba(0,0,0,0.6)'}}>
+          <div style={{background:'var(--surface)', color:'var(--text)', borderRadius:'12px', padding:'2rem', maxWidth:'420px', width:'90%', textAlign:'center', border:'1px solid #cbd5e1', boxShadow:'0 20px 60px rgba(0,0,0,0.6)'}}>
             <div style={{fontSize:'3rem', marginBottom:'1rem'}}>⏱️</div>
             <h2 style={{marginBottom:'0.75rem', color:'var(--text)'}}>Still there?</h2>
             <p style={{color:'var(--text-muted)', marginBottom:'1.5rem'}}>
@@ -3784,7 +3849,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
       ];
 
       return (
-        <div className="app-container">
+        <div className="app-container ft-desktop">
           <header style={{
             backgroundColor: '#2683FB',
             position: 'sticky',
@@ -3856,12 +3921,12 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           </header>
 
           <nav style={{
-            backgroundColor: '#0D1320',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #e2e8f0',
             position: 'sticky',
             top: '80px',
             zIndex: 99,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.3)'
+            boxShadow: '0 1px 4px rgba(15,23,42,0.06)'
           }}>
             {(() => {
               const navGroups = [
@@ -3929,13 +3994,13 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                             gap: '0.4rem',
                             fontSize: '0.88rem',
                             fontWeight: isGroupActive ? '700' : '500',
-                            color: isGroupActive ? '#46C5FF' : 'rgba(255,255,255,0.75)',
-                            borderBottom: isGroupActive ? '2px solid #46C5FF' : '2px solid transparent',
+                            color: isGroupActive ? '#2683FB' : '#475569',
+                            borderBottom: isGroupActive ? '2px solid #2683FB' : '2px solid transparent',
                             transition: 'all 0.15s',
                             whiteSpace: 'nowrap',
                           }}
-                          onMouseOver={(e) => { if (!isGroupActive) e.currentTarget.style.color = 'white'; }}
-                          onMouseOut={(e) => { if (!isGroupActive) e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
+                          onMouseOver={(e) => { if (!isGroupActive) e.currentTarget.style.color = '#0f172a'; }}
+                          onMouseOut={(e) => { if (!isGroupActive) e.currentTarget.style.color = '#475569'; }}
                         >
                           {isGroupActive ? `${activeItem.icon} ${activeItem.label}` : group.label}
                           <span style={{
@@ -3953,11 +4018,11 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                             position: 'absolute',
                             top: 'calc(100% - 2px)',
                             left: 0,
-                            backgroundColor: '#0D1320',
-                            border: '1.5px solid rgba(70,197,255,0.35)',
-                            borderTop: '2px solid #46C5FF',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #e2e8f0',
+                            borderTop: '2px solid #2683FB',
                             borderRadius: '0 0 10px 10px',
-                            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                            boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
                             minWidth: '180px',
                             zIndex: 200,
                             overflow: 'hidden'
@@ -3971,18 +4036,18 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                                   width: '100%',
                                   textAlign: 'left',
                                   padding: '0.75rem 1.25rem',
-                                  background: tab === item.id ? 'rgba(70,197,255,0.12)' : 'none',
+                                  background: tab === item.id ? '#eff6ff' : 'none',
                                   border: 'none',
-                                  borderLeft: tab === item.id ? '3px solid #46C5FF' : '3px solid transparent',
-                                  color: tab === item.id ? '#46C5FF' : 'rgba(255,255,255,0.8)',
+                                  borderLeft: tab === item.id ? '3px solid #2683FB' : '3px solid transparent',
+                                  color: tab === item.id ? '#2683FB' : '#334155',
                                   fontSize: '0.88rem',
                                   fontWeight: tab === item.id ? '600' : '400',
                                   cursor: 'pointer',
                                   transition: 'all 0.15s',
                                   gap: '0.5rem',
                                 }}
-                                onMouseOver={(e) => { if (tab !== item.id) { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = 'white'; }}}
-                                onMouseOut={(e) => { if (tab !== item.id) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}}
+                                onMouseOver={(e) => { if (tab !== item.id) { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}}
+                                onMouseOut={(e) => { if (tab !== item.id) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#334155'; }}}
                               >
                                 {item.icon} {item.label}
                               </button>
@@ -4514,10 +4579,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               </div>
             ) : (
               <select value={formSource} onChange={e => setFormSource(e.target.value)}
-                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid rgba(38,131,251,0.45)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', background: 'rgba(22,32,50,0.95)', color: 'var(--text)', colorScheme: 'dark' }}>
-                <option value="referral" style={{background:'#1e2d45', color:'#e8f0fe'}}>🤝 Referral</option>
-                <option value="existing" style={{background:'#1e2d45', color:'#e8f0fe'}}>⭐ Existing</option>
-                <option value="marketing" style={{background:'#1e2d45', color:'#e8f0fe'}}>📣 Marketing</option>
+                style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '1px solid #cbd5e1', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', background: '#fff', color: 'var(--text)', colorScheme: 'light' }}>
+                <option value="referral">🤝 Referral</option>
+                <option value="existing">⭐ Existing</option>
+                <option value="marketing">📣 Marketing</option>
               </select>
             )}
           </div>
@@ -4648,10 +4713,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 { label: 'Total Paid', val: fmtMoney(customerDetail.totalPaid), icon: '✅', color: '#10b981' },
                 { label: 'Outstanding', val: fmtMoney(customerDetail.balance), icon: '⚠️', color: customerDetail.balance > 0 ? '#ef4444' : '#10b981' },
               ].map(s => (
-                <div key={s.label} style={{ background: 'var(--surface)', borderRadius: 12, padding: '1rem 1.25rem', boxShadow: '0 2px 12px rgba(0,0,0,0.3)', border: `2px solid ${s.color}22` }}>
+                <div key={s.label} style={{ background: 'var(--surface)', borderRadius: 12, padding: '1rem 1.25rem', boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.05)', border: `2px solid ${s.color}22` }}>
                   <div style={{ fontSize: '1.4rem' }}>{s.icon}</div>
                   <div style={{ fontSize: '1.4rem', fontWeight: 700, color: s.color }}>{s.val}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#8ab4d8' }}>{s.label}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{s.label}</div>
                 </div>
               ))}
             </div>
@@ -4769,7 +4834,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           {/* Delete confirm */}
           {confirmDelete && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-              <div style={{ background: 'var(--surface)', color: 'var(--text)', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
+              <div style={{ background: 'var(--surface)', color: 'var(--text)', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '1px solid #cbd5e1' }}>
                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
                 <h3 style={{ marginBottom: '0.5rem' }}>Delete {confirmDelete.name}?</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
@@ -4870,7 +4935,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {filtered.map(cust => (
                 <div key={cust.id || cust.email} onClick={() => openDetail(cust)}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1.1rem', background: 'var(--surface)', borderRadius: 12, border: '2px solid rgba(38,131,251,0.45)', cursor: 'pointer', transition: 'all 0.15s', flexWrap: 'wrap', gap: '0.5rem' }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1.1rem', background: 'var(--surface)', borderRadius: 12, border: '1px solid #cbd5e1', cursor: 'pointer', transition: 'all 0.15s', flexWrap: 'wrap', gap: '0.5rem' }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary)'}
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                 >
@@ -4916,7 +4981,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
           {/* Delete confirm modal */}
           {confirmDelete && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-              <div style={{ background: 'var(--surface)', color: 'var(--text)', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
+              <div style={{ background: 'var(--surface)', color: 'var(--text)', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '1px solid #cbd5e1' }}>
                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
                 <h3 style={{ marginBottom: '0.5rem' }}>Delete {confirmDelete.name}?</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
@@ -5047,10 +5112,10 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 { icon: '📋', label: 'Appointments', val: hist.appointments.length, color: '#8b5cf6' },
                 { icon: '💰', label: 'Billed for this horse', val: fmtMoney(hist.totalBilled), sub: `${hist.invoices.length} invoice${hist.invoices.length === 1 ? '' : 's'}`, color: '#f59e0b' },
               ].map(s => (
-                <div key={s.label} style={{ background: 'var(--surface)', borderRadius: 12, padding: '1rem 1.25rem', boxShadow: '0 2px 12px rgba(0,0,0,0.3)', border: `2px solid ${s.color}22` }}>
+                <div key={s.label} style={{ background: 'var(--surface)', borderRadius: 12, padding: '1rem 1.25rem', boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.05)', border: `2px solid ${s.color}22` }}>
                   <div style={{ fontSize: '1.4rem' }}>{s.icon}</div>
                   <div style={{ fontSize: '1.3rem', fontWeight: 700, color: s.color }}>{s.val}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#8ab4d8' }}>{s.label}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{s.label}</div>
                   {s.sub && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{s.sub}</div>}
                 </div>
               ))}
@@ -5369,7 +5434,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 const isActive = b.active !== false;
                 return (
                   <div key={b.id}
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1.1rem', background: 'var(--surface)', borderRadius: 12, border: '2px solid rgba(38,131,251,0.45)', flexWrap: 'wrap', gap: '0.75rem' }}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 1.1rem', background: 'var(--surface)', borderRadius: 12, border: '1px solid #cbd5e1', flexWrap: 'wrap', gap: '0.75rem' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', minWidth: 0 }}>
                       <div style={{ width: 88, height: 48, borderRadius: 8, background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, border: '1px solid var(--border)' }}>
@@ -5401,7 +5466,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
           {confirmDelete && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-              <div style={{ background: 'var(--surface)', color: 'var(--text)', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '2px solid rgba(38,131,251,0.45)' }}>
+              <div style={{ background: 'var(--surface)', color: 'var(--text)', borderRadius: 16, padding: '2rem', maxWidth: 400, width: '90%', textAlign: 'center', border: '1px solid #cbd5e1' }}>
                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚠️</div>
                 <h3 style={{ marginBottom: '0.5rem' }}>Delete {confirmDelete.businessName}?</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
@@ -5838,8 +5903,8 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         setSending(false);
       };
 
-      const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: 8, border: '2px solid rgba(38,131,251,0.45)', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box', background: 'rgba(22,32,50,0.95)', color: 'var(--text)', colorScheme: 'dark' };
-      const cardStyle = { background: 'var(--surface)', borderRadius: 12, padding: '1.5rem', boxShadow: '0 2px 12px rgba(0,0,0,0.3)', marginBottom: '1.25rem', border: '2px solid rgba(38,131,251,0.45)', color: 'var(--text)' };
+      const inputStyle = { width: '100%', padding: '0.75rem', borderRadius: 8, border: '1px solid #cbd5e1', fontFamily: 'Outfit,sans-serif', fontSize: '1rem', boxSizing: 'border-box', background: '#fff', color: 'var(--text)', colorScheme: 'light' };
+      const cardStyle = { background: 'var(--surface)', borderRadius: 12, padding: '1.5rem', boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.05)', marginBottom: '1.25rem', border: '1px solid #cbd5e1', color: 'var(--text)' };
 
       return (
         <div style={{ maxWidth: 680, margin: '0 auto' }}>
@@ -5900,7 +5965,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             )}
 
             {routeGenerated && totalDistance && (
-              <div style={{ padding: '0.6rem 1rem', background: '#0d2a15', border: '1.5px solid #4ade80', borderRadius: 8, marginBottom: '1rem', fontSize: '0.9rem', color: '#4ade80', fontWeight: 600 }}>
+              <div style={{ padding: '0.6rem 1rem', background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: 8, marginBottom: '1rem', fontSize: '0.9rem', color: '#166534', fontWeight: 600 }}>
                 🚗 Optimised route · {totalDistance} mi · ~{totalDuration} min driving
               </div>
             )}
@@ -5970,7 +6035,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                         📅 Next appt: {c.nextAppt.requestedDate} {c.nextAppt.requestedTime ? `at ${c.nextAppt.requestedTime}` : ''}
                       </div>
                     ) : (
-                      <div style={{ fontSize: '0.8rem', marginTop: 3, color: '#4ade80', fontWeight: 600 }}>
+                      <div style={{ fontSize: '0.8rem', marginTop: 3, color: '#166534', fontWeight: 600 }}>
                         ✅ No upcoming appointment scheduled
                       </div>
                     )}
@@ -6009,7 +6074,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
               </div>
 
               {sendResult && (
-                <div style={{ marginTop: '0.75rem', padding: '0.7rem 1rem', background: '#0d2a15', borderRadius: 8, border: '1.5px solid #4ade80', fontSize: '0.92rem', fontWeight: 600, color: '#4ade80' }}>
+                <div style={{ marginTop: '0.75rem', padding: '0.7rem 1rem', background: '#f0fdf4', borderRadius: 8, border: '1.5px solid #86efac', fontSize: '0.92rem', fontWeight: 600, color: '#16a34a' }}>
                   {sendResult}
                 </div>
               )}
@@ -7409,9 +7474,9 @@ function ServicesView({ userId }) {
             const isOwned = owned.has(inventoryCatalogKey(p.t, v[0]));
             const on = isOwned || selected.has(key);
             return (
-              <label key={vi} title={v[1] ? `Part # ${v[1]}` : ''} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.25rem 0.55rem', borderRadius: 999, border: `2px solid ${on ? 'var(--primary)' : 'var(--border)'}`, fontSize: '0.85rem', cursor: isOwned ? 'default' : 'pointer', opacity: isOwned ? 0.5 : 1 }}>
+              <label key={vi} title={v[1] ? `Part # ${v[1]}` : ''} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.25rem 0.55rem', borderRadius: 999, border: `2px solid ${isOwned ? '#22c55e' : on ? 'var(--primary)' : 'var(--border)'}`, fontSize: '0.85rem', cursor: isOwned ? 'default' : 'pointer' }} {...(isOwned ? { title: 'Already in your inventory' } : {})}>
                 <input type="checkbox" checked={on} disabled={isOwned} onChange={() => toggleKey(key)} style={{ margin: 0 }} />
-                {v[0] || 'Standard'}
+                {v[0] || 'Standard'}{isOwned && <span style={{ color: '#22c55e' }}> ✓</span>}
               </label>
             );
           })}
@@ -7426,10 +7491,10 @@ function ServicesView({ userId }) {
           const key = `fd:${pi}:0`;
           const isOwned = owned.has(inventoryCatalogKey(p.t, ''));
           return (
-            <label key={pi} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0', opacity: isOwned ? 0.5 : 1, cursor: isOwned ? 'default' : 'pointer' }}>
+            <label key={pi} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0', cursor: isOwned ? 'default' : 'pointer' }}>
               <input type="checkbox" checked={isOwned || selected.has(key)} disabled={isOwned} onChange={() => toggleKey(key)} />
               <span style={{ flex: 1 }}>{p.t}{p.b ? <span style={{ color: 'var(--text-muted)' }}> — {p.b}</span> : null}</span>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : ''}</span>
+              {isOwned && <span style={{ color: '#22c55e', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>✓ In inventory</span>}
             </label>
           );
         }
@@ -7561,10 +7626,10 @@ function ServicesView({ userId }) {
                       {genVisible.filter(v => v.entry.category === cat).map(({ entry, idx }) => {
                         const isOwned = owned.has(inventoryCatalogKey(entry.name, ''));
                         return (
-                          <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0', opacity: isOwned ? 0.5 : 1, cursor: isOwned ? 'default' : 'pointer' }}>
+                          <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0', cursor: isOwned ? 'default' : 'pointer' }}>
                             <input type="checkbox" checked={isOwned || selected.has(`gen:${idx}`)} disabled={isOwned} onChange={() => toggleKey(`gen:${idx}`)} />
                             <span style={{ flex: 1 }}>{entry.name}</span>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : `per ${entry.unit}`}</span>
+                            {isOwned ? <span style={{ color: '#22c55e', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>✓ In inventory</span> : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>per {entry.unit}</span>}
                           </label>
                         );
                       })}
@@ -11646,11 +11711,11 @@ function CalendarView({ userId }) {
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Sex</label>
                 <select value={sex} onChange={e => setSex(e.target.value)}
-                  style={{ ...inputStyle, border: '2px solid rgba(38,131,251,0.45)', background: 'rgba(22,32,50,0.95)', color: 'var(--text)', colorScheme: 'dark' }}>
-                  <option value="" style={{background:'#1e2d45', color:'#e8f0fe'}}>—</option>
-                  <option value="Mare" style={{background:'#1e2d45', color:'#e8f0fe'}}>Mare</option>
-                  <option value="Gelding" style={{background:'#1e2d45', color:'#e8f0fe'}}>Gelding</option>
-                  <option value="Stallion" style={{background:'#1e2d45', color:'#e8f0fe'}}>Stallion</option>
+                  style={{ ...inputStyle, border: '1px solid #cbd5e1', background: '#fff', color: 'var(--text)', colorScheme: 'light' }}>
+                  <option value="">—</option>
+                  <option value="Mare">Mare</option>
+                  <option value="Gelding">Gelding</option>
+                  <option value="Stallion">Stallion</option>
                 </select>
               </div>
             </div>
@@ -12057,7 +12122,7 @@ function CalendarView({ userId }) {
 
             <div style={{padding: '1.5rem', maxHeight: '70vh', overflowY: 'auto'}}>
               <div style={{marginBottom: '1rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px'}}>
-                <div style={{fontWeight: '600', color: '#46C5FF'}}>Customer: {appointment.customerName}{appointment.farmName ? ` — ${appointment.farmName}` : ''}</div>
+                <div style={{fontWeight: '600', color: '#2563eb'}}>Customer: {appointment.customerName}{appointment.farmName ? ` — ${appointment.farmName}` : ''}</div>
                 <div style={{fontSize: '0.875rem', color: '#64748b'}}>Email: {appointment.email || 'Not provided'}</div>
               </div>
 
@@ -14360,10 +14425,10 @@ useEffect(() => {
                 border: '2px solid #0ea5e9',
                 borderRadius: '8px'
               }}>
-                <div style={{fontSize: '0.875rem', fontWeight: '600', color: '#46C5FF', marginBottom: '0.5rem'}}>
+                <div style={{fontSize: '0.875rem', fontWeight: '600', color: '#2563eb', marginBottom: '0.5rem'}}>
                   📋 Invoice from Appointment
                 </div>
-                <div style={{fontSize: '0.875rem', color: '#46C5FF'}}>
+                <div style={{fontSize: '0.875rem', color: '#2563eb'}}>
                   Customer info pre-filled from appointment booking
                 </div>
               </div>
@@ -14417,7 +14482,7 @@ useEffect(() => {
                 <div style={{
                   fontSize: '0.9rem',
                   fontWeight: '600',
-                  color: '#46C5FF',
+                  color: '#2563eb',
                   marginBottom: '0.75rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -14469,7 +14534,7 @@ useEffect(() => {
                     </div>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                       <div>
-                        <div style={{fontSize: '0.85rem', fontWeight: '600', color: '#46C5FF'}}>
+                        <div style={{fontSize: '0.85rem', fontWeight: '600', color: '#2563eb'}}>
                           {selectedCustomerInfo.lastInvoice.invoiceNumber}
                         </div>
                         <div style={{fontSize: '0.75rem', color: '#64748b'}}>
@@ -14481,7 +14546,7 @@ useEffect(() => {
                         </div>
                       </div>
                       <div style={{textAlign: 'right'}}>
-                        <div style={{fontSize: '1rem', fontWeight: 'bold', color: '#46C5FF'}}>
+                        <div style={{fontSize: '1rem', fontWeight: 'bold', color: '#2563eb'}}>
                           ${selectedCustomerInfo.lastInvoice.total?.toFixed(2)}
                         </div>
                         <span style={{
@@ -15470,7 +15535,7 @@ useEffect(() => {
             </p>
             <div style={{marginBottom: '1rem'}}>
               <strong>Booking URL:</strong><br/>
-              <code style={{background: 'rgba(13,19,32,0.9)', color: '#46C5FF', padding: '0.5rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.5rem', wordBreak: 'break-all', border: '1.5px solid rgba(38,131,251,0.45)'}}>
+              <code style={{background: '#f1f5f9', color: '#1d4ed8', padding: '0.5rem', borderRadius: '4px', display: 'inline-block', marginTop: '0.5rem', wordBreak: 'break-all', border: '1.5px solid rgba(38,131,251,0.45)'}}>
                 {`${window.location.origin}?farrier=${safeFarrierId}`}
               </code>
               <div style={{marginTop: '0.5rem'}}>

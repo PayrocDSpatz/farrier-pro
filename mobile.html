@@ -3420,11 +3420,11 @@ function setCatalogTab(tab) {
 function catalogCheckRow(key, owned, label, sub) {
   const checked = owned || state.catalogSelected.has(key);
   return `
-    <label class="horse-row" style="${owned ? 'opacity:0.5;' : ''}">
+    <label class="horse-row">
       <input type="checkbox" ${checked ? 'checked' : ''} ${owned ? 'disabled' : ''} onchange="toggleCatalogKey('${key}', this.checked)" style="width:20px;height:20px;flex-shrink:0;">
       <div style="flex:1; min-width:0;">
         <div class="customer-row-name">${label}</div>
-        <div class="customer-row-sub">${owned ? 'Already in your inventory' : sub}</div>
+        <div class="customer-row-sub" ${owned ? 'style="color:#22c55e;font-weight:600;"' : ''}>${owned ? '✓ In inventory' : sub}</div>
       </div>
     </label>`;
 }
@@ -3477,9 +3477,9 @@ function renderFdProduct(p, pi) {
       const key = `fd:${pi}:${vi}`;
       const owned = state.catalogOwned.has(inventoryCatalogKey(p.t, v[0]));
       const on = owned || state.catalogSelected.has(key);
-      return `<label style="display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border-radius:999px; background:var(--surface); border:2px solid ${on ? 'var(--blue)' : 'var(--border)'}; font-size:0.85rem; font-weight:600; ${owned ? 'opacity:0.5;' : ''}">
+      return `<label style="display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border-radius:999px; background:var(--surface); border:2px solid ${owned ? '#22c55e' : on ? 'var(--blue)' : 'var(--border)'}; font-size:0.85rem; font-weight:600;">
         <input type="checkbox" ${on ? 'checked' : ''} ${owned ? 'disabled' : ''} onchange="toggleCatalogKey('${key}', this.checked); renderInventoryCatalog();" style="margin:0;">
-        ${escapeHtml(v[0] || 'Standard')}
+        ${escapeHtml(v[0] || 'Standard')}${owned ? ' <span style="color:#22c55e;">✓</span>' : ''}
       </label>`;
     }).join('') + `</div>`;
   }
