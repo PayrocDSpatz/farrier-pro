@@ -7280,7 +7280,7 @@ function ServicesView({ userId }) {
                 <div style={{ padding: '1.25rem', borderRadius: 12, background: 'var(--surface)', border: '2px solid var(--primary)', marginBottom: '1rem' }}>
                   <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.35rem' }}>📋 Build your inventory from our supply catalog?</div>
                   <div style={{ color: 'var(--text-muted)', marginBottom: '0.9rem' }}>
-                    Tick the shoes, nails, pads and tools you carry — brand, size, part number and list price come filled in. You just count what's on the truck.
+                    Tick the shoes, nails, pads and tools you carry — brand, size and part number come filled in. You just count what's on the truck.
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button className="btn btn-primary" onClick={() => setCatalogOpen(true)}>Browse catalog</button>
@@ -7411,7 +7411,7 @@ function ServicesView({ userId }) {
             return (
               <label key={vi} title={v[1] ? `Part # ${v[1]}` : ''} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.25rem 0.55rem', borderRadius: 999, border: `2px solid ${on ? 'var(--primary)' : 'var(--border)'}`, fontSize: '0.85rem', cursor: isOwned ? 'default' : 'pointer', opacity: isOwned ? 0.5 : 1 }}>
                 <input type="checkbox" checked={on} disabled={isOwned} onChange={() => toggleKey(key)} style={{ margin: 0 }} />
-                {v[0] || 'Standard'}{v[2] ? <span style={{ color: 'var(--text-muted)' }}> · ${Number(v[2]).toFixed(2)}</span> : null}
+                {v[0] || 'Standard'}
               </label>
             );
           })}
@@ -7429,7 +7429,7 @@ function ServicesView({ userId }) {
             <label key={pi} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0', opacity: isOwned ? 0.5 : 1, cursor: isOwned ? 'default' : 'pointer' }}>
               <input type="checkbox" checked={isOwned || selected.has(key)} disabled={isOwned} onChange={() => toggleKey(key)} />
               <span style={{ flex: 1 }}>{p.t}{p.b ? <span style={{ color: 'var(--text-muted)' }}> — {p.b}</span> : null}</span>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : p.v[0][2] ? `$${Number(p.v[0][2]).toFixed(2)}` : ''}</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : ''}</span>
             </label>
           );
         }
@@ -7505,7 +7505,7 @@ function ServicesView({ userId }) {
             </div>
             <p style={{ margin: '0 0 0.75rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
               {tab === 'fd'
-                ? 'Pick the sizes you carry. Brand, size, part number and list price are filled in — click Edit afterwards to set quantity, reorder level, or your actual cost.'
+                ? 'Pick the sizes you carry. Brand, size and part number are filled in — click Edit afterwards to set quantity, reorder level and your cost.'
                 : "For anything not in the supply catalog. They're added with a quantity of 0 — click Edit on each to fill in details."}
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
@@ -7575,7 +7575,7 @@ function ServicesView({ userId }) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{tab === 'fd' && fd ? `List prices as of ${fd.retrieved}` : ''}</span>
+              <span />
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button className="btn btn-outline" onClick={onClose}>Cancel</button>
                 <button className="btn btn-primary" disabled={!selected.size || saving} onClick={handleAdd}>

@@ -3341,7 +3341,7 @@ async function loadInventoryList() {
       list.innerHTML = `
         <div class="card" style="border:2px solid #bfdbfe; background:#eff6ff;">
           <div style="font-weight:700; font-size:1rem; margin-bottom:6px;">📋 Build your inventory from our supply catalog?</div>
-          <div style="font-size:0.88rem; color:var(--text-muted); margin-bottom:14px;">Tick the shoes, nails, pads and tools you carry — brand, size, part number and list price come filled in. You just count what's on the truck.</div>
+          <div style="font-size:0.88rem; color:var(--text-muted); margin-bottom:14px;">Tick the shoes, nails, pads and tools you carry — brand, size and part number come filled in. You just count what's on the truck.</div>
           <button class="btn-primary" onclick="openInventoryCatalog()">Browse catalog</button>
           <div style="margin-top:8px;"></div>
           <button class="btn-secondary" onclick="startNewInventoryItem()">I'll add my own</button>
@@ -3453,10 +3453,9 @@ function toggleCatalogSearchAll() {
 
 function renderFdProduct(p, pi) {
   const brand = p.b ? ` <span style="font-weight:400;color:var(--text-muted);">— ${escapeHtml(p.b)}</span>` : '';
-  const price = (v) => v[2] ? '$' + Number(v[2]).toFixed(2) : '';
   if (p.v.length === 1 && !p.v[0][0]) {
     return catalogCheckRow(`fd:${pi}:0`, state.catalogOwned.has(inventoryCatalogKey(p.t, '')),
-      escapeHtml(p.t) + brand, [price(p.v[0]), p.u !== 'each' ? 'per ' + escapeHtml(p.u) : ''].filter(Boolean).join(' · '));
+      escapeHtml(p.t) + brand, p.u !== 'each' ? 'per ' + escapeHtml(p.u) : '');
   }
   const selCount = p.v.filter((_, vi) => state.catalogSelected.has(`fd:${pi}:${vi}`)).length;
   const isOpen = state.catalogOpenProduct === pi;
@@ -3480,7 +3479,7 @@ function renderFdProduct(p, pi) {
       const on = owned || state.catalogSelected.has(key);
       return `<label style="display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border-radius:999px; background:var(--surface); border:2px solid ${on ? 'var(--blue)' : 'var(--border)'}; font-size:0.85rem; font-weight:600; ${owned ? 'opacity:0.5;' : ''}">
         <input type="checkbox" ${on ? 'checked' : ''} ${owned ? 'disabled' : ''} onchange="toggleCatalogKey('${key}', this.checked); renderInventoryCatalog();" style="margin:0;">
-        ${escapeHtml(v[0] || 'Standard')}${v[2] ? `<span style="font-weight:400;color:var(--text-muted);">${price(v)}</span>` : ''}
+        ${escapeHtml(v[0] || 'Standard')}
       </label>`;
     }).join('') + `</div>`;
   }
@@ -3522,7 +3521,7 @@ function renderInventoryCatalog() {
           </div>`;
         if (isOpen) html += `<div style="padding-left:12px;">${inCat.map(({ p, pi }) => renderFdProduct(p, pi)).join('')}</div>`;
       });
-      html += `<div class="customer-row-sub" style="padding:10px 4px;">List prices as of ${escapeHtml(fd.retrieved)} — edit any item to enter your actual cost.</div>`;
+      html += `<div class="customer-row-sub" style="padding:10px 4px;">Edit any item to enter your cost.</div>`;
     }
   } else {
     let lastCat = null;
