@@ -32,7 +32,26 @@ service cloud.firestore {
 
     match /supportAdmins/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
+      allow read: if isServer(); // api/send-sms lets support staff text farriers
       allow write: if false;
+    }
+
+    // ── FarriTech support desk (support.html) ──
+    // Support staff only (plus the server, which logs farriers' text replies onto tickets).
+    // Farriers can't read any of it: none of it is stored on their own farriers/{uid} profile.
+    function isSupportAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/supportAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/supportAdmins/$(request.auth.uid)).data.get('active', true) != false;
+    }
+    match /supportFarriers/{recordId} {
+      allow read, write: if isSupportAdmin() || isServer();
+    }
+    match /supportTickets/{ticketId} {
+      allow read, write: if isSupportAdmin() || isServer();
+      match /messages/{messageId} {
+        allow read, write: if isSupportAdmin() || isServer();
+      }
     }
 match /sponsorBanners/{bannerId} {
   allow read: if true;

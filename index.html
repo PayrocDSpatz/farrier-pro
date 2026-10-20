@@ -2550,25 +2550,6 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
   const finishSignup = urlParams.get("finishSignup") === "1" || urlParams.has("leadId") || urlParams.has("lead") || urlParams.has("lid");
 
 
-  // Support admin gate (must be outside conditional renders)
-  const [isAdmin, setIsAdmin] = useState(null);
-
-  useEffect(() => {
-    // Only check admin access when support mode is enabled and a user is signed in
-    if (!support || !user) {
-      setIsAdmin(null);
-      return;
-    }
-    (async () => {
-      try {
-        const doc = await db.collection("supportAdmins").doc(user.uid).get();
-        setIsAdmin(doc.exists && (doc.data()?.active !== false));
-      } catch (e) {
-        console.error("Admin check failed", e);
-        setIsAdmin(false);
-      }
-    })();
-  }, [support, user?.uid]);
   const clearSupportSession = async () => {
     try {
       if (supportSessionId && db) {
@@ -2810,34 +2791,10 @@ ${appointment.comments ? `   ${appointment.comments}` : '   (None)'}
     return <CustomerBookingView farrierId={farrierIdParam} />;
   }
 
-  // Support portal view
+  // Support portal view — moved to its own page, support.html (/support).
 if (support) {
-  if (!user) return <AuthView />;
-
-  // Firestore-based admin gate (easy + no custom claims)
-  if (isAdmin === null) {
-    return (
-      <div className="page">
-        <div className="card">
-          <h2>Checking access…</h2>
-          <p>Loading support portal…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className="page">
-        <div className="card">
-          <h2>Access denied</h2>
-          <p>This account is not allowed to access the support portal.</p>
-        </div>
-      </div>
-    );
-  }
-
-  return <SupportPortal user={user} />;
+  window.location.replace('/support');
+  return null;
   }
 
   // Finish signup (post-billing activation)
@@ -3717,105 +3674,20 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
 }
 
 
-   function SupportPortal({ user }) {
-  const [q, setQ] = useState('');
-  const [farriers, setFarriers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [reason, setReason] = useState('Troubleshooting');
-
-  useEffect(() => {
-    (async () => {
-      if (!db) return;
-      const snap = await db.collection('farriers').get();
-      setFarriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    })();
-  }, []);
-
-  const filtered = farriers.filter(f => {
-    const s = (q || '').toLowerCase();
-    return (
-      (f.businessName || '').toLowerCase().includes(s) ||
-      (f.email || '').toLowerCase().includes(s) ||
-      (f.phone || '').toLowerCase().includes(s)
-    );
-  });
-
-  const startSession = async (targetFarrierId) => {
-    const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
-
-    const docRef = await db.collection('supportSessions').add({
-      supportAgentUid: user.uid,
-      targetFarrierId,
-      reason,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      expiresAt: firebase.firestore.Timestamp.fromDate(expires),
-      endedAt: null
-    });
-
-    // Redirect into the normal app in support mode
-    const u = new URL(window.location.href);
-    u.searchParams.delete('support');
-    u.searchParams.set('supportSession', docRef.id);
-    window.location.href = u.toString();
-  };
-
-  return (
-    <div className="app-container">
-      <header className="app-header">
-        <div className="header-content">
-          <div className="logo">
-            <span className="logo-icon">🐴</span>
-            <span>Support Portal</span>
-          </div>
-        </div>
-      </header>
-
-      <div className="auth-container">
-        <div className="card">
-          <h2>Impersonate a Farrier</h2>
-
-          <div className="form-group">
-            <label>Search</label>
-            <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="business, email, phone..." />
-          </div>
-
-          <div className="form-group">
-            <label>Reason (required)</label>
-            <input value={reason} onChange={(e)=>setReason(e.target.value)} />
-          </div>
-
-          {loading ? (
-            <p>Loading…</p>
-          ) : (
-            <div style={{marginTop:'12px'}}>
-              {filtered.map(f => (
-                <div key={f.id} className="card" style={{marginBottom:'10px'}}>
-                  <div><strong>{f.businessName || '(no business name)'}</strong></div>
-                  <div style={{color:'var(--text-muted)'}}>{f.email || ''} {f.phone ? `• ${fmtPhone(f.phone)}` : ''}</div>
-                  <div style={{marginTop:'8px'}}>
-                    <button className="btn btn-primary" onClick={()=>startSession(f.id)}>
-                      Login as this Farrier
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {filtered.length === 0 && <p style={{color:'var(--text-muted)'}}>No matches.</p>}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
 // Emails allowed to manage sponsor banners on the customer portal (FarriTech support/admins only — not farrier accounts)
 const SPONSOR_ADMIN_EMAILS = ['david@dasconsulting.com', 'david@dasdigitalai.com', 'eaven777@gmail.com'];
 
 function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupportMode, supportSession, clearSupportSession }) {
 
       const isSponsorAdmin = SPONSOR_ADMIN_EMAILS.includes((user?.email || '').toLowerCase());
+      // FarriTech support staff get a button to the support desk (support.html).
+      const [isSupportStaff, setIsSupportStaff] = useState(false);
+      useEffect(() => {
+        if (!user?.uid || !db) return;
+        db.collection('supportAdmins').doc(user.uid).get()
+          .then(d => setIsSupportStaff(d.exists && d.data()?.active !== false))
+          .catch(() => setIsSupportStaff(false));
+      }, [user?.uid]);
       const [tab, setTab] = useState('qrcode');
       const [openNavGroup, setOpenNavGroup] = useState(null);
 
@@ -3940,6 +3812,24 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                   Logged in as {user.email}
                 </div>
               </div>
+              {isSupportStaff && !isSupportMode && (
+                <a
+                  href="/support"
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: 'rgba(255,255,255,0.18)',
+                    border: '1px solid rgba(255,255,255,0.4)',
+                    color: 'white',
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    textDecoration: 'none',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  🛟 Support
+                </a>
+              )}
               <button
                 onClick={handleLogout}
                 style={{
@@ -7390,7 +7280,7 @@ function ServicesView({ userId }) {
                 <div style={{ padding: '1.25rem', borderRadius: 12, background: 'var(--surface)', border: '2px solid var(--primary)', marginBottom: '1rem' }}>
                   <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.35rem' }}>📋 Build your inventory from our supply catalog?</div>
                   <div style={{ color: 'var(--text-muted)', marginBottom: '0.9rem' }}>
-                    Tick the shoes, nails, pads and tools you carry — brand, size, part number and list price come filled in. You just count what's on the truck.
+                    Tick the shoes, nails, pads and tools you carry — brand, size and part number come filled in. You just count what's on the truck.
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button className="btn btn-primary" onClick={() => setCatalogOpen(true)}>Browse catalog</button>
@@ -7521,7 +7411,7 @@ function ServicesView({ userId }) {
             return (
               <label key={vi} title={v[1] ? `Part # ${v[1]}` : ''} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.25rem 0.55rem', borderRadius: 999, border: `2px solid ${on ? 'var(--primary)' : 'var(--border)'}`, fontSize: '0.85rem', cursor: isOwned ? 'default' : 'pointer', opacity: isOwned ? 0.5 : 1 }}>
                 <input type="checkbox" checked={on} disabled={isOwned} onChange={() => toggleKey(key)} style={{ margin: 0 }} />
-                {v[0] || 'Standard'}{v[2] ? <span style={{ color: 'var(--text-muted)' }}> · ${Number(v[2]).toFixed(2)}</span> : null}
+                {v[0] || 'Standard'}
               </label>
             );
           })}
@@ -7539,7 +7429,7 @@ function ServicesView({ userId }) {
             <label key={pi} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0', opacity: isOwned ? 0.5 : 1, cursor: isOwned ? 'default' : 'pointer' }}>
               <input type="checkbox" checked={isOwned || selected.has(key)} disabled={isOwned} onChange={() => toggleKey(key)} />
               <span style={{ flex: 1 }}>{p.t}{p.b ? <span style={{ color: 'var(--text-muted)' }}> — {p.b}</span> : null}</span>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : p.v[0][2] ? `$${Number(p.v[0][2]).toFixed(2)}` : ''}</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{isOwned ? 'already added' : ''}</span>
             </label>
           );
         }
@@ -7615,7 +7505,7 @@ function ServicesView({ userId }) {
             </div>
             <p style={{ margin: '0 0 0.75rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
               {tab === 'fd'
-                ? 'Pick the sizes you carry. Brand, size, part number and list price are filled in — click Edit afterwards to set quantity, reorder level, or your actual cost.'
+                ? 'Pick the sizes you carry. Brand, size and part number are filled in — click Edit afterwards to set quantity, reorder level and your cost.'
                 : "For anything not in the supply catalog. They're added with a quantity of 0 — click Edit on each to fill in details."}
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
@@ -7685,7 +7575,7 @@ function ServicesView({ userId }) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{tab === 'fd' && fd ? `List prices as of ${fd.retrieved}` : ''}</span>
+              <span />
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button className="btn btn-outline" onClick={onClose}>Cancel</button>
                 <button className="btn btn-primary" disabled={!selected.size || saving} onClick={handleAdd}>

@@ -240,6 +240,13 @@ export async function setGoogleRefreshToken(farrierId, token) {
   await patchDoc(`farriers/${farrierId}`, {}, LEGACY_GOOGLE_FIELDS);
 }
 
+// FarriTech support staff (supportAdmins/{uid}, set by hand in the Firebase console).
+export async function isSupportAdmin(uid) {
+  if (!uid) return false;
+  const a = await getDoc(`supportAdmins/${uid}`);
+  return !!a && a.active !== false;
+}
+
 export async function isFarrier(uid) {
   if (!uid) return false;
   const { uid: serverUid } = await serverAuth();
