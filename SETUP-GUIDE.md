@@ -259,7 +259,7 @@ exports.handler = async (event) => {
 ```
 
 #### New-signup text alerts
-`api/notify-signup.js` texts you whenever a new farrier creates a FarriTech account
+`/api/notify-signup` (code in `api/_lib/signup-alert.js`, served by `api/send-sms.js`) texts you whenever a new farrier creates a FarriTech account
 (business name, contact name, email, phone, city/state). In Vercel → Settings →
 Environment Variables, add:
 
