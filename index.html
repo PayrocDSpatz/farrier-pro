@@ -2127,6 +2127,18 @@ async function seedDefaultServicesIfEmpty_(userId) {
   console.log("✅ Default services seeded");
 }
 
+// Tells the server a new farrier account was just created so it can text the FarriTech
+// owner (api/notify-signup). Fire-and-forget — never blocks or fails a signup.
+function notifySignup_(user) {
+  if (!user) return;
+  user.getIdToken().then(token => fetch('/api/notify-signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: '{}',
+    keepalive: true, // the signup screen redirects right away
+  })).catch(e => console.warn('Signup alert failed', e));
+}
+
 // Ensures the farrier profile doc exists and surfaces permission/config errors clearly
 async function ensureFarriTechfile_(uid, profile) {
   if (!db || !uid) throw new Error("Firestore is not initialized.");
@@ -3032,6 +3044,7 @@ const [loading, setLoading] = useState(false);
               googleCalendarConnected: false,
               bookingUrl: window.location.origin + '?farrier=' + user.uid
             });
+            notifySignup_(user);
 }
 
           // User will be automatically logged in by Firebase
@@ -3087,6 +3100,7 @@ const [loading, setLoading] = useState(false);
       googleCalendarConnected: false,
       bookingUrl: window.location.origin + '?farrier=' + user.uid
     });
+    notifySignup_(user);
 
     // Services are no longer auto-seeded here — the first-time setup wizard
     // (SetupWizardView) is now how a new farrier adds their own real services
@@ -3491,6 +3505,7 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
       try {
         await ensureFarriTechfile_(uid, farrierDoc);
         console.log("✅ Farrier profile written successfully");
+        notifySignup_(newUser);
       } catch (writeErr) {
         console.error("❌ ensureFarriTechfile_ failed:", writeErr?.code, writeErr?.message);
         throw writeErr;
@@ -3565,6 +3580,7 @@ console.log("✅ Writing farrier doc, UID:", uid, "farrierId:", farrierDoc?.farr
           };
 
           await ensureFarriTechfile_(recoveryUid, recoveryDoc);
+          notifySignup_(existingUser);
           if (leadId) {
             try {
               await db.collection("leads").doc(leadId).set({
