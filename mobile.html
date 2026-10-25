@@ -148,6 +148,9 @@
   .invoice-row-num { font-weight: 700; font-size: 0.95rem; }
   .invoice-row-amount { font-weight: 800; font-size: 1rem; color: var(--blue); }
   .invoice-row-bottom { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+  .inv-filter { display: flex; gap: 6px; background: var(--surface); border-radius: var(--radius-sm); padding: 4px; margin-bottom: 10px; box-shadow: var(--shadow); }
+  .inv-filter button { flex: 1; border: none; background: none; border-radius: 8px; padding: 10px; font-weight: 700; font-size: 0.9rem; color: var(--text-muted); cursor: pointer; }
+  .inv-filter button.active { background: var(--blue); color: white; }
 
   /* ── BADGES ── */
   .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -341,7 +344,7 @@
       <div style="font-size:1.4rem;">📶</div>
       <div style="flex:1;">
         <div style="font-weight:700; color:var(--blue); font-size:0.9rem;">You're Set for Offline</div>
-        <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">Opening the app with signal automatically syncs your customers and horses. For your full appointment list and outstanding invoices too, open Find Appointment and Open Invoices once while you have signal.</div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">Opening the app with signal automatically syncs your customers and horses. For your full appointment list and outstanding invoices too, open Find Appointment and Invoices once while you have signal.</div>
       </div>
       <button onclick="dismissOfflineTip()" style="background:none; border:none; color:var(--text-muted); font-size:1.2rem; cursor:pointer; padding:4px; flex-shrink:0; line-height:1;">✕</button>
     </div>
@@ -375,7 +378,7 @@
       </button>
       <button class="big-btn" onclick="goTo('screen-search'); setTimeout(()=>loadOpenInvoices(),300)">
         <div class="big-btn-icon cyan">💰</div>
-        <div class="big-btn-label">Open Invoices</div>
+        <div class="big-btn-label">Invoices</div>
       </button>
       <button class="big-btn" onclick="goTo('screen-inventory'); loadInventoryList();">
         <div class="big-btn-icon" style="background:#B45309;">📦</div>
@@ -428,7 +431,10 @@
     <div id="search-loading" class="loading-wrap"><div class="spinner"></div></div>
     <div id="search-results"></div>
     <div id="open-invoices-section" style="display:none;">
-      <div class="section-label" style="margin-top:8px;">💰 Outstanding Invoices</div>
+      <div class="inv-filter" style="margin-top:8px;">
+        <button id="inv-filter-open" class="active" onclick="loadOpenInvoices('outstanding')">💰 Open</button>
+        <button id="inv-filter-paid" onclick="loadOpenInvoices('paid')">✅ Paid</button>
+      </div>
       <div id="open-invoices-list"></div>
     </div>
   </div>
@@ -1979,22 +1985,46 @@ function startAppointmentForHorse(h) {
   renderApptHorsePicker([h.id]);
 }
 
-async function loadOpenInvoices() {
+// Home "Invoices" card: Open (outstanding — tap to collect) or Paid (history, with
+// refunds where the payment allows one). Same farrierId+status+createdAt query/index
+// either way.
+async function loadOpenInvoices(status = 'outstanding') {
   document.getElementById('search-input').value = '';
   document.getElementById('search-results').innerHTML = '';
   const sec = document.getElementById('open-invoices-section');
   sec.style.display = 'block';
+  document.getElementById('inv-filter-open').classList.toggle('active', status === 'outstanding');
+  document.getElementById('inv-filter-paid').classList.toggle('active', status === 'paid');
   const list = document.getElementById('open-invoices-list');
   list.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
     const snap = await db.collection('invoices')
       .where('farrierId', '==', bizId())
-      .where('status', '==', 'outstanding')
+      .where('status', '==', status)
       .orderBy('createdAt', 'desc')
       .get();
     const invs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (!invs.length) {
-      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🎉</div><div class="empty-state-text">No outstanding invoices</div></div>`;
+      list.innerHTML = status === 'paid'
+        ? `<div class="empty-state"><div class="empty-state-icon">🧾</div><div class="empty-state-text">No paid invoices yet</div></div>`
+        : `<div class="empty-state"><div class="empty-state-icon">🎉</div><div class="empty-state-text">No outstanding invoices</div></div>`;
+      return;
+    }
+    if (status === 'paid') {
+      // openRefund() looks invoices up here.
+      state.customerInvoices = { ...(state.customerInvoices || {}), ...Object.fromEntries(invs.map(inv => [inv.id, inv])) };
+      list.innerHTML = invs.map(inv => `
+        <div class="invoice-row paid">
+          <div class="invoice-row-top">
+            <div class="invoice-row-num">#${inv.invoiceNumber} · ${inv.customerName}</div>
+            <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
+          </div>
+          <div class="invoice-row-bottom" style="display:flex; align-items:center; gap:6px;">
+            <span>${fmtDate(inv.paidAt || inv.createdAt)} · <span class="badge badge-success">paid</span></span>
+            ${canRefundInvoice(inv) ? `<button class="btn-sm" style="margin-left:auto; background:var(--danger-bg); color:var(--danger);" onclick="event.stopPropagation(); openRefund('${inv.id}')">↩️ Refund</button>` : ''}
+          </div>
+        </div>
+      `).join('');
       return;
     }
     list.innerHTML = invs.map(inv => `
