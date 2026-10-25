@@ -1996,8 +1996,8 @@ function startAppointmentForHorse(h) {
   renderApptHorsePicker([h.id]);
 }
 
-// Home "Invoices" card: Open (outstanding — tap to collect) or Paid (history, with
-// refunds where the payment allows one).
+// Home "Invoices" card: Open (customers who owe money, grouped with balances) or Paid
+// (history, with refunds where the payment allows one).
 async function loadOpenInvoices(status = 'outstanding') {
   document.getElementById('inv-filter-open').classList.toggle('active', status === 'outstanding');
   document.getElementById('inv-filter-paid').classList.toggle('active', status === 'paid');
@@ -2035,16 +2035,48 @@ async function loadOpenInvoices(status = 'outstanding') {
       `).join('');
       return;
     }
-    list.innerHTML = invs.map(inv => `
-      <div class="invoice-row outstanding" onclick="openInvoicePayment(${JSON.stringify(inv).replace(/"/g,'&quot;')})">
+    // Open: who owes money — one row per customer with their balance, biggest first.
+    // Tapping a customer shows their unpaid invoices (tap one to collect).
+    const byCust = {};
+    invs.forEach(inv => {
+      const key = inv.customerName || 'Unknown customer';
+      (byCust[key] = byCust[key] || { name: key, farm: inv.customerFarmName || '', total: 0, invs: [] });
+      byCust[key].total += inv.total || 0;
+      byCust[key].invs.push(inv);
+    });
+    const owing = Object.values(byCust).sort((a,b) => b.total - a.total);
+    const grand = owing.reduce((sum, c) => sum + c.total, 0);
+    list.innerHTML = `
+      <div class="card" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:700;">${owing.length} customer${owing.length === 1 ? '' : 's'} owe you</div>
+        <div style="font-weight:800; font-size:1.15rem; color:var(--blue);">$${grand.toFixed(2)}</div>
+      </div>
+    ` + owing.map((c, i) => `
+      <div class="invoice-row outstanding" onclick="toggleOwingCustomer(${i})">
         <div class="invoice-row-top">
-          <div class="invoice-row-num">#${inv.invoiceNumber} · ${inv.customerName}</div>
-          <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
+          <div class="invoice-row-num">${c.name}</div>
+          <div class="invoice-row-amount">$${c.total.toFixed(2)}</div>
         </div>
-        <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to collect payment</div>
+        <div class="invoice-row-bottom">${c.farm ? c.farm + ' · ' : ''}${c.invs.length} unpaid invoice${c.invs.length === 1 ? '' : 's'} · oldest ${fmtDate(c.invs[c.invs.length - 1].createdAt)}</div>
+      </div>
+      <div id="owing-cust-${i}" style="display:none; margin:-4px 0 10px 16px;">
+        ${c.invs.map(inv => `
+          <div class="invoice-row outstanding" onclick="openInvoicePayment(${JSON.stringify(inv).replace(/"/g,'&quot;')})">
+            <div class="invoice-row-top">
+              <div class="invoice-row-num">#${inv.invoiceNumber}</div>
+              <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
+            </div>
+            <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to collect payment</div>
+          </div>
+        `).join('')}
       </div>
     `).join('');
   } catch(e) { console.error('Invoices load error:', e); list.innerHTML = '<div class="empty-state"><div class="empty-state-text">Error loading invoices</div></div>'; }
+}
+
+function toggleOwingCustomer(i) {
+  const el = document.getElementById('owing-cust-' + i);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 function selectCustomer(c) {
