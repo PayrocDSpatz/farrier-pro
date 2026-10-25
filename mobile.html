@@ -158,6 +158,7 @@
   .badge-success { background: var(--success-bg); color: var(--success); }
   .badge-warning { background: var(--warning-bg); color: var(--warning); }
   .badge-danger { background: var(--danger-bg); color: var(--danger); }
+  .badge-muted { background: var(--border); color: var(--text-muted); }
   .badge-blue { background: #EBF4FF; color: var(--blue); }
 
   /* ── STAT ROW ── */
@@ -381,6 +382,10 @@
         <div class="big-btn-icon cyan">💰</div>
         <div class="big-btn-label">Invoices</div>
       </button>
+      <button class="big-btn" onclick="openUpcomingService()">
+        <div class="big-btn-icon" style="background:#15803D;">🔔</div>
+        <div class="big-btn-label">Upcoming Service</div>
+      </button>
       <button class="big-btn" onclick="goTo('screen-inventory'); loadInventoryList();">
         <div class="big-btn-icon" style="background:#B45309;">📦</div>
         <div class="big-btn-label">Inventory</div>
@@ -470,6 +475,29 @@
   </div>
   <div class="scroll-body" style="padding-top:8px;">
     <div id="horse-search-results"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- SCREEN: UPCOMING SERVICE REPORT           -->
+<!-- ══════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-upcoming">
+  <div class="header">
+    <button class="back-btn" onclick="goBack()">‹</button>
+    <div class="header-title">Upcoming Service</div>
+  </div>
+  <div style="padding:12px 16px 0; flex-shrink:0; background:var(--bg);">
+    <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:6px;">Horses due in the next…</div>
+    <div style="display:flex; gap:6px; margin-bottom:10px;" id="upcoming-weeks">
+      <button class="appt-filter-btn" data-weeks="1" onclick="setUpcomingWeeks(1)">1 wk</button>
+      <button class="appt-filter-btn" data-weeks="2" onclick="setUpcomingWeeks(2)">2 wks</button>
+      <button class="appt-filter-btn active" data-weeks="4" onclick="setUpcomingWeeks(4)">4 wks</button>
+      <button class="appt-filter-btn" data-weeks="6" onclick="setUpcomingWeeks(6)">6 wks</button>
+      <button class="appt-filter-btn" data-weeks="8" onclick="setUpcomingWeeks(8)">8 wks</button>
+    </div>
+  </div>
+  <div class="scroll-body" style="padding-top:0;">
+    <div id="upcoming-list"></div>
   </div>
 </div>
 
@@ -1986,6 +2014,109 @@ function openHorseFromSearch(h) {
     state.customerHorses = (state.allHorses || []).filter(x => x.customerId === owner.id);
   }
   openHorseDetail(h);
+}
+
+// ── UPCOMING SERVICE REPORT ──
+// Every horse whose next service (lib/horse-history.js: its next booked appointment, or
+// last service + shoeing cycle) falls within the chosen number of weeks.
+// Appointments and invoices are pulled once per visit, then switching weeks re-filters.
+let _upcomingData = null;
+
+async function openUpcomingService() {
+  goTo('screen-upcoming');
+  _upcomingData = null;
+  const list = document.getElementById('upcoming-list');
+  list.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    if (!(state.allHorses || []).length) await loadAllHorses();
+    const [aSnap, iSnap] = await Promise.all([
+      db.collection('appointments').where('farrierId', '==', bizId()).get(),
+      db.collection('invoices').where('farrierId', '==', bizId()).get(),
+    ]);
+    const appts = aSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const invs = iSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _upcomingData = (state.allHorses || []).map(h => ({ h, hist: FarriHorseHistory.build(h, appts, invs) }));
+    const active = document.querySelector('#upcoming-weeks .active');
+    renderUpcoming(Number(active?.dataset.weeks) || 4);
+  } catch (e) {
+    console.error('Upcoming service error:', e);
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-text">Couldn't load horses${netState.online ? '' : ' while offline'}</div></div>`;
+  }
+}
+
+function setUpcomingWeeks(weeks) {
+  document.querySelectorAll('#upcoming-weeks .appt-filter-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.weeks) === weeks));
+  if (_upcomingData) renderUpcoming(weeks);
+}
+
+// Grouped by owner/farm: a farm shows up when at least one of its horses is due, with
+// those horses first and the owner's other horses (not due yet) listed under them, so a
+// farm visit can cover everything there. Farms are ordered by their earliest due date.
+function renderUpcoming(weeks) {
+  const list = document.getElementById('upcoming-list');
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(today.getTime() + weeks * 7 * 86400e3);
+  const isDue = x => x.hist.nextService && x.hist.nextService.date < end;
+
+  const groups = {};
+  _upcomingData.forEach(x => {
+    const owner = horseOwner(x.h);
+    const key = x.h.customerId || owner.name || 'unknown';
+    (groups[key] = groups[key] || { owner, due: [], other: [] })[isDue(x) ? 'due' : 'other'].push(x);
+  });
+  const farms = Object.values(groups).filter(g => g.due.length);
+  const byNext = (a, b) => (a.hist.nextService?.date || Infinity) - (b.hist.nextService?.date || Infinity);
+  farms.forEach(g => { g.due.sort(byNext); g.other.sort(byNext); });
+  farms.sort((a, b) => a.due[0].hist.nextService.date - b.due[0].hist.nextService.date);
+
+  const dueCount = farms.reduce((n, g) => n + g.due.length, 0);
+  const overdue = farms.reduce((n, g) => n + g.due.filter(x => x.hist.nextService.overdue).length, 0);
+  const noDate = _upcomingData.filter(x => !x.hist.nextService).length;
+  const noDateNote = noDate
+    ? `<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; margin:12px 0;">${noDate} horse${noDate === 1 ? ' has' : 's have'} no appointment or shoeing cycle, so no due date.</div>`
+    : '';
+  if (!farms.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🐴</div><div class="empty-state-text">No horses due in the next ${weeks} week${weeks === 1 ? '' : 's'}</div></div>` + noDateNote;
+    return;
+  }
+
+  const horseRow = ({ h, hist }, muted) => {
+    const next = hist.nextService;
+    const badge = !next ? '<span class="badge badge-muted">no due date</span>'
+      : !next.estimated ? '<span class="badge badge-success">booked</span>'
+      : next.overdue ? '<span class="badge badge-danger">overdue</span>'
+      : (muted ? '<span class="badge badge-muted">next</span>' : '<span class="badge badge-warning">due</span>');
+    return `
+      <div class="horse-row" style="padding:10px 12px; margin-bottom:6px;${muted ? ' opacity:0.7; box-shadow:none;' : ''}" onclick="openUpcomingHorse('${escapeHtml(h.id)}')">
+        <div style="flex:1; min-width:0;">
+          <div class="customer-row-name" style="font-size:0.95rem;">🐴 ${escapeHtml(h.name || 'Unnamed')}</div>
+          <div class="customer-row-sub">${next ? fmtDate(next.date) + ' ' : ''}${badge}${hist.lastService ? ' · last ' + fmtDate(hist.lastService.date) : ''}</div>
+        </div>
+        <div class="customer-row-arrow">›</div>
+      </div>`;
+  };
+
+  list.innerHTML = `
+    <div class="card" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-weight:700;">${dueCount} horse${dueCount === 1 ? '' : 's'} due at ${farms.length} farm${farms.length === 1 ? '' : 's'}</div>
+      ${overdue ? `<span class="badge badge-danger">${overdue} overdue</span>` : ''}
+    </div>
+  ` + farms.map(g => `
+    <div class="card" style="margin-bottom:12px; padding:12px;">
+      <div style="font-weight:800; color:var(--blue);">${escapeHtml(g.owner.farm || g.owner.name || 'Unknown owner')}</div>
+      ${g.owner.farm && g.owner.name ? `<div style="font-size:0.82rem; color:var(--text-muted);">${escapeHtml(g.owner.name)}</div>` : ''}
+      <div style="margin-top:8px;">${g.due.map(x => horseRow(x, false)).join('')}</div>
+      ${g.other.length ? `
+        <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin:10px 0 6px;">Also at this farm · not due yet</div>
+        ${g.other.map(x => horseRow(x, true)).join('')}` : ''}
+    </div>
+  `).join('') + noDateNote;
+}
+
+function openUpcomingHorse(id) {
+  const h = (state.allHorses || []).find(x => x.id === id);
+  if (h) openHorseFromSearch(h);
 }
 
 // New Invoice / New Appt, pre-filled for one specific horse — used by the horse detail
