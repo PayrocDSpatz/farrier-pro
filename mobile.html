@@ -1998,8 +1998,7 @@ function startAppointmentForHorse(h) {
   renderApptHorsePicker([h.id]);
 }
 
-// Home "Invoices" card: Open (customers who owe money, grouped with balances) or Paid
-// (history, with refunds where the payment allows one).
+// Home "Invoices" card: Open (customers who owe money) or Paid, both grouped by customer.
 async function loadOpenInvoices(status = 'outstanding') {
   document.getElementById('inv-filter-open').classList.toggle('active', status === 'outstanding');
   document.getElementById('inv-filter-paid').classList.toggle('active', status === 'paid');
@@ -2021,13 +2020,9 @@ async function loadOpenInvoices(status = 'outstanding') {
       return;
     }
     // One row per customer with their total (owed, or paid), biggest first. Tapping a
-    // customer shows their invoices: unpaid ones open the invoice (pay / resend), paid
-    // ones offer a refund where the payment allows one.
+    // customer shows their invoices; unpaid ones open the invoice (pay / resend).
+    // Refunds stay on the customer screen's Invoice History.
     const paid = status === 'paid';
-    if (paid) {
-      // openRefund() looks invoices up here.
-      state.customerInvoices = { ...(state.customerInvoices || {}), ...Object.fromEntries(invs.map(inv => [inv.id, inv])) };
-    }
     const byCust = {};
     invs.forEach(inv => {
       const key = inv.customerName || 'Unknown customer';
@@ -2044,10 +2039,7 @@ async function loadOpenInvoices(status = 'outstanding') {
               <div class="invoice-row-num">#${inv.invoiceNumber}</div>
               <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
             </div>
-            <div class="invoice-row-bottom" style="display:flex; align-items:center; gap:6px;">
-              <span>${fmtDate(inv.paidAt || inv.createdAt)} · <span class="badge badge-success">paid</span></span>
-              ${canRefundInvoice(inv) ? `<button class="btn-sm" style="margin-left:auto; background:var(--danger-bg); color:var(--danger);" onclick="event.stopPropagation(); openRefund('${inv.id}')">↩️ Refund</button>` : ''}
-            </div>
+            <div class="invoice-row-bottom">${fmtDate(inv.paidAt || inv.createdAt)} · <span class="badge badge-success">paid</span></div>
           </div>`
       : inv => `
           <div class="invoice-row outstanding" onclick="openInvoicePayment(${JSON.stringify(inv).replace(/"/g,'&quot;')})">
