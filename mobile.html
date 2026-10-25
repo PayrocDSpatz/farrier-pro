@@ -4719,9 +4719,12 @@ async function loadHorseHistory(h) {
       db.collection('invoices').where('farrierId', '==', bizId()).get(),
     ]);
     if (state.currentHorse?.id !== h.id) return; // moved on to another horse meanwhile
+    const allInvs = iSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Unpaid rows open the invoice (pay / resend) via openHorseInvoice().
+    state.horseInvoices = Object.fromEntries(allInvs.map(inv => [inv.id, inv]));
     const hist = FarriHorseHistory.build(h,
       aSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-      iSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      allInvs);
     const last = hist.lastService, next = hist.nextService;
     const nextLabel = next ? (next.estimated ? (next.overdue ? 'Next Service (overdue)' : 'Next Service (est.)') : 'Next Service') : 'Next Service';
     const rows = [
@@ -4736,12 +4739,12 @@ async function loadHorseHistory(h) {
         <div class="appt-row-bottom">${esc(a.horseServices.join(', ')) || '—'}</div>
       </div>`).join('');
     const invHtml = hist.invoices.map(inv => `
-      <div class="invoice-row ${esc(inv.status)}">
+      <div class="invoice-row ${esc(inv.status)}"${inv.status === 'outstanding' ? ` onclick="openHorseInvoice('${esc(inv.id)}')"` : ''}>
         <div class="invoice-row-top">
           <div class="invoice-row-num">#${esc(inv.invoiceNumber || inv.id.slice(-6).toUpperCase())}</div>
           <div class="invoice-row-amount">$${inv.horseTotal.toFixed(2)}</div>
         </div>
-        <div class="invoice-row-bottom">${fmtDate(inv.date)} · ${esc(inv.horseLines.map(l => l.description).filter(Boolean).join(', ') || 'Service')} · <span class="badge badge-${inv.status === 'paid' ? 'success' : 'warning'}">${esc(inv.status || 'outstanding')}</span></div>
+        <div class="invoice-row-bottom">${fmtDate(inv.date)} · ${esc(inv.horseLines.map(l => l.description).filter(Boolean).join(', ') || 'Service')} · <span class="badge badge-${inv.status === 'paid' ? 'success' : 'warning'}">${esc(inv.status || 'outstanding')}</span>${inv.status === 'outstanding' ? ' · Tap to view invoice' : ''}</div>
       </div>`).join('');
     el.innerHTML = rows.map(([label, v]) => `<div class="info-row"><div class="info-row-label">${label}</div><div class="info-row-value">${v}</div></div>`).join('')
       + `<div class="section-label" style="margin-top:12px;">📋 Appointments (${hist.appointments.length})</div>`
@@ -4752,6 +4755,11 @@ async function loadHorseHistory(h) {
     console.error('Horse history error:', e);
     el.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem;">Couldn't load history${netState.online ? '' : ' while offline'}.</div>`;
   }
+}
+
+function openHorseInvoice(id) {
+  const inv = state.horseInvoices?.[id];
+  if (inv) openInvoicePayment(inv);
 }
 
 // A horse that's appeared on a real invoice or appointment is service/billing
