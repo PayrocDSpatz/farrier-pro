@@ -86,6 +86,7 @@
   .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-secondary { background: var(--bg); color: var(--text); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 13px 20px; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; transition: background 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
   .btn-secondary:active { background: var(--border); }
+  .btn-secondary.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
   .btn-danger { background: var(--danger-bg); color: var(--danger); border: 2px solid #fca5a5; border-radius: var(--radius-sm); padding: 13px 20px; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; }
   .btn-sm { padding: 8px 14px; font-size: 0.85rem; border-radius: 8px; border: none; cursor: pointer; font-family: 'Outfit', sans-serif; font-weight: 600; }
   .btn-outline { background: transparent; border: 2px solid var(--blue); color: var(--blue); border-radius: var(--radius-sm); padding: 13px 20px; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -695,10 +696,19 @@
     <div id="pay-resend-section">
       <div class="section-label">Resend Invoice</div>
       <div class="row-btns" style="margin-bottom:8px;">
-        <button class="btn-secondary" id="resend-sms-btn" onclick="resendInvoice('sms')">💬 Text</button>
-        <button class="btn-secondary" id="resend-email-btn" onclick="resendInvoice('email')">✉️ Email</button>
+        <button class="btn-secondary" id="resend-sms-btn" onclick="openResend('sms')">💬 Text</button>
+        <button class="btn-secondary" id="resend-email-btn" onclick="openResend('email')">✉️ Email</button>
       </div>
-      <div id="pay-resend-to" style="font-size:0.8rem; color:var(--text-muted); margin:-2px 0 8px;"></div>
+      <div id="resend-panel" class="card" style="display:none; margin-bottom:12px;">
+        <div class="field" style="margin-bottom:10px;">
+          <label id="resend-to-label">Send to</label>
+          <input id="resend-to-input" type="tel" autocomplete="off">
+        </div>
+        <div class="row-btns">
+          <button class="btn-primary" id="resend-send-btn" onclick="resendInvoice()">Send</button>
+          <button class="btn-secondary" onclick="closeResend()">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <div class="section-label">Payment Method</div>
@@ -4233,7 +4243,7 @@ function openInvoicePayment(inv) {
   document.getElementById('pay-dual-price').textContent = prices.card !== null ? FarriPricing.dualPriceText(inv) : '';
   document.getElementById('pay-edit-invoice-btn').style.display = inv.status === 'outstanding' ? 'inline-block' : 'none';
   document.getElementById('pay-resend-section').style.display = inv.status === 'paid' ? 'none' : 'block';
-  document.getElementById('pay-resend-to').textContent = [inv.customerPhone, inv.customerEmail].filter(Boolean).join(' · ');
+  closeResend();
   document.getElementById('check-fields').style.display = 'none';
   document.getElementById('card-fields').style.display = 'none';
   // Reset Stripe card element for fresh entry each time
@@ -4245,24 +4255,46 @@ function openInvoicePayment(inv) {
   goTo('screen-payment');
 }
 
-// "Resend Invoice" on the payment screen — texts or emails the invoice again, with its
-// pay link when online payments are connected (making one now if it's missing). Asks
-// for a number/email when the invoice has none, and saves it back on the invoice.
-async function resendInvoice(channel) {
+// "Resend Invoice" on the payment screen — Text/Email opens a panel pre-filled with the
+// invoice's phone/email so the farrier can check or change it, then Send texts or emails
+// the invoice with its pay link when online payments are connected (making one now if
+// it's missing). A new or changed number/email is saved back on the invoice.
+function openResend(channel) {
   const inv = state.currentInvoice;
   if (!inv) return;
+  const isSms = channel === 'sms';
+  state.resendChannel = channel;
+  document.getElementById('resend-panel').style.display = 'block';
+  document.getElementById('resend-to-label').textContent = isSms ? '💬 Text invoice to mobile number' : '✉️ Email invoice to';
+  const input = document.getElementById('resend-to-input');
+  input.type = isSms ? 'tel' : 'email';
+  input.placeholder = isSms ? '(555) 555-5555' : 'name@example.com';
+  input.value = (isSms ? inv.customerPhone : inv.customerEmail) || '';
+  document.getElementById('resend-sms-btn').classList.toggle('selected', isSms);
+  document.getElementById('resend-email-btn').classList.toggle('selected', !isSms);
+  input.focus();
+}
+
+function closeResend() {
+  state.resendChannel = null;
+  document.getElementById('resend-panel').style.display = 'none';
+}
+
+async function resendInvoice() {
+  const inv = state.currentInvoice;
+  const channel = state.resendChannel;
+  if (!inv || !channel) return;
   if (!netState.online) { showToast('Sending needs an internet connection', 'error'); return; }
   const isSms = channel === 'sms';
   const field = isSms ? 'customerPhone' : 'customerEmail';
-  let to = inv[field] || '';
-  if (!to) {
-    to = (prompt(isSms ? 'Mobile number to text the invoice to:' : 'Email address to send the invoice to:') || '').trim();
-    if (!to) return;
-  }
-  const btns = ['resend-sms-btn', 'resend-email-btn'].map(id => document.getElementById(id));
+  const to = document.getElementById('resend-to-input').value.trim();
+  if (!to) { showToast(isSms ? 'Enter a mobile number' : 'Enter an email address', 'error'); return; }
+  if (!isSms && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { showToast('Enter a valid email address', 'error'); return; }
+  const btns = ['resend-sms-btn', 'resend-email-btn', 'resend-send-btn'].map(id => document.getElementById(id));
   btns.forEach(b => b.disabled = true);
+  document.getElementById('resend-send-btn').textContent = 'Sending…';
   try {
-    if (!inv[field] && inv.id) {
+    if (to !== (inv[field] || '') && inv.id) {
       inv[field] = to;
       performWrite(() => db.collection('invoices').doc(inv.id).update({ [field]: to }));
     }
@@ -4296,12 +4328,13 @@ async function resendInvoice(channel) {
       })).json();
       ok = data.ok; error = data.error;
     }
-    if (ok) showToast(`Invoice ${isSms ? 'texted' : 'emailed'} to ${to}`);
+    if (ok) { showToast(`Invoice ${isSms ? 'texted' : 'emailed'} to ${to}`); closeResend(); }
     else showToast(`${isSms ? 'Text' : 'Email'} failed: ${error || 'Unknown error'}`, 'error');
   } catch (e) {
     showToast('Error: ' + e.message, 'error');
   }
   btns.forEach(b => b.disabled = false);
+  document.getElementById('resend-send-btn').textContent = 'Send';
 }
 
 // Card requires network (a live Stripe charge) — grey it out while offline instead of
