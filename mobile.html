@@ -133,7 +133,7 @@
   .total-bar-amount { font-size: 1.6rem; font-weight: 800; }
 
   /* ── PAYMENT METHOD ── */
-  .pay-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .pay-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
   .pay-chip { padding: 16px 12px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); background: var(--surface); transition: all 0.15s; }
   .pay-chip:active { transform: scale(0.97); }
   .pay-chip.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
@@ -706,7 +706,6 @@
       <div class="pay-chip" onclick="selectPayMethod('cash', this)"><span class="pay-chip-icon">💵</span>Cash</div>
       <div class="pay-chip" onclick="selectPayMethod('check', this)"><span class="pay-chip-icon">🧾</span>Check</div>
       <div class="pay-chip" onclick="selectPayMethod('card', this)"><span class="pay-chip-icon">💳</span>Card</div>
-      <div class="pay-chip" onclick="selectPayMethod('link', this)"><span class="pay-chip-icon">📲</span>Pay Link</div>
     </div>
 
     <!-- Check number field -->
@@ -731,22 +730,6 @@
         <label>Card Details</label>
         <div id="stripe-card-element" style="padding:14px; border:2px solid var(--border); border-radius:10px; background:var(--surface);"></div>
         <div id="stripe-card-error" style="color:#dc2626; font-size:0.82rem; margin-top:6px; display:none;"></div>
-      </div>
-    </div>
-
-    <!-- Send link options -->
-    <div id="link-fields" style="display:none;">
-      <div class="card" style="background:#EBF4FF; border:2px solid #bfdbfe;">
-        <div style="font-weight:700; color:var(--blue); margin-bottom:8px;">📲 Send Payment Link</div>
-        <div style="font-size:0.85rem; color:var(--text-muted);">Customer will receive a link to pay online.</div>
-        <div style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
-          <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; font-weight:600; cursor:pointer;">
-            <input type="checkbox" id="send-sms-link" style="width:18px;height:18px;"> Send via SMS
-          </label>
-          <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; font-weight:600; cursor:pointer;">
-            <input type="checkbox" id="send-email-link" style="width:18px;height:18px;"> Send via Email
-          </label>
-        </div>
       </div>
     </div>
 
@@ -3131,7 +3114,7 @@ async function createInvoice() {
   } else if (stripeConnected && total > 0) {
     try {
       // The server prices the link from the saved invoice, so wait for the save to land.
-      await Promise.race([saved, new Promise((_, reject) => setTimeout(() => reject(new Error('Invoice is still saving — try Pay Link again in a moment')), 10000))]);
+      await Promise.race([saved, new Promise((_, reject) => setTimeout(() => reject(new Error('Invoice is still saving — try Resend Invoice in a moment')), 10000))]);
       const plRes = await fetch('/api/stripe-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4253,7 +4236,6 @@ function openInvoicePayment(inv) {
   document.getElementById('pay-resend-to').textContent = [inv.customerPhone, inv.customerEmail].filter(Boolean).join(' · ');
   document.getElementById('check-fields').style.display = 'none';
   document.getElementById('card-fields').style.display = 'none';
-  document.getElementById('link-fields').style.display = 'none';
   // Reset Stripe card element for fresh entry each time
   if (_stripeCard) { _stripeCard.destroy(); _stripeCard = null; }
   document.getElementById('confirm-pay-btn').disabled = true;
@@ -4322,12 +4304,11 @@ async function resendInvoice(channel) {
   btns.forEach(b => b.disabled = false);
 }
 
-// Card and Pay Link both require network (a live Stripe charge, an emailed/texted
-// link) — grey them out while offline instead of letting the farrier tap one and
-// hit a confusing failure. Cash/Check stay available and queue like any other write.
+// Card requires network (a live Stripe charge) — grey it out while offline instead of
+// letting the farrier tap it and hit a confusing failure. Cash/Check stay available and queue like any other write.
 function updatePayMethodAvailability() {
   document.querySelectorAll('#pay-method-grid .pay-chip').forEach(chip => {
-    const needsNetwork = /'card'|'link'/.test(chip.getAttribute('onclick') || '');
+    const needsNetwork = /'card'/.test(chip.getAttribute('onclick') || '');
     chip.classList.toggle('chip-offline-disabled', needsNetwork && !netState.online);
   });
 }
@@ -4335,7 +4316,7 @@ window.addEventListener('online', updatePayMethodAvailability);
 window.addEventListener('offline', updatePayMethodAvailability);
 
 function selectPayMethod(method, el) {
-  if ((method === 'card' || method === 'link') && !netState.online) {
+  if (method === 'card' && !netState.online) {
     showToast('Card payments require an internet connection', 'error');
     return;
   }
@@ -4344,7 +4325,6 @@ function selectPayMethod(method, el) {
   el.classList.add('selected');
   document.getElementById('check-fields').style.display = method === 'check' ? 'block' : 'none';
   document.getElementById('card-fields').style.display  = method === 'card'  ? 'block' : 'none';
-  document.getElementById('link-fields').style.display  = method === 'link'  ? 'block' : 'none';
   const iposCard = method === 'card' && Boolean(state.userProfile?.ipospaysConnected);
   document.getElementById('ipos-card-fields').style.display = iposCard ? 'block' : 'none';
   document.getElementById('stripe-card-fields').style.display = iposCard ? 'none' : 'block';
@@ -4356,8 +4336,7 @@ function selectPayMethod(method, el) {
   const btn = document.getElementById('confirm-pay-btn');
   btn.disabled = false;
   const inv = state.currentInvoice;
-  btn.textContent = method === 'link' ? '📲 Send Payment Link'
-    : method === 'card' ? `✓ Charge ${FarriPricing.money(FarriPricing.getChargeCents(inv, 'card_keyed'))}`
+  btn.textContent = method === 'card' ? `✓ Charge ${FarriPricing.money(FarriPricing.getChargeCents(inv, 'card_keyed'))}`
     : `✓ Record ${FarriPricing.money(FarriPricing.getChargeCents(inv, method))} ${method === 'check' ? 'Check' : 'Cash'}`;
 }
 
@@ -4370,88 +4349,7 @@ async function confirmPayment() {
   document.getElementById('pay-saving').style.display = 'block';
 
   try {
-    if (method === 'link') {
-      // Send payment link via SMS/email
-      const sendSms = document.getElementById('send-sms-link')?.checked;
-      const sendEmail = document.getElementById('send-email-link')?.checked;
-      let payUrl = inv.paymentUrl || '';
-
-      // Must select at least one delivery method
-      if (!sendSms && !sendEmail) {
-        showToast('Please select SMS or Email to send the link', 'error');
-        document.getElementById('confirm-pay-btn').disabled = false;
-        document.getElementById('pay-saving').style.display = 'none';
-        return;
-      }
-
-      // No link yet (invoice made offline, or the link failed when it was saved) — make
-      // one now; the server builds it from the saved invoice.
-      let linkError = '';
-      if (!payUrl && netState.online && onlinePayConnected() && inv.id) {
-        try {
-          const plRes = await fetch('/api/stripe-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'payment_link', invoiceId: inv.id }),
-          });
-          const plData = await plRes.json();
-          if (plData.success && plData.paymentUrl) {
-            payUrl = plData.paymentUrl;
-            inv.paymentUrl = payUrl;
-          } else {
-            linkError = plData.error || 'Stripe error';
-          }
-        } catch (e) {
-          linkError = e.message;
-        }
-      }
-
-      // Must have a payment URL
-      if (!payUrl) {
-        showToast(linkError ? 'No payment link: ' + linkError
-          : !netState.online ? 'No payment link — you are offline'
-          : 'No payment link available — check Stripe is connected in Settings', 'error');
-        document.getElementById('confirm-pay-btn').disabled = false;
-        document.getElementById('pay-saving').style.display = 'none';
-        return;
-      }
-
-      let sent = [];
-      if (sendSms && inv.customerPhone) {
-        await fetch('/api/send-sms', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: inv.customerPhone, body: `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for ${FarriPricing.dualPriceText(inv)} is ready. Pay here: ${payUrl}${FarriPricing.altPaySms(state.userProfile, inv)} Reply STOP to opt out.` })
-        });
-        sent.push('SMS');
-      } else if (sendSms && !inv.customerPhone) {
-        showToast('Customer has no phone number on file', 'error');
-        document.getElementById('confirm-pay-btn').disabled = false;
-        document.getElementById('pay-saving').style.display = 'none';
-        return;
-      }
-      if (sendEmail && inv.customerEmail) {
-        const bizName = state.userProfile?.businessName || 'Your Farrier';
-        const firstName = (inv.customerName || 'there').split(' ')[0];
-        const invoiceHtml = buildInvoiceEmail(inv, bizName, firstName, payUrl);
-        const emailRes = await fetch('/api/send-email', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: inv.customerEmail,
-            subject: `Invoice #${inv.invoiceNumber} from ${bizName}`,
-            html: invoiceHtml
-          })
-        });
-        const emailData = await emailRes.json();
-        console.log('📧 Email result:', emailData);
-        sent.push('Email');
-      } else if (sendEmail && !inv.customerEmail) {
-        showToast('Customer has no email on file', 'error');
-        document.getElementById('confirm-pay-btn').disabled = false;
-        document.getElementById('pay-saving').style.display = 'none';
-        return;
-      }
-      showSuccess('Link Sent!', `Payment link sent via ${sent.join(' & ')} to ${inv.customerName}`);
-    } else if (method === 'card') {
+    if (method === 'card') {
       const charged = state.userProfile?.ipospaysConnected ? await chargeCardViaIpos(inv) : await chargeCardViaStripe(inv);
       if (!charged) {
         document.getElementById('confirm-pay-btn').disabled = false;
