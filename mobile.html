@@ -2020,25 +2020,14 @@ async function loadOpenInvoices(status = 'outstanding') {
         : `<div class="empty-state"><div class="empty-state-icon">🎉</div><div class="empty-state-text">No outstanding invoices</div></div>`;
       return;
     }
-    if (status === 'paid') {
+    // One row per customer with their total (owed, or paid), biggest first. Tapping a
+    // customer shows their invoices: unpaid ones open the invoice (pay / resend), paid
+    // ones offer a refund where the payment allows one.
+    const paid = status === 'paid';
+    if (paid) {
       // openRefund() looks invoices up here.
       state.customerInvoices = { ...(state.customerInvoices || {}), ...Object.fromEntries(invs.map(inv => [inv.id, inv])) };
-      list.innerHTML = invs.map(inv => `
-        <div class="invoice-row paid">
-          <div class="invoice-row-top">
-            <div class="invoice-row-num">#${inv.invoiceNumber} · ${inv.customerName}</div>
-            <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
-          </div>
-          <div class="invoice-row-bottom" style="display:flex; align-items:center; gap:6px;">
-            <span>${fmtDate(inv.paidAt || inv.createdAt)} · <span class="badge badge-success">paid</span></span>
-            ${canRefundInvoice(inv) ? `<button class="btn-sm" style="margin-left:auto; background:var(--danger-bg); color:var(--danger);" onclick="event.stopPropagation(); openRefund('${inv.id}')">↩️ Refund</button>` : ''}
-          </div>
-        </div>
-      `).join('');
-      return;
     }
-    // Open: who owes money — one row per customer with their balance, biggest first.
-    // Tapping a customer shows their unpaid invoices (tap one to collect).
     const byCust = {};
     invs.forEach(inv => {
       const key = inv.customerName || 'Unknown customer';
@@ -2046,31 +2035,43 @@ async function loadOpenInvoices(status = 'outstanding') {
       byCust[key].total += inv.total || 0;
       byCust[key].invs.push(inv);
     });
-    const owing = Object.values(byCust).sort((a,b) => b.total - a.total);
-    const grand = owing.reduce((sum, c) => sum + c.total, 0);
-    list.innerHTML = `
-      <div class="card" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-        <div style="font-weight:700;">${owing.length} customer${owing.length === 1 ? '' : 's'} owe you</div>
-        <div style="font-weight:800; font-size:1.15rem; color:var(--blue);">$${grand.toFixed(2)}</div>
-      </div>
-    ` + owing.map((c, i) => `
-      <div class="invoice-row outstanding" onclick="toggleOwingCustomer(${i})">
-        <div class="invoice-row-top">
-          <div class="invoice-row-num">${c.name}</div>
-          <div class="invoice-row-amount">$${c.total.toFixed(2)}</div>
-        </div>
-        <div class="invoice-row-bottom">${c.farm ? c.farm + ' · ' : ''}${c.invs.length} unpaid invoice${c.invs.length === 1 ? '' : 's'} · oldest ${fmtDate(c.invs[c.invs.length - 1].createdAt)}</div>
-      </div>
-      <div id="owing-cust-${i}" style="display:none; margin:-4px 0 10px 16px;">
-        ${c.invs.map(inv => `
+    const custs = Object.values(byCust).sort((a,b) => b.total - a.total);
+    const grand = custs.reduce((sum, c) => sum + c.total, 0);
+    const invRow = paid
+      ? inv => `
+          <div class="invoice-row paid">
+            <div class="invoice-row-top">
+              <div class="invoice-row-num">#${inv.invoiceNumber}</div>
+              <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
+            </div>
+            <div class="invoice-row-bottom" style="display:flex; align-items:center; gap:6px;">
+              <span>${fmtDate(inv.paidAt || inv.createdAt)} · <span class="badge badge-success">paid</span></span>
+              ${canRefundInvoice(inv) ? `<button class="btn-sm" style="margin-left:auto; background:var(--danger-bg); color:var(--danger);" onclick="event.stopPropagation(); openRefund('${inv.id}')">↩️ Refund</button>` : ''}
+            </div>
+          </div>`
+      : inv => `
           <div class="invoice-row outstanding" onclick="openInvoicePayment(${JSON.stringify(inv).replace(/"/g,'&quot;')})">
             <div class="invoice-row-top">
               <div class="invoice-row-num">#${inv.invoiceNumber}</div>
               <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
             </div>
             <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to view invoice</div>
-          </div>
-        `).join('')}
+          </div>`;
+    list.innerHTML = `
+      <div class="card" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:700;">${paid ? `Paid by ${custs.length} customer${custs.length === 1 ? '' : 's'}` : `${custs.length} customer${custs.length === 1 ? '' : 's'} owe you`}</div>
+        <div style="font-weight:800; font-size:1.15rem; color:${paid ? 'var(--success)' : 'var(--blue)'};">$${grand.toFixed(2)}</div>
+      </div>
+    ` + custs.map((c, i) => `
+      <div class="invoice-row ${paid ? 'paid' : 'outstanding'}" onclick="toggleOwingCustomer(${i})">
+        <div class="invoice-row-top">
+          <div class="invoice-row-num">${c.name}</div>
+          <div class="invoice-row-amount">$${c.total.toFixed(2)}</div>
+        </div>
+        <div class="invoice-row-bottom">${c.farm ? c.farm + ' · ' : ''}${c.invs.length} ${paid ? 'paid' : 'unpaid'} invoice${c.invs.length === 1 ? '' : 's'} · ${paid ? 'latest ' + fmtDate(c.invs[0].paidAt || c.invs[0].createdAt) : 'oldest ' + fmtDate(c.invs[c.invs.length - 1].createdAt)}</div>
+      </div>
+      <div id="owing-cust-${i}" style="display:none; margin:-4px 0 10px 16px;">
+        ${c.invs.map(invRow).join('')}
       </div>
     `).join('');
   } catch(e) { console.error('Invoices load error:', e); list.innerHTML = '<div class="empty-state"><div class="empty-state-text">Error loading invoices</div></div>'; }
