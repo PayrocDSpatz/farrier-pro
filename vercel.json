@@ -19,6 +19,10 @@
       "destination": "/support.html"
     },
     {
+      "source": "/seminar",
+      "destination": "/seminar.html"
+    },
+    {
       "source": "/api/notify-signup",
       "destination": "/api/send-sms?signupAlert=1"
     },
