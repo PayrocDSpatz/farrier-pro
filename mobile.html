@@ -692,6 +692,15 @@
       <button id="pay-edit-invoice-btn" onclick="startEditInvoice(state.currentInvoice)" style="background:none; border:2px solid var(--border); border-radius:8px; padding:8px 16px; font-weight:700; font-size:0.85rem; color:var(--text-muted); cursor:pointer;">✏️ Edit Invoice</button>
     </div>
 
+    <div id="pay-resend-section">
+      <div class="section-label">Resend Invoice</div>
+      <div class="row-btns" style="margin-bottom:8px;">
+        <button class="btn-secondary" id="resend-sms-btn" onclick="resendInvoice('sms')">💬 Text</button>
+        <button class="btn-secondary" id="resend-email-btn" onclick="resendInvoice('email')">✉️ Email</button>
+      </div>
+      <div id="pay-resend-to" style="font-size:0.8rem; color:var(--text-muted); margin:-2px 0 8px;"></div>
+    </div>
+
     <div class="section-label">Payment Method</div>
     <div class="pay-grid" id="pay-method-grid">
       <div class="pay-chip" onclick="selectPayMethod('cash', this)"><span class="pay-chip-icon">💵</span>Cash</div>
@@ -4240,6 +4249,8 @@ function openInvoicePayment(inv) {
   document.getElementById('pay-amount').textContent = FarriPricing.money(prices.cash);
   document.getElementById('pay-dual-price').textContent = prices.card !== null ? FarriPricing.dualPriceText(inv) : '';
   document.getElementById('pay-edit-invoice-btn').style.display = inv.status === 'outstanding' ? 'inline-block' : 'none';
+  document.getElementById('pay-resend-section').style.display = inv.status === 'paid' ? 'none' : 'block';
+  document.getElementById('pay-resend-to').textContent = [inv.customerPhone, inv.customerEmail].filter(Boolean).join(' · ');
   document.getElementById('check-fields').style.display = 'none';
   document.getElementById('card-fields').style.display = 'none';
   document.getElementById('link-fields').style.display = 'none';
@@ -4250,6 +4261,65 @@ function openInvoicePayment(inv) {
   document.getElementById('confirm-pay-btn').textContent = 'Confirm Payment';
   updatePayMethodAvailability();
   goTo('screen-payment');
+}
+
+// "Resend Invoice" on the payment screen — texts or emails the invoice again, with its
+// pay link when online payments are connected (making one now if it's missing). Asks
+// for a number/email when the invoice has none, and saves it back on the invoice.
+async function resendInvoice(channel) {
+  const inv = state.currentInvoice;
+  if (!inv) return;
+  if (!netState.online) { showToast('Sending needs an internet connection', 'error'); return; }
+  const isSms = channel === 'sms';
+  const field = isSms ? 'customerPhone' : 'customerEmail';
+  let to = inv[field] || '';
+  if (!to) {
+    to = (prompt(isSms ? 'Mobile number to text the invoice to:' : 'Email address to send the invoice to:') || '').trim();
+    if (!to) return;
+  }
+  const btns = ['resend-sms-btn', 'resend-email-btn'].map(id => document.getElementById(id));
+  btns.forEach(b => b.disabled = true);
+  try {
+    if (!inv[field] && inv.id) {
+      inv[field] = to;
+      performWrite(() => db.collection('invoices').doc(inv.id).update({ [field]: to }));
+    }
+    let payUrl = inv.paymentUrl || '';
+    if (!payUrl && onlinePayConnected() && inv.id) {
+      try {
+        const plRes = await fetch('/api/stripe-payment', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'payment_link', invoiceId: inv.id }),
+        });
+        const plData = await plRes.json();
+        if (plData.success && plData.paymentUrl) { payUrl = plData.paymentUrl; inv.paymentUrl = payUrl; }
+      } catch (e) { console.warn('Pay link not created:', e); }
+    }
+    const bizName = state.userProfile?.businessName || 'Your Farrier';
+    let ok, error;
+    if (isSms) {
+      const body = payUrl
+        ? `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for ${FarriPricing.dualPriceText(inv)} from ${bizName} is ready. Pay here: ${payUrl}${FarriPricing.altPaySms(state.userProfile, inv)} Reply STOP to opt out.`
+        : `Hi ${inv.customerName}, your invoice #${inv.invoiceNumber} for ${FarriPricing.dualPriceText(inv)} from ${bizName} is ready. Reply STOP to opt out.`;
+      const data = await (await fetch('/api/send-sms', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, body }),
+      })).json();
+      ok = data.success; error = data.error;
+    } else {
+      const firstName = (inv.customerName || 'there').split(' ')[0];
+      const data = await (await fetch('/api/send-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject: `Invoice #${inv.invoiceNumber} from ${bizName}`, html: buildInvoiceEmail(inv, bizName, firstName, payUrl) }),
+      })).json();
+      ok = data.ok; error = data.error;
+    }
+    if (ok) showToast(`Invoice ${isSms ? 'texted' : 'emailed'} to ${to}`);
+    else showToast(`${isSms ? 'Text' : 'Email'} failed: ${error || 'Unknown error'}`, 'error');
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+  btns.forEach(b => b.disabled = false);
 }
 
 // Card and Pay Link both require network (a live Stripe charge, an emailed/texted
