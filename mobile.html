@@ -1997,8 +1997,7 @@ function startAppointmentForHorse(h) {
 }
 
 // Home "Invoices" card: Open (outstanding — tap to collect) or Paid (history, with
-// refunds where the payment allows one). Same farrierId+status+createdAt query/index
-// either way.
+// refunds where the payment allows one).
 async function loadOpenInvoices(status = 'outstanding') {
   document.getElementById('inv-filter-open').classList.toggle('active', status === 'outstanding');
   document.getElementById('inv-filter-paid').classList.toggle('active', status === 'paid');
@@ -2008,9 +2007,11 @@ async function loadOpenInvoices(status = 'outstanding') {
     const snap = await db.collection('invoices')
       .where('farrierId', '==', bizId())
       .where('status', '==', status)
-      .orderBy('createdAt', 'desc')
       .get();
-    const invs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Sorted here rather than with orderBy so the query needs no composite index
+    // (same approach as the customer screen's invoice query).
+    const invs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
     if (!invs.length) {
       list.innerHTML = status === 'paid'
         ? `<div class="empty-state"><div class="empty-state-icon">🧾</div><div class="empty-state-text">No paid invoices yet</div></div>`
@@ -2043,7 +2044,7 @@ async function loadOpenInvoices(status = 'outstanding') {
         <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to collect payment</div>
       </div>
     `).join('');
-  } catch(e) { list.innerHTML = '<div class="empty-state"><div class="empty-state-text">Error loading invoices</div></div>'; }
+  } catch(e) { console.error('Invoices load error:', e); list.innerHTML = '<div class="empty-state"><div class="empty-state-text">Error loading invoices</div></div>'; }
 }
 
 function selectCustomer(c) {
