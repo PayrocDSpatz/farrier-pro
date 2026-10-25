@@ -2058,7 +2058,7 @@ async function loadOpenInvoices(status = 'outstanding') {
               <div class="invoice-row-num">#${inv.invoiceNumber}</div>
               <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
             </div>
-            <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to collect payment</div>
+            <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to view invoice</div>
           </div>
         `).join('')}
       </div>
@@ -2191,7 +2191,7 @@ async function loadCustomerDetail(c) {
             <div class="invoice-row-num">#${inv.invoiceNumber}</div>
             <div class="invoice-row-amount">$${(inv.total||0).toFixed(2)}</div>
           </div>
-          <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to collect</div>
+          <div class="invoice-row-bottom">${fmtDate(inv.createdAt)} · Tap to view invoice</div>
         </div>
       `).join('');
     }
