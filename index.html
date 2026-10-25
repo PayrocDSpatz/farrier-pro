@@ -3839,6 +3839,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
         { id: 'invoices', label: 'Invoices', icon: '💰' },
         { id: 'customers', label: 'Customers', icon: '👥' },
         { id: 'horses', label: 'Horses', icon: '🐴' },
+        { id: 'upcoming', label: 'Upcoming Service', icon: '🔔' },
         { id: 'services', label: 'Services', icon: '🧾' },
         // Business-wide revenue: not for a team member with the farrier role (api/_lib/team.js).
         ...(window.FarriTeam?.role === 'farrier' ? [] : [{ id: 'reports', label: 'Reports', icon: '📈' }]),
@@ -3949,6 +3950,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 { label: '👥 Clients', items: [
                   { id: 'customers', label: 'Customers', icon: '👥' },
                   { id: 'horses', label: 'Horses', icon: '🐴' },
+                  { id: 'upcoming', label: 'Upcoming Service', icon: '🔔' },
                 ]},
                 { label: '⚙️ Manage', items: [
                   { id: 'services', label: 'Services', icon: '🧾' },
@@ -4078,6 +4080,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
             {tab === 'invoices' && <InvoicesView userId={farrierId} userProfile={userProfile} />}
             {tab === 'customers' && <CustomersView userId={farrierId} userProfile={userProfile} />}
             {tab === 'horses' && <HorsesView userId={farrierId} />}
+            {tab === 'upcoming' && <HorsesView userId={farrierId} upcoming />}
             {tab === 'sponsors' && isSponsorAdmin && <SponsorBannersView />}
             {tab === 'services' && <ServicesView userId={farrierId} />}
             {tab === 'inventory' && <InventoryView userId={farrierId} />}
@@ -5003,8 +5006,12 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
     // lists all of that customer's horses), then see its whole history: last and
     // next service, every appointment and every invoice line for that horse
     // (lib/horse-history.js decides what belongs to it).
+    // With `upcoming` (the Upcoming Service tab) the list is instead every horse due for
+    // service within N weeks, grouped by farm, plus each farm's other horses — the same
+    // report as mobile.html's renderUpcoming().
     // ─────────────────────────────────────────
-    function HorsesView({ userId }) {
+    function HorsesView({ userId, upcoming }) {
+      const [weeks, setWeeks] = useState(4);
       const [horses, setHorses] = useState([]);
       const [customersById, setCustomersById] = useState({});
       const [appointments, setAppointments] = useState([]);
@@ -5067,7 +5074,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
 
         return (
           <div>
-            <button className="btn btn-sm btn-outline" onClick={() => setSelected(null)} style={{ marginBottom: '1rem' }}>← Back to Horses</button>
+            <button className="btn btn-sm btn-outline" onClick={() => setSelected(null)} style={{ marginBottom: '1rem' }}>← Back to {upcoming ? 'Upcoming Service' : 'Horses'}</button>
 
             <div className="card" style={{ marginBottom: '1rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
@@ -5180,6 +5187,100 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                 onClose={() => setEditHorse(null)}
                 onSaved={() => load()}
               />
+            )}
+          </div>
+        );
+      }
+
+      // ── UPCOMING SERVICE ── a farm appears when at least one of its horses is due within
+      // `weeks`; due horses first, then the owner's other horses. Farms by earliest due date.
+      if (upcoming) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const end = new Date(today.getTime() + weeks * 7 * 86400e3);
+        const all = horses.map(h => ({ h, hist: window.FarriHorseHistory.build(h, appointments, invoices) }));
+        const isDue = x => x.hist.nextService && x.hist.nextService.date < end;
+        const byFarm = {};
+        all.forEach(x => {
+          const key = x.h.customerId || ownerName(x.h);
+          (byFarm[key] = byFarm[key] || { owner: customersById[x.h.customerId], name: ownerName(x.h), due: [], other: [] })[isDue(x) ? 'due' : 'other'].push(x);
+        });
+        const byNext = (a, b) => (a.hist.nextService?.date || Infinity) - (b.hist.nextService?.date || Infinity);
+        const farms = Object.values(byFarm).filter(g => g.due.length);
+        farms.forEach(g => { g.due.sort(byNext); g.other.sort(byNext); });
+        farms.sort((a, b) => a.due[0].hist.nextService.date - b.due[0].hist.nextService.date);
+        const dueCount = farms.reduce((n, g) => n + g.due.length, 0);
+        const overdue = farms.reduce((n, g) => n + g.due.filter(x => x.hist.nextService.overdue).length, 0);
+        const noDate = all.filter(x => !x.hist.nextService).length;
+        const horseRow = ({ h, hist }, muted) => {
+          const next = hist.nextService;
+          const tag = !next ? pill('no due date', '#94a3b8')
+            : !next.estimated ? pill('booked', '#10b981')
+            : next.overdue ? pill('overdue', '#ef4444')
+            : muted ? pill('next', '#94a3b8') : pill('due', '#f59e0b');
+          return (
+            <div key={h.id} onClick={() => setSelected(h)} style={{ ...rowStyle, cursor: 'pointer', ...(muted ? { background: 'transparent', border: '1px solid var(--border)', opacity: 0.75 } : {}) }}>
+              <div>
+                <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>🐴 {h.name || 'Unnamed'}</span>
+                {h.breed && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}> — {h.breed}</span>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', flexWrap: 'wrap' }}>
+                {next && <span style={{ fontWeight: 600, color: next.overdue ? '#ef4444' : undefined }}>{fmtDay(next.date)}</span>}
+                {tag}
+                <span>Last: {hist.lastService ? fmtDay(hist.lastService.date) : '—'}</span>
+                <span>›</span>
+              </div>
+            </div>
+          );
+        };
+        return (
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <h2 style={{ margin: 0, color: 'var(--primary)' }}>🔔 Upcoming Service</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Due in the next</span>
+                {[1, 2, 4, 6, 8].map(w => (
+                  <button key={w} className={`btn btn-sm ${weeks === w ? 'btn-primary' : 'btn-outline'}`} onClick={() => setWeeks(w)}>{w} wk{w === 1 ? '' : 's'}</button>
+                ))}
+              </div>
+            </div>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>⏳ Loading horses…</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {farms.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No horses due in the next {weeks} week{weeks === 1 ? '' : 's'}.</div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontWeight: 700 }}>
+                      {dueCount} horse{dueCount === 1 ? '' : 's'} due at {farms.length} farm{farms.length === 1 ? '' : 's'}
+                      {overdue > 0 && pill(`${overdue} overdue`, '#ef4444')}
+                    </div>
+                    {farms.map(g => (
+                      <div key={g.due[0].h.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '0.9rem' }}>
+                        <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1.05rem' }}>{g.owner?.farmName || g.name}</div>
+                        {g.owner?.farmName && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>👤 {g.name}</div>}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.6rem' }}>
+                          {g.due.map(x => horseRow(x, false))}
+                        </div>
+                        {g.other.length > 0 && (
+                          <>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0.8rem 0 0.4rem' }}>Also at this farm · not due yet</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                              {g.other.map(x => horseRow(x, true))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+                {noDate > 0 && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {noDate} horse{noDate === 1 ? ' has' : 's have'} no appointment or shoeing cycle, so no due date. Set a shoeing cycle on the horse to include it.
+                  </div>
+                )}
+              </div>
             )}
           </div>
         );
