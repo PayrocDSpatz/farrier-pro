@@ -1931,11 +1931,17 @@ function goToHorseSearch() {
   filterHorses('');
 }
 
+// A horse's owner, from its customerId when the horse doc has no customerName saved.
+function horseOwner(h) {
+  const c = h.customerId ? (state.customers || []).find(x => x.id === h.customerId) : null;
+  return { name: h.customerName || c?.name || '', farm: c?.farmName || '' };
+}
+
 function filterHorses(q) {
   const term = q.toLowerCase().trim();
   const all = state.allHorses || [];
   const filtered = term
-    ? all.filter(h => (h.name||'').toLowerCase().includes(term) || (h.customerName||'').toLowerCase().includes(term))
+    ? all.filter(h => (h.name||'').toLowerCase().includes(term) || horseOwner(h).name.toLowerCase().includes(term))
     : all;
 
   const el = document.getElementById('horse-search-results');
@@ -1945,16 +1951,16 @@ function filterHorses(q) {
     el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🐴</div><div class="empty-state-text">No horses found</div><div class="empty-state-sub">Try a different name, or add a new horse</div></div>`;
     return;
   }
-  el.innerHTML = filtered.map(h => `
+  el.innerHTML = filtered.map(h => { const owner = horseOwner(h); return `
     <div class="horse-row" data-hid="${h.id}">
       <div class="horse-row-avatar">🐴</div>
       <div>
-        <div class="customer-row-name">${h.name || 'Unnamed'}</div>
-        <div class="customer-row-sub">${h.customerName || 'Unknown owner'}</div>
+        <div class="customer-row-name">${h.name || 'Unnamed'} <span style="font-weight:500; color:var(--text-muted);">· ${owner.name || 'Unknown owner'}</span></div>
+        <div class="customer-row-sub">Last service: ${h.lastServiceDate ? fmtDate(h.lastServiceDate) : 'none yet'}${owner.farm ? ' · ' + owner.farm : ''}</div>
       </div>
       <div class="customer-row-arrow">›</div>
     </div>
-  `).join('');
+  `; }).join('');
 
   // Event delegation — touchend for instant response on iPad, click as fallback
   el.onclick = (e) => {
