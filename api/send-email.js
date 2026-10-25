@@ -4,6 +4,8 @@
 // Route-sheet uses: { action, to, subject, html }
 // Appointment emails use the same body fields as the individual handlers did.
 
+import { callerFromRequest, isFarrier, isSupportAdmin } from './_lib/firebase-rest.js';
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM = 'FarriTech <welcome@contact.dasdigitalai.com>';
 
@@ -161,13 +163,23 @@ function buildUpdateHtml(body) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
   try {
     const body = req.body || {};
     const { action } = body;
+
+    // Only signed-in farriers (incl. team members), FarriTech support staff, or the server
+    // itself may send — otherwise anyone could send any email from FarriTech's address.
+    // The public /seminar sign-up is the one exception; it only sends fixed content.
+    if (action !== 'seminar-signup') {
+      const caller = await callerFromRequest(req).catch(() => null);
+      if (!caller || !((await isFarrier(caller.uid).catch(() => false)) || (await isSupportAdmin(caller.uid).catch(() => false)))) {
+        return res.status(401).json({ ok: false, error: 'Not authorized' });
+      }
+    }
 
     if (!action) {
       // Direct pass-through: { to, subject, html }
