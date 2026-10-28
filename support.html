@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="/api-auth.js"></script>
 
   <!-- React -->
@@ -117,6 +118,13 @@
     .center { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; }
     .login { width: 100%; max-width: 380px; }
     .err { color: var(--error); font-size: 0.85rem; margin-top: 0.5rem; }
+    .btn-danger { background: var(--error); border: 1px solid var(--error); color: #fff; font-weight: 600; }
+    .btn-danger:hover { background: #b91c1c; border-color: #b91c1c; }
+    .danger-zone { border-color: #fecaca; }
+    .danger-zone h3 { color: var(--error); }
+    .del-list { margin: 0.5rem 0 0.75rem; padding-left: 1.1rem; font-size: 0.9rem; }
+    .del-warn { background: var(--note-bg); border: 1px solid var(--note-border); border-radius: 8px; padding: 0.55rem 0.7rem; font-size: 0.85rem; margin-bottom: 0.6rem; }
+    .del-log { font-family: monospace; font-size: 0.8rem; background: var(--surface-2); border-radius: 8px; padding: 0.6rem; max-height: 180px; overflow-y: auto; }
     .back { display: none; }
 
     @media (max-width: 860px) {
@@ -149,6 +157,7 @@
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
+    const storage = firebase.storage();
     const ts = () => firebase.firestore.FieldValue.serverTimestamp();
 
     // ── Data model (Firestore; only supportAdmins can read or write — see firestore.rules) ──
@@ -280,6 +289,8 @@
       const [selFarrier, setSelFarrier] = useState(null);
       const [newTicketFor, setNewTicketFor] = useState(undefined); // undefined = closed, null = pick a farrier
       const [addingFarrier, setAddingFarrier] = useState(false);
+      // Kept here (not in the farrier's detail view) so the result stays up after the farrier leaves the list.
+      const [deleteFor, setDeleteFor] = useState(null);
 
       useEffect(() => {
         const errs = (what) => (e) => { console.error(what, e); alert(`Couldn't load ${what}: ${e.message}`); };
@@ -344,7 +355,13 @@
           {tab === 'tickets'
             ? <TicketsTab tickets={tickets} selected={selTicket} setSelected={setSelTicket} farrierByKey={farrierByKey} user={user} openFarrier={openFarrier} />
             : <FarriersTab farriers={farriers} tickets={tickets} selected={selFarrier} setSelected={setSelFarrier} user={user}
-                onNewTicket={(key) => setNewTicketFor(key)} openTicket={openTicket} onAdd={() => setAddingFarrier(true)} />}
+                onNewTicket={(key) => setNewTicketFor(key)} openTicket={openTicket} onAdd={() => setAddingFarrier(true)}
+                onDelete={(f) => setDeleteFor(f)} />}
+
+          {deleteFor && (
+            <DeleteFarrierModal farrier={deleteFor} onClose={() => setDeleteFor(null)}
+              onDeleted={() => { setDeleteFor(null); setSelFarrier(null); }} />
+          )}
 
           {newTicketFor !== undefined && (
             <NewTicketModal farriers={farriers} initialKey={newTicketFor} user={user}
@@ -613,7 +630,7 @@
     }
 
     // ── Farriers ──
-    function FarriersTab({ farriers, tickets, selected, setSelected, user, onNewTicket, openTicket, onAdd }) {
+    function FarriersTab({ farriers, tickets, selected, setSelected, user, onNewTicket, openTicket, onAdd, onDelete }) {
       const [stage, setStage] = useState('all');
       const [q, setQ] = useState('');
       const s = q.trim().toLowerCase();
@@ -660,7 +677,7 @@
           <div className="detail-pane">
             {farrier
               ? <FarrierDetail key={farrier.key} farrier={farrier} tickets={tickets.filter(t => t.farrierKey === farrier.key)} user={user}
-                  onBack={() => setSelected(null)} onNewTicket={() => onNewTicket(farrier.key)} openTicket={openTicket} />
+                  onBack={() => setSelected(null)} onNewTicket={() => onNewTicket(farrier.key)} openTicket={openTicket} onDelete={() => onDelete(farrier)} />
               : <div className="empty">Pick a farrier to see their details, notes and tickets.</div>}
           </div>
         </div>
@@ -696,7 +713,7 @@
       );
     }
 
-    function FarrierDetail({ farrier, tickets, user, onBack, onNewTicket, openTicket }) {
+    function FarrierDetail({ farrier, tickets, user, onBack, onNewTicket, openTicket, onDelete }) {
       const initial = () => Object.fromEntries(FARRIER_FIELDS.map(k => [k, farrier[k] || '']));
       const [form, setForm] = useState(initial);
       const [saving, setSaving] = useState(false);
@@ -789,6 +806,199 @@
                 <dt>Account ID</dt><dd style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{farrier.key}</dd>
               </dl>
             ) : <p className="who" style={{ margin: 0 }}>No FarriTech account yet — entered by support.</p>}
+          </div>
+
+          <div className="card danger-zone">
+            <h3>Delete</h3>
+            <p className="who" style={{ marginTop: 0 }}>
+              {farrier.hasAccount
+                ? 'Permanently removes this farrier and all their horses, customers, invoices, appointments and other records.'
+                : 'Removes this support record and its tickets.'}
+            </p>
+            <button className="btn btn-danger btn-sm" onClick={onDelete}>
+              {farrier.hasAccount ? 'Delete farrier…' : 'Delete record…'}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Delete a farrier and everything that belongs to them ──
+    // Every record below carries farrierId = the farrier's uid. Support staff can delete these
+    // because firestore.rules grants isSupportAdmin() read + delete on each of them.
+    const FARRIER_DATA = [
+      ['appointments', 'appointments'], ['customers', 'customers'], ['horses', 'horses'],
+      ['invoices', 'invoices'], ['services', 'services'], ['mileage_logs', 'mileage logs'],
+      ['inventoryItems', 'inventory items'], ['inventoryTransactions', 'inventory transactions'],
+    ];
+
+    // Everything tied to this farrier. `key` is their uid when they have an account.
+    async function findFarrierRecords(key, hasAccount) {
+      const out = { data: {}, members: [], invites: [], sessions: [], tickets: [] };
+      if (hasAccount) {
+        for (const [c] of FARRIER_DATA) out.data[c] = (await db.collection(c).where('farrierId', '==', key).get()).docs;
+        out.members = (await db.collection('businessMembers').where('businessId', '==', key).get()).docs;
+        out.invites = (await db.collection('businessInvites').where('businessId', '==', key).get()).docs;
+        out.sessions = (await db.collection('supportSessions').where('targetFarrierId', '==', key).get()).docs;
+      }
+      out.tickets = (await db.collection('supportTickets').where('farrierKey', '==', key).get()).docs;
+      return out;
+    }
+
+    async function deleteRefs(refs) {
+      for (let i = 0; i < refs.length; i += 400) {
+        const batch = db.batch();
+        refs.slice(i, i + 400).forEach(r => batch.delete(r));
+        await batch.commit();
+      }
+    }
+
+    // Deletes the farrier's data first and their profile (farriers/{uid}) last, so if anything
+    // fails part-way the farrier is still in the list and Delete can simply be run again.
+    async function deleteFarrier({ key, hasAccount, alsoSupport, log }) {
+      if (key === auth.currentUser?.uid) throw new Error("You can't delete your own account here.");
+      const rec = await findFarrierRecords(key, hasAccount);
+
+      if (hasAccount) {
+        // Horse photos live in Storage, not Firestore. Best effort: a failure here doesn't stop the rest.
+        const paths = rec.data.horses.flatMap(d => (d.data().photos || []).map(p => p.storagePath).filter(Boolean));
+        let photoFails = 0;
+        for (const path of paths) {
+          try { await storage.ref(path).delete(); } catch (e) { if (e.code !== 'storage/object-not-found') photoFails++; }
+        }
+        if (paths.length) log(`Photos: ${paths.length - photoFails} of ${paths.length} removed${photoFails ? ` (${photoFails} could not be deleted from Storage; remove the horse-photos/${key} folder in the Firebase console)` : ''}`);
+
+        // Payments are a subcollection of each invoice.
+        let payments = 0;
+        for (const inv of rec.data.invoices) {
+          const pay = await inv.ref.collection('payments').get();
+          payments += pay.size;
+          await deleteRefs(pay.docs.map(d => d.ref));
+        }
+        if (payments) log(`Invoice payments: ${payments} deleted`);
+
+        for (const [c, label] of FARRIER_DATA) {
+          await deleteRefs(rec.data[c].map(d => d.ref));
+          log(`${label[0].toUpperCase() + label.slice(1)}: ${rec.data[c].length} deleted`);
+        }
+
+        // Team: this business's members lose access; the farrier's own membership (if they were a member) goes too.
+        await deleteRefs([...rec.members, ...rec.invites].map(d => d.ref));
+        await db.collection('businessMembers').doc(key).delete();
+        if (rec.members.length || rec.invites.length) log(`Team: ${rec.members.length} members and ${rec.invites.length} invites removed`);
+        await deleteRefs(rec.sessions.map(d => d.ref));
+        await db.collection('farrierSecrets').doc(key).delete(); // payment keys, Google Calendar token
+        log('Payment keys and calendar token deleted');
+      }
+
+      if (alsoSupport) {
+        for (const t of rec.tickets) {
+          await deleteRefs((await t.ref.collection('messages').get()).docs.map(d => d.ref));
+        }
+        await deleteRefs(rec.tickets.map(d => d.ref));
+        await db.collection('supportFarriers').doc(key).delete();
+        log(`Support record and ${rec.tickets.length} tickets deleted`);
+      }
+
+      if (hasAccount) {
+        await db.collection('farriers').doc(key).delete();
+        log('Farrier profile deleted');
+      }
+    }
+
+    function DeleteFarrierModal({ farrier, onClose, onDeleted }) {
+      const [rec, setRec] = useState(null);
+      const [alsoSupport, setAlsoSupport] = useState(true);
+      const [typed, setTyped] = useState('');
+      const [busy, setBusy] = useState(false);
+      const [lines, setLines] = useState([]);
+      const [error, setError] = useState('');
+      const [done, setDone] = useState(false);
+      const confirmWord = (farrier.email || farrier.businessName || 'DELETE').trim();
+      const a = farrier.account;
+
+      useEffect(() => {
+        findFarrierRecords(farrier.key, farrier.hasAccount).then(setRec).catch(e => setError(e.message));
+      }, []);
+
+      const counts = rec ? [
+        ...FARRIER_DATA.map(([c, label]) => [label, rec.data[c]?.length || 0]),
+        ['team members', rec.members.length], ['support tickets', rec.tickets.length],
+      ].filter(([, n]) => n) : [];
+
+      const run = async () => {
+        setBusy(true); setError(''); setLines([]);
+        try {
+          await deleteFarrier({ key: farrier.key, hasAccount: farrier.hasAccount, alsoSupport, log: m => setLines(l => [...l, m]) });
+          setDone(true);
+        } catch (e) {
+          console.error(e);
+          setError(`Stopped part-way: ${e.message}. Nothing is lost by running Delete again.`);
+        }
+        setBusy(false);
+      };
+
+      return (
+        <div className="modal-back" onClick={e => e.target === e.currentTarget && !busy && (done ? onDeleted() : onClose())}>
+          <div className="modal">
+            <h2>{farrier.hasAccount ? 'Delete farrier and all their records' : 'Delete support record'}</h2>
+            {!done && (
+              <>
+                <p style={{ margin: '0 0 0.5rem' }}>
+                  <strong>{farrier.businessName || farrier.contactName || farrier.email}</strong>
+                  {farrier.email && farrier.businessName ? <> ({farrier.email})</> : null}
+                </p>
+                {!rec && !error && <p className="who">Counting records…</p>}
+                {rec && (
+                  <>
+                    {farrier.hasAccount && (
+                      <>
+                        <p style={{ margin: 0, fontSize: '0.9rem' }}>This permanently deletes:</p>
+                        <ul className="del-list">
+                          <li>their farrier profile, payment keys and calendar token</li>
+                          {counts.map(([label, n]) => <li key={label}>{n} {label}</li>)}
+                          {!counts.length && <li>no other records found</li>}
+                        </ul>
+                      </>
+                    )}
+                    {a?.subscriptionId && (
+                      <div className="del-warn">⚠️ This farrier has a subscription ({a.subscriptionId}). Deleting does <strong>not</strong> cancel it. Cancel it in Stripe separately.</div>
+                    )}
+                    {rec.members.length > 0 && (
+                      <div className="del-warn">⚠️ {rec.members.length} team member{rec.members.length === 1 ? '' : 's'} work in this business and will lose access to its records.</div>
+                    )}
+                    <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.9rem', color: 'var(--text)' }}>
+                      <input type="checkbox" style={{ width: 'auto' }} checked={alsoSupport} onChange={e => setAlsoSupport(e.target.checked)} />
+                      Also delete the support record, notes and tickets
+                    </label>
+                    <div className="field" style={{ marginTop: '0.75rem' }}>
+                      <label>Type <strong>{confirmWord}</strong> to confirm</label>
+                      <input value={typed} onChange={e => setTyped(e.target.value)} disabled={busy} autoFocus />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+            {lines.length > 0 && <div className="del-log">{lines.map((l, i) => <div key={i}>{l}</div>)}</div>}
+            {error && <div className="err">{error}</div>}
+            {done && (
+              <>
+                <p>✅ Deleted.</p>
+                {farrier.hasAccount && (
+                  <div className="del-warn">Their login still exists. In the Firebase console go to Authentication → Users, find <strong>{farrier.email || farrier.key}</strong> and delete it, or they could sign in again and start a blank account.</div>
+                )}
+              </>
+            )}
+            <div className="actions">
+              {done
+                ? <button className="btn btn-primary" onClick={onDeleted}>Done</button>
+                : <>
+                    <button className="btn" disabled={busy} onClick={onClose}>Cancel</button>
+                    <button className="btn btn-danger" disabled={busy || !rec || typed.trim().toLowerCase() !== confirmWord.toLowerCase()} onClick={run}>
+                      {busy ? 'Deleting…' : 'Delete permanently'}
+                    </button>
+                  </>}
+            </div>
           </div>
         </div>
       );
