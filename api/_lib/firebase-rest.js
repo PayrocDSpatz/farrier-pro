@@ -258,7 +258,8 @@ export async function authorizeSender(req, tag) {
   if ((await check(isFarrier)) || (await check(isSupportAdmin))) return { caller };
   if (lookupError) {
     console.error(`${tag}: could not verify caller`, caller.uid, lookupError);
-    return { status: 500, error: 'Could not verify your account. Please try again.' };
+    // Detail is only shown to callers with a valid sign-in, to speed up diagnosis.
+    return { status: 500, error: `Could not verify your account (${String(lookupError.message || lookupError).slice(0, 300)})` };
   }
   console.warn(`${tag}: no farrier profile for`, caller.uid, caller.email);
   return { status: 403, error: 'No farrier account found for this login' };
