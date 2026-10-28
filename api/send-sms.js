@@ -20,9 +20,19 @@ export default async function handler(req, res) {
   if (req.query?.signupAlert) return notifySignup(req, res);
 
   const caller = await callerFromRequest(req).catch(() => null);
+  if (!caller) return res.status(401).json({ error: 'Please sign in again' });
+
   // Farriers texting their customers, or FarriTech support texting a farrier (support.html).
-  if (!caller || !((await isFarrier(caller.uid).catch(() => false)) || (await isSupportAdmin(caller.uid).catch(() => false)))) {
-    return res.status(401).json({ error: 'Not authorized' });
+  // A failed lookup (server sign-in, Firestore) is reported as a server error, not as "not a farrier".
+  let lookupError = null;
+  const check = (fn) => fn(caller.uid).catch(err => { lookupError = err; return false; });
+  if (!((await check(isFarrier)) || (await check(isSupportAdmin)))) {
+    if (lookupError) {
+      console.error('send-sms: could not verify caller', caller.uid, lookupError);
+      return res.status(500).json({ error: 'Could not verify your account. Please try again.' });
+    }
+    console.warn('send-sms: no farrier profile for', caller.uid, caller.email);
+    return res.status(403).json({ error: 'No farrier account found for this login' });
   }
 
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
