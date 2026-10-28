@@ -4,7 +4,7 @@
 // Route-sheet uses: { action, to, subject, html }
 // Appointment emails use the same body fields as the individual handlers did.
 
-import { callerFromRequest, isFarrier, isSupportAdmin } from './_lib/firebase-rest.js';
+import { authorizeSender } from './_lib/firebase-rest.js';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM = 'FarriTech <welcome@contact.dasdigitalai.com>';
@@ -175,10 +175,8 @@ export default async function handler(req, res) {
     // itself may send — otherwise anyone could send any email from FarriTech's address.
     // The public /seminar sign-up is the one exception; it only sends fixed content.
     if (action !== 'seminar-signup') {
-      const caller = await callerFromRequest(req).catch(() => null);
-      if (!caller || !((await isFarrier(caller.uid).catch(() => false)) || (await isSupportAdmin(caller.uid).catch(() => false)))) {
-        return res.status(401).json({ ok: false, error: 'Not authorized' });
-      }
+      const auth = await authorizeSender(req, 'send-email');
+      if (auth.error) return res.status(auth.status).json({ ok: false, error: auth.error });
     }
 
     if (!action) {
