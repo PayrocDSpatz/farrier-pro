@@ -17,6 +17,31 @@ Firebase data as the main app, but only FarriTech support staff can use it.
     back, `api/twilio-webhook.js` adds the reply to their open ticket, marks it unread and sets
     it back to Open.
 
+## Deleting a farrier
+
+Open a farrier → **Delete** card at the bottom → **Delete farrier…**. The dialog counts what will
+go, you type the farrier's email (or business name) to confirm, and it permanently deletes:
+
+- their horses, customers, invoices (and each invoice's payments), appointments, services,
+  mileage logs, inventory items and inventory transactions
+- their payment keys and Google Calendar token (`farrierSecrets`)
+- their business's team memberships and invites (team members keep their own logins but lose access)
+- their horse photos in Storage (best effort)
+- optionally, the support record, notes and tickets
+- their farrier profile, last of all. If something fails part-way the farrier stays in the list,
+  and running **Delete** again finishes the job.
+
+What it does **not** do:
+
+- **Their login.** Without a service-account key the app can't delete a Firebase Auth user. Delete
+  it by hand in Firebase console → Authentication → Users, or they can sign in again and start a
+  blank account.
+- **Cancel their subscription.** The dialog warns if one exists; cancel it in Stripe.
+- Anything outside Firestore and Storage (for example emails already sent).
+
+This needs the updated `firestore.rules` published (it lets support admins read and delete these
+records). A farrier who isn't a business owner has no shared records; only their own are deleted.
+
 ## Who can see it
 
 Support data lives in its own collections: `supportFarriers`, `supportTickets` and
