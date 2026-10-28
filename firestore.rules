@@ -118,8 +118,11 @@ match /sponsorBanners/{bannerId} {
       allow update, delete: if isTeamOf(resource.data.farrierId);
       allow delete: if isSupportAdmin(); // support.html → Delete farrier
     }
+// The server's own login (SERVER_AUTH_EMAIL / SERVER_AUTH_PASSWORD in Vercel). Do NOT delete this
+// user in Firebase Authentication: texts, email and payments stop working. If it is ever recreated,
+// put its new uid here, publish these rules, and update the two Vercel variables.
 function isServer() {
-  return request.auth != null && request.auth.uid == '2kkfUU5dOvTRn1rWIaua38sgnNr1';
+  return request.auth != null && request.auth.uid == 'kw1LkZWo4gU8WgIBaHXRGdHK4v83';
 }
 
 match /farrierSecrets/{farrierId} {
