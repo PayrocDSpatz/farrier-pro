@@ -247,6 +247,23 @@ export async function isSupportAdmin(uid) {
   return !!a && a.active !== false;
 }
 
+// Gate for endpoints that send messages: a signed-in farrier/team member, FarriTech support
+// staff, or the server itself. Returns { caller } or { status, error } with the reason —
+// a failed lookup (server sign-in, Firestore) is a 500, not a silent "not a farrier".
+export async function authorizeSender(req, tag) {
+  const caller = await callerFromRequest(req).catch(() => null);
+  if (!caller) return { status: 401, error: 'Please sign in again' };
+  let lookupError = null;
+  const check = (fn) => fn(caller.uid).catch(err => { lookupError = err; return false; });
+  if ((await check(isFarrier)) || (await check(isSupportAdmin))) return { caller };
+  if (lookupError) {
+    console.error(`${tag}: could not verify caller`, caller.uid, lookupError);
+    return { status: 500, error: 'Could not verify your account. Please try again.' };
+  }
+  console.warn(`${tag}: no farrier profile for`, caller.uid, caller.email);
+  return { status: 403, error: 'No farrier account found for this login' };
+}
+
 export async function isFarrier(uid) {
   if (!uid) return false;
   const { uid: serverUid } = await serverAuth();

@@ -4,7 +4,7 @@
 // Only signed-in farriers, FarriTech support staff (support.html), or the server itself
 // (e.g. payment confirmations) may send —
 // otherwise anyone could text any number on FarriTech's Twilio account.
-import { callerFromRequest, isFarrier, isSupportAdmin } from './_lib/firebase-rest.js';
+import { authorizeSender } from './_lib/firebase-rest.js';
 import { notifySignup } from './_lib/signup-alert.js';
 
 export default async function handler(req, res) {
@@ -19,21 +19,9 @@ export default async function handler(req, res) {
   // /api/notify-signup (rewritten here in vercel.json) — new-signup text to the owner.
   if (req.query?.signupAlert) return notifySignup(req, res);
 
-  const caller = await callerFromRequest(req).catch(() => null);
-  if (!caller) return res.status(401).json({ error: 'Please sign in again' });
-
   // Farriers texting their customers, or FarriTech support texting a farrier (support.html).
-  // A failed lookup (server sign-in, Firestore) is reported as a server error, not as "not a farrier".
-  let lookupError = null;
-  const check = (fn) => fn(caller.uid).catch(err => { lookupError = err; return false; });
-  if (!((await check(isFarrier)) || (await check(isSupportAdmin)))) {
-    if (lookupError) {
-      console.error('send-sms: could not verify caller', caller.uid, lookupError);
-      return res.status(500).json({ error: 'Could not verify your account. Please try again.' });
-    }
-    console.warn('send-sms: no farrier profile for', caller.uid, caller.email);
-    return res.status(403).json({ error: 'No farrier account found for this login' });
-  }
+  const auth = await authorizeSender(req, 'send-sms');
+  if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
