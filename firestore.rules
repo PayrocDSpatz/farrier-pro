@@ -122,7 +122,7 @@ match /sponsorBanners/{bannerId} {
 // user in Firebase Authentication: texts, email and payments stop working. If it is ever recreated,
 // put its new uid here, publish these rules, and update the two Vercel variables.
 function isServer() {
-  return request.auth != null && request.auth.uid == '1302SLsblraPhL1hT4ausfsTnv52';
+  return request.auth != null && request.auth.uid == 'kw1LkZWo4gU8WgIBaHXRGdHK4v83';
 }
 
 match /farrierSecrets/{farrierId} {
