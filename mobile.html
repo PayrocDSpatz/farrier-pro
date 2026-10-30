@@ -4539,7 +4539,7 @@ async function confirmPayment() {
       showSuccess('Payment Charged!', `$${Number(charged.amount).toFixed(2)} collected via card`);
     } else {
       // Cash, check, ACH, Zelle, Venmo, an outside card terminal or other, for the balance (at the
-      // card price for an outside terminal, the cash price otherwise). Online, the server records
+      // card price for an external card, the cash price otherwise). Online, the server records
       // it and closes any open pay link so the customer can't also pay online. Offline, it's
       // written straight to the invoice and syncs later (the pay link can't be closed until then).
       const checkNumber = PAY_REFERENCE_FIELDS[method] ? (document.getElementById('check-number')?.value.trim() || '') : '';
