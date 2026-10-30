@@ -134,12 +134,6 @@
   .total-bar-amount { font-size: 1.6rem; font-weight: 800; }
 
   /* ── PAYMENT METHOD ── */
-  .pay-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
-  .pay-chip { padding: 16px 12px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: center; font-family: 'Outfit', sans-serif; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); background: var(--surface); transition: all 0.15s; }
-  .pay-chip:active { transform: scale(0.97); }
-  .pay-chip.selected { border-color: var(--blue); background: #EBF4FF; color: var(--blue); }
-  .pay-chip.chip-offline-disabled { opacity: 0.4; pointer-events: none; }
-  .pay-chip-icon { font-size: 1.5rem; display: block; margin-bottom: 6px; }
 
   /* ── INVOICE ROW ── */
   .invoice-row { padding: 14px 16px; background: var(--surface); border-radius: var(--radius-sm); margin-bottom: 8px; box-shadow: var(--shadow); cursor: pointer; border-left: 4px solid var(--border); }
@@ -740,15 +734,15 @@
     </div>
 
     <div class="section-label">Payment Method</div>
-    <div class="pay-grid" id="pay-method-grid">
-      <div class="pay-chip" onclick="selectPayMethod('cash', this)"><span class="pay-chip-icon">💵</span>Cash</div>
-      <div class="pay-chip" onclick="selectPayMethod('check', this)"><span class="pay-chip-icon">🧾</span>Check</div>
-      <div class="pay-chip" onclick="selectPayMethod('card', this)"><span class="pay-chip-icon">💳</span>Card</div>
+    <!-- Options are filled in by populatePayMethodOptions(): Card (charge now) plus every
+         FarriPricing.MANUAL_METHODS entry, the same list the desktop Record Payment dropdown shows. -->
+    <div class="field">
+      <select id="pay-method-select" onchange="selectPayMethod(this.value)"></select>
     </div>
 
-    <!-- Check number field -->
+    <!-- Check # / confirmation # / note for payments taken outside FarriTech -->
     <div id="check-fields" style="display:none;">
-      <div class="field"><label>Check #</label><input type="text" id="check-number" placeholder="e.g. 1042" inputmode="numeric" style="letter-spacing:2px;"></div>
+      <div class="field"><label id="check-number-label">Check #</label><input type="text" id="check-number" placeholder="e.g. 1042" inputmode="numeric" style="letter-spacing:2px;"></div>
     </div>
 
     <!-- Stripe Elements card entry (or, with iPOSpays connected, the iPOSpays card form) -->
@@ -4379,9 +4373,9 @@ function openInvoicePayment(inv) {
   // Reset Stripe card element for fresh entry each time
   if (_stripeCard) { _stripeCard.destroy(); _stripeCard = null; }
   document.getElementById('confirm-pay-btn').disabled = true;
-  document.querySelectorAll('.pay-chip').forEach(c => c.classList.remove('selected'));
+  populatePayMethodOptions();
+  document.getElementById('check-number').value = '';
   document.getElementById('confirm-pay-btn').textContent = 'Confirm Payment';
-  updatePayMethodAvailability();
   goTo('screen-payment');
 }
 
@@ -4467,26 +4461,49 @@ async function resendInvoice() {
   document.getElementById('resend-send-btn').textContent = 'Send';
 }
 
-// Card requires network (a live Stripe charge) — grey it out while offline instead of
-// letting the farrier tap it and hit a confusing failure. Cash/Check stay available and queue like any other write.
+// Same methods as the desktop Record Payment dropdown, plus "Card (charge now)" for a live
+// charge. Card requires network, so it's disabled while offline instead of letting the farrier
+// pick it and hit a confusing failure. Everything else stays available and queues like any other write.
+const PAY_REFERENCE_FIELDS = {
+  check: { label: 'Check #', placeholder: 'e.g. 1042', numeric: true },
+  ach: { label: 'Confirmation #', placeholder: 'Confirmation #' },
+  zelle: { label: 'Confirmation #', placeholder: 'Confirmation #' },
+  venmo: { label: 'Venmo transaction ID', placeholder: 'Venmo transaction ID' },
+  card_terminal: { label: 'Last 4 or approval code', placeholder: 'Last 4 or approval code' },
+  other: { label: 'Note', placeholder: 'Optional note' },
+};
+
+function populatePayMethodOptions() {
+  const sel = document.getElementById('pay-method-select');
+  sel.innerHTML = '<option value="" disabled selected>Select payment method…</option>'
+    + '<option value="card">Card (charge now)</option>'
+    + Object.entries(FarriPricing.MANUAL_METHODS).map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+  updatePayMethodAvailability();
+}
+
 function updatePayMethodAvailability() {
-  document.querySelectorAll('#pay-method-grid .pay-chip').forEach(chip => {
-    const needsNetwork = /'card'/.test(chip.getAttribute('onclick') || '');
-    chip.classList.toggle('chip-offline-disabled', needsNetwork && !netState.online);
-  });
+  const opt = document.querySelector('#pay-method-select option[value="card"]');
+  if (opt) opt.disabled = !netState.online;
 }
 window.addEventListener('online', updatePayMethodAvailability);
 window.addEventListener('offline', updatePayMethodAvailability);
 
-function selectPayMethod(method, el) {
+function selectPayMethod(method) {
   if (method === 'card' && !netState.online) {
     showToast('Card payments require an internet connection', 'error');
+    document.getElementById('pay-method-select').value = state.selectedPayMethod || '';
     return;
   }
   state.selectedPayMethod = method;
-  document.querySelectorAll('.pay-chip').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
-  document.getElementById('check-fields').style.display = method === 'check' ? 'block' : 'none';
+  const ref = PAY_REFERENCE_FIELDS[method];
+  document.getElementById('check-fields').style.display = ref ? 'block' : 'none';
+  if (ref) {
+    const input = document.getElementById('check-number');
+    document.getElementById('check-number-label').textContent = ref.label;
+    input.placeholder = ref.placeholder;
+    input.inputMode = ref.numeric ? 'numeric' : 'text';
+    input.style.letterSpacing = ref.numeric ? '2px' : '';
+  }
   document.getElementById('card-fields').style.display  = method === 'card'  ? 'block' : 'none';
   const iposCard = method === 'card' && Boolean(state.userProfile?.ipospaysConnected);
   document.getElementById('ipos-card-fields').style.display = iposCard ? 'block' : 'none';
@@ -4500,7 +4517,7 @@ function selectPayMethod(method, el) {
   btn.disabled = false;
   const inv = state.currentInvoice;
   btn.textContent = method === 'card' ? `✓ Charge ${FarriPricing.money(FarriPricing.getChargeCents(inv, 'card_keyed'))}`
-    : `✓ Record ${FarriPricing.money(FarriPricing.getChargeCents(inv, method))} ${method === 'check' ? 'Check' : 'Cash'}`;
+    : `✓ Record ${FarriPricing.money(FarriPricing.getChargeCents(inv, method))} ${FarriPricing.MANUAL_METHODS[method]}`;
 }
 
 async function confirmPayment() {
@@ -4521,11 +4538,14 @@ async function confirmPayment() {
       }
       showSuccess('Payment Charged!', `$${Number(charged.amount).toFixed(2)} collected via card`);
     } else {
-      // Cash or check for the balance at the cash price. Online, the server records it and
-      // closes any open pay link so the customer can't also pay online. Offline, it's written
-      // straight to the invoice and syncs later (the pay link can't be closed until then).
-      const checkNumber = method === 'check' ? (document.getElementById('check-number')?.value.trim() || '') : '';
+      // Cash, check, ACH, Zelle, Venmo, an outside card terminal or other, for the balance (at the
+      // card price for an external card, the cash price otherwise). Online, the server records
+      // it and closes any open pay link so the customer can't also pay online. Offline, it's
+      // written straight to the invoice and syncs later (the pay link can't be closed until then).
+      const checkNumber = PAY_REFERENCE_FIELDS[method] ? (document.getElementById('check-number')?.value.trim() || '') : '';
       const amountCents = FarriPricing.getChargeCents(inv, method);
+      const methodLabel = FarriPricing.MANUAL_METHODS[method];
+      const isCard = FarriPricing.isCardMethod(method);
       if (netState.online) {
         const res = await fetch('/api/stripe-payment', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4540,25 +4560,25 @@ async function confirmPayment() {
         }
       } else {
         const payment = {
-          amount: amountCents / 100, creditAmount: amountCents / 100, method,
-          memo: checkNumber || (method === 'check' ? 'Check' : 'Cash'), date: new Date().toISOString(),
+          amount: amountCents / 100, creditAmount: FarriPricing.balanceCents(inv) / 100, method: isCard ? 'credit_card' : method,
+          memo: checkNumber || methodLabel, date: new Date().toISOString(),
         };
         const payments = [...(inv.payments || []), payment];
         const paidAmount = payments.reduce((t, p) => t + (p.amount || 0), 0);
         const updateData = {
           status: 'paid',
           paidAt: firebase.firestore.FieldValue.serverTimestamp(),
-          paymentMethod: method,
+          paymentMethod: isCard ? 'card' : method,
           payments,
           paidAmount,
           amountPaidCents: Math.round(paidAmount * 100),
           balanceDue: 0,
-          priceApplied: 'cash',
+          priceApplied: isCard && FarriPricing.invoiceRate(inv) > 0 && !inv.cardFeeWaived ? 'card' : 'cash',
         };
         if (method === 'check') updateData.checkNumber = checkNumber;
         performWrite(() => db.collection('invoices').doc(inv.id).update(updateData));
       }
-      showSuccess('Payment Recorded!', `${FarriPricing.money(amountCents)} collected via ${method}` + (netState.online ? '' : ' (will sync when back online)'));
+      showSuccess('Payment Recorded!', `${FarriPricing.money(amountCents)} collected via ${methodLabel}` + (netState.online ? '' : ' (will sync when back online)'));
     }
   } catch(e) {
     showToast('Error: ' + e.message, 'error');

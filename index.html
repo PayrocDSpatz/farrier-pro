@@ -13717,7 +13717,7 @@ function CalendarView({ userId }) {
 
 
     // Record a payment taken outside FarriTech. The amount starts at the price for the
-    // chosen method (card price for "Card (outside terminal)", cash price otherwise) and
+    // chosen method (card price for "External card", cash price otherwise) and
     // can be lowered for a partial payment. The server records it and closes any open
     // online checkout so the customer can't also pay by link.
     function ManualPaymentModal({ invoice, onClose, onPaymentRecorded }) {
