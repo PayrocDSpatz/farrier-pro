@@ -810,6 +810,8 @@
     <button class="btn-primary" id="nc-save-btn" onclick="saveNewCustomer()">Save Customer</button>
     <div style="margin-top:8px;"></div>
     <button class="btn-secondary" onclick="goBack()">Cancel</button>
+    <!-- Edit mode only (see startEditCustomer / startNewCustomer) -->
+    <button class="btn-danger" id="nc-delete-btn" onclick="deleteCustomer()" style="display:none; margin-top:24px;">🗑️ Delete Customer</button>
   </div>
 </div>
 
@@ -4625,6 +4627,7 @@ function startNewCustomer() {
   state.editingCustomerId = null;
   document.getElementById('nc-form-title').textContent = 'New Customer';
   document.getElementById('nc-save-btn').textContent = 'Save Customer';
+  document.getElementById('nc-delete-btn').style.display = 'none';
   ['nc-name','nc-farm','nc-manager-contact','nc-phone','nc-email','nc-notes','nc-address','nc-city','nc-state','nc-zip'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   state.ncContacts = []; renderNcContacts();
   document.getElementById('nc-address').style.display = '';
@@ -4641,6 +4644,7 @@ function startEditCustomer(c) {
   state.editingCustomerId = c.id;
   document.getElementById('nc-form-title').textContent = 'Edit Customer';
   document.getElementById('nc-save-btn').textContent = 'Save Changes';
+  document.getElementById('nc-delete-btn').style.display = '';
   document.getElementById('nc-name').value = c.name || '';
   document.getElementById('nc-farm').value = c.farmName || '';
   document.getElementById('nc-manager-contact').value = c.managerContact || '';
@@ -4710,6 +4714,64 @@ async function saveNewCustomer() {
     selectCustomer(newCustomer);
   }
   btn.disabled = false; btn.textContent = editingId ? 'Save Changes' : 'Save Customer';
+}
+
+// Deletes the customer record only. If the customer has horses, invoices or appointments the
+// farrier is told how many and has to confirm before it goes through. Looked up the same way the
+// customer screen lists them (horses by customerId, invoices/appointments by customerName).
+async function deleteCustomer() {
+  const id = state.editingCustomerId;
+  const c = state.customers.find(x => x.id === id);
+  if (!id || !c) return;
+  if (!netState.online) {
+    showToast("Can't check this customer's history while offline — try again when you're back online.", 'error');
+    return;
+  }
+
+  const btn = document.getElementById('nc-delete-btn');
+  btn.disabled = true; btn.textContent = 'Checking history…';
+  let horses, appts, invs;
+  try {
+    const [hSnap, aSnap, iSnap] = await Promise.all([
+      db.collection('horses').where('farrierId', '==', bizId()).where('customerId', '==', id).get(),
+      db.collection('appointments').where('farrierId', '==', bizId()).where('customerName', '==', c.name).get(),
+      db.collection('invoices').where('farrierId', '==', bizId()).where('customerName', '==', c.name).get(),
+    ]);
+    horses = hSnap.size;
+    appts = aSnap.size;
+    invs = iSnap.docs.map(d => d.data());
+  } catch (e) {
+    console.error('Customer history lookup error:', e);
+    showToast('Error checking history: ' + e.message, 'error');
+    return;
+  } finally {
+    btn.disabled = false; btn.textContent = '🗑️ Delete Customer';
+  }
+
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  // Paid (or part-paid) invoices are billing records, so they block the delete outright.
+  const paid = invs.filter(i => i.status === 'paid' || i.status === 'partial').length;
+  if (paid) {
+    showToast(`Can't delete ${c.name} — ${plural(paid, 'invoice')} ${paid === 1 ? 'has' : 'have'} been paid.`, 'error');
+    return;
+  }
+  const history = [horses && plural(horses, 'horse'), invs.length && plural(invs.length, 'invoice'), appts && plural(appts, 'appointment')].filter(Boolean);
+  const outstanding = invs.filter(i => i.status === 'outstanding').length;
+  const message = history.length
+    ? `${c.name} has ${history.length > 1 ? history.slice(0, -1).join(', ') + ' and ' + history[history.length - 1] : history[0]}.\n\n`
+      + 'Deleting removes the customer record only. Those horses, invoices and appointments stay in your account but will no longer be tied to a customer.\n\n'
+      + (outstanding ? `⚠️ ${plural(outstanding, 'invoice')} still outstanding.\n\n` : '')
+      + `Delete ${c.name} anyway?`
+    : `Delete ${c.name}? This cannot be undone.`;
+  if (!confirm(message)) return;
+
+  performWrite(() => db.collection('customers').doc(id).delete());
+  state.customers = state.customers.filter(x => x.id !== id);
+  state.customer = null;
+  state.editingCustomerId = null;
+  showToast(`${c.name} deleted.`, 'success');
+  goBack(); // edit form → customer screen
+  goBack(); // customer screen → wherever the farrier came from
 }
 
 // ── HORSES ──
