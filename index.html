@@ -1783,19 +1783,16 @@ src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCoYUHgYEFkS2nfnBqDcBk-9hk
         const maxDescW = pageW - 48 - 240; // leave room for qty/rate/amount
         const lineH = 14;
 
-        const computeTotal = () => items.reduce((sum, it) => {
-          const qty = Number(it.qty || 1);
-          const rate = Number(it.amount ?? it.unitPriceSnapshot ?? 0);
-          return sum + (qty * rate);
-        }, 0);
+        // `amount` is the line total (rate × qty); the rate is the per-horse price.
+        const computeTotal = () => items.reduce((sum, it) => sum + Number(it.amount ?? it.unitPriceSnapshot ?? 0), 0);
 
         for (const it of items) {
           const rawDesc = safeText_(it.serviceNameSnapshot || it.description || "");
           const desc = rawDesc === 'Custom Service (enter manually)' ? 'Custom Service' : rawDesc;
-          const horse = safeText_(it.horseName || "");
-          const qty = Number(it.qty || 1);
-          const rate = Number(it.amount ?? it.unitPriceSnapshot ?? 0);
-          const lineTotal = qty * rate;
+          const horse = safeText_(FarriPricing.itemHorseLabel({ ...it, qty: 1 }));
+          const qty = FarriPricing.itemQty(it);
+          const lineTotal = Number(it.amount ?? it.unitPriceSnapshot ?? 0);
+          const rate = FarriPricing.itemUnitPrice(it);
 
           // Page break
           if (y > pageH - 140) {
@@ -5172,7 +5169,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{fmtDay(inv.date)}</div>
                         {inv.horseLines.map((l, i) => (
                           <div key={i} style={{ fontSize: '0.8rem', color: 'var(--text)', opacity: 0.85 }}>
-                            🔧 {l.description || 'Service'}{Number(l.qty) > 1 ? ` × ${l.qty}` : ''} — {fmtMoney((Number(l.amount) || 0) * (Number(l.qty) || 1))}
+                            🔧 {l.description || 'Service'}{Number(l.qty) > 1 ? ` × ${l.qty}` : ''} — {fmtMoney(Number(l.amount) || 0)}
                           </div>
                         ))}
                       </div>
@@ -7125,7 +7122,7 @@ function FarrierDashboard({ user, userProfile, setUserProfile, farrierId, isSupp
                               <div style={{marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e5e7eb'}}>
                                 {inv.items.map((item, idx) => (
                                   <div key={idx} style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem'}}>
-                                    • {item.description}{item.horseName ? ` (${item.horseName})` : ''} - ${parseFloat(item.amount || 0).toFixed(2)}
+                                    • {item.description}{FarriPricing.itemHorseLabel(item) ? ` (${FarriPricing.itemHorseLabel(item)})` : ''} - ${parseFloat(item.amount || 0).toFixed(2)}
                                   </div>
                                 ))}
                               </div>
@@ -8366,7 +8363,7 @@ function ServicesView({ userId }) {
               invoiceDate: dateStr,
               dueDate: dateStr,
               item: item.description || item.serviceNameSnapshot || 'Service',
-              itemDescription: item.horseName ? `${item.description || ''} (${item.horseName})` : (item.description || ''),
+              itemDescription: FarriPricing.itemHorseLabel(item) ? `${item.description || ''} (${FarriPricing.itemHorseLabel(item)})` : (item.description || ''),
               itemAmount: Number(item.amount || 0).toFixed(2),
               memo: inv.notes || '',
             });
@@ -10493,7 +10490,8 @@ function CalendarView({ userId }) {
           const k = keyOf(d);
           const perHorse = {};
           (inv.items || []).forEach(it => {
-            const horse = String(it.horseName || '').trim();
+            // "Multiple horses × 10" for a group line, so the day's recap shows how many.
+            const horse = FarriPricing.itemHorseLabel({ horseName: it.horseName, qty: it.qty });
             if (!horse) return;
             const id = norm(horse);
             perHorse[id] = perHorse[id] || { horse, customer: inv.customerName || '', farm: inv.customerFarmName || '', services: [], invoiceNumber: inv.invoiceNumber || '' };
@@ -13851,8 +13849,10 @@ function CalendarView({ userId }) {
       const [customerPhone, setCustomerPhone] = useState(editingInvoice?.customerPhone || prefillData?.customerPhone || '');
       const [items, setItems] = useState(
         editingInvoice?.items?.length
-          ? editingInvoice.items.map(i => ({ ...i, qty: i.qty || 1 }))
-          : [{ description: '', amount: 0, horseId: '', horseName: '' }]
+          // While editing, `amount` holds the per-horse price; the line total (price × qty)
+          // is worked out again on save.
+          ? editingInvoice.items.map(i => ({ ...i, qty: FarriPricing.itemQty(i), amount: FarriPricing.itemUnitPrice(i) }))
+          : [{ description: '', amount: 0, qty: 1, horseId: '', horseName: '' }]
       );
       const [milesDriven, setMilesDriven] = useState(editingInvoice?.milesDriven || 0);
       const [loading, setLoading] = useState(false);
@@ -14059,6 +14059,7 @@ useEffect(() => {
      // already uses elsewhere for linking records without a real doc id in hand).
      const [horseOptions, setHorseOptions] = useState([
        { id: "", name: "-- Select Horse --" },
+       { id: "__multiple__", name: "👥 " + FarriPricing.MULTIPLE_HORSES },
        { id: "__new__", name: "+ Add New Horse..." }
      ]);
 
@@ -14073,6 +14074,7 @@ useEffect(() => {
            .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
          setHorseOptions([
            { id: "", name: "-- Select Horse --" },
+           { id: "__multiple__", name: "👥 " + FarriPricing.MULTIPLE_HORSES },
            ...list,
            { id: "__new__", name: "+ Add New Horse..." }
          ]);
@@ -14081,7 +14083,7 @@ useEffect(() => {
      }, [userId, customerId, customerName]);
 
       const addItem = () => {
-        setItems([...items, { description: '', amount: 0, horseId: '', horseName: '' }]);
+        setItems([...items, { description: '', amount: 0, qty: 1, horseId: '', horseName: '' }]);
       };
 
       const updateItem = (index, field, value) => {
@@ -14117,7 +14119,13 @@ useEffect(() => {
 
      const selectHorse = (index, horseId) => {
        const newItems = [...items];
-       if (horseId === '__new__') {
+       // Anything but "Multiple horses" is a single horse, so the quantity goes back to 1.
+       if (horseId !== '__multiple__') { newItems[index].qty = 1; newItems[index].note = ''; }
+       if (horseId === '__multiple__') {
+         // Horses the farrier doesn't know individually: no horse record, just a name and a count.
+         newItems[index].horseId = '';
+         newItems[index].horseName = FarriPricing.MULTIPLE_HORSES;
+       } else if (horseId === '__new__') {
          newItems[index].horseId = '__new__';
          newItems[index].horseName = '';
        } else if (!horseId) {
@@ -14147,7 +14155,7 @@ useEffect(() => {
         setItems(items.filter((_, i) => i !== index));
       };
 
-      const total = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+      const total = items.reduce((sum, item) => sum + FarriPricing.lineAmount(item.amount, item.qty), 0);
 
       const generatePaymentLink = async (sendVia = null) => {
         if (editLocked) {
@@ -14173,8 +14181,11 @@ useEffect(() => {
     description: String(i.description || "").trim(),
     horseId: (i.horseId && i.horseId !== '__new__') ? i.horseId : "",
     horseName: String(i.horseName || "").trim(),
-    qty: Number(i.qty || 1),
-    amount: Number(i.amount || 0),
+    // `amount` on the form is the per-horse price; saved, it's the line total (price × qty).
+    qty: FarriPricing.itemQty(i),
+    unitPrice: Number(i.amount || 0),
+    amount: FarriPricing.lineAmount(i.amount, i.qty),
+    ...(i.horseName === FarriPricing.MULTIPLE_HORSES && !i.horseId && String(i.note || '').trim() ? { note: String(i.note).trim() } : {}),
 
     // service linkage + immutable snapshots (so old invoices never change)
     serviceId: i.serviceId || "",
@@ -14389,7 +14400,7 @@ useEffect(() => {
                 db.collection('horses').doc(item.horseId).update({
                   lastServiceId: item.serviceId || '',
                   lastServiceName: item.description,
-                  lastServicePrice: item.amount,
+                  lastServicePrice: item.unitPrice,
                   lastServiceDate: firebase.firestore.FieldValue.serverTimestamp(),
                 }).catch(() => {});
               }
@@ -14757,7 +14768,7 @@ useEffect(() => {
                       silently overwritten by a service chosen a moment earlier. */}
                   <div style={{display: 'flex', gap: '0.5rem', marginBottom: '0.5rem'}}>
                     <select
-                      value={item.horseId || ''}
+                      value={item.horseId || (item.horseName === FarriPricing.MULTIPLE_HORSES ? '__multiple__' : '')}
                       onChange={(e) => selectHorse(idx, e.target.value)}
                       style={{
                         flex: 2,
@@ -14865,7 +14876,45 @@ useEffect(() => {
                       step="0.01"
                       min="0"
                     />
+                    <label style={{marginBottom: 0, fontSize: '0.9rem', fontWeight: '500'}}>Qty:</label>
+                    <input
+                      type="number"
+                      aria-label="Quantity"
+                      value={item.qty ?? 1}
+                      onChange={(e) => updateItem(idx, 'qty', e.target.value === '' ? '' : Math.max(1, Math.floor(Number(e.target.value)) || 1))}
+                      onBlur={() => { if (!(Number(item.qty) >= 1)) updateItem(idx, 'qty', 1); }}
+                      style={{
+                        width: '80px',
+                        padding: '0.75rem',
+                        border: '2px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '1rem'
+                      }}
+                      step="1"
+                      min="1"
+                    />
                   </div>
+                  {FarriPricing.itemQty(item) > 1 && (
+                    <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem'}}>
+                      {FarriPricing.money(Math.round((Number(item.amount) || 0) * 100))} each × {FarriPricing.itemQty(item)} = {FarriPricing.money(Math.round(FarriPricing.lineAmount(item.amount, item.qty) * 100))}
+                    </div>
+                  )}
+                  {item.horseName === FarriPricing.MULTIPLE_HORSES && !item.horseId && (
+                    <input
+                      type="text"
+                      placeholder="What are they? e.g. polo string, fronts only"
+                      value={item.note || ''}
+                      onChange={(e) => updateItem(idx, 'note', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '2px solid var(--border)',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        marginTop: '0.5rem'
+                      }}
+                    />
+                  )}
                 </div>
               ))}
               <button className="btn btn-sm btn-outline" onClick={addItem} type="button">

@@ -1377,7 +1377,7 @@ const state = {
   currentHorse: null,
   customerHorses: [],   // horses for state.customer, populated by loadCustomerDetail()
   allHorses: [],        // every horse for this farrier, populated by loadAllHorses() — powers Find Horse
-  invoiceLines: [], // [{horseId, horseName, serviceId, serviceName, price}] — one per "+ Add Line" on screen-services
+  invoiceLines: [], // [{horseId, horseName, serviceId, serviceName, price, qty, note}] — one per "+ Add Line" on screen-services
 };
 
 // ── NETWORK STATUS + WRITE QUEUE ──
@@ -2360,7 +2360,8 @@ async function loadCustomerDetail(c) {
 // Horse" jumps out to create a horse record that isn't on file yet, then comes right
 // back with a fresh line pre-selecting it.
 function emptyInvoiceLine() {
-  return { horseId: '', horseName: '', serviceId: '', serviceName: '', price: 0 };
+  // price is per horse; qty is how many horses it covers (see FarriPricing.lineAmount)
+  return { horseId: '', horseName: '', serviceId: '', serviceName: '', price: 0, qty: 1, note: '' };
 }
 
 function startNewInvoice() {
@@ -2388,7 +2389,7 @@ function splitInvoiceItemsForEdit(items) {
   const customs = [];
   (items || []).forEach(i => {
     if (i.serviceId) {
-      lines.push({ horseId: i.horseId || '', horseName: i.horseName || '', serviceId: i.serviceId, serviceName: i.description || '', price: i.amount || 0 });
+      lines.push({ horseId: i.horseId || '', horseName: i.horseName || '', serviceId: i.serviceId, serviceName: i.description || '', price: FarriPricing.itemUnitPrice(i), qty: FarriPricing.itemQty(i), note: i.note || '' });
     } else {
       customs.push({ name: i.description || '', price: i.amount || 0 });
     }
@@ -2459,7 +2460,13 @@ function renderInvoiceLines() {
       </select>
       <div class="horse-svc-price-wrap${line.serviceName ? ' show' : ''}" id="line-price-wrap-${idx}">
         <span style="font-weight:700; color:var(--text-muted);">$</span>
-        <input type="number" id="line-price-${idx}" min="0" step="0.01" value="${line.serviceName ? line.price.toFixed(2) : ''}" oninput="onLinePriceInput(${idx})">
+        <input type="number" id="line-price-${idx}" min="0" step="0.01" value="${line.serviceName ? line.price.toFixed(2) : ''}" oninput="onLinePriceInput(${idx})" aria-label="Price per horse">
+        <span style="font-weight:700; color:var(--text-muted);">×</span>
+        <input type="number" id="line-qty-${idx}" min="1" step="1" inputmode="numeric" value="${line.qty || 1}" oninput="onLineQtyInput(${idx})" aria-label="Quantity" style="flex:none; width:84px;">
+      </div>
+      <div id="line-total-hint-${idx}" style="font-size:0.8rem; color:var(--text-muted); margin-top:6px;"></div>
+      <div id="line-note-wrap-${idx}" style="display:${line.horseName === FarriPricing.MULTIPLE_HORSES ? 'block' : 'none'}; margin-top:8px;">
+        <input type="text" class="horse-svc-select" id="line-note-${idx}" placeholder="What are they? e.g. polo string, fronts only" autocomplete="off" oninput="onLineNoteInput(${idx})">
       </div>
     </div>
   `).join('');
@@ -2467,6 +2474,8 @@ function renderInvoiceLines() {
   // Re-apply each field's current value after the innerHTML rebuild.
   state.invoiceLines.forEach((line, idx) => {
     document.getElementById(`line-horse-input-${idx}`).value = line.horseName || '';
+    document.getElementById(`line-note-${idx}`).value = line.note || '';
+    updateLineTotalHint(idx);
     if (line.serviceName) {
       const i = state.services.findIndex(s => s.name === line.serviceName);
       if (i >= 0) document.getElementById(`line-service-${idx}`).value = i;
@@ -2489,7 +2498,8 @@ function onLineHorseInput(idx) {
   // Plain onclick — hiding the list is handled by the document-level click-outside
   // listener below, not by input blur (blur-vs-click ordering isn't reliable across
   // every input method, so selection could silently fail to register).
-  const generalRow = `<div class="horse-combo-suggestion" onclick="selectLineHorse(${idx}, '', '')">📋 General / Other</div>`;
+  const generalRow = `<div class="horse-combo-suggestion" onclick="selectLineHorse(${idx}, '', '')">📋 General / Other</div>`
+    + `<div class="horse-combo-suggestion" onclick="selectLineHorse(${idx}, '', '${FarriPricing.MULTIPLE_HORSES}')">👥 ${FarriPricing.MULTIPLE_HORSES}</div>`;
   // escapeHtml around the JSON.stringify'd name is essential — JSON.stringify uses
   // double quotes, which would otherwise terminate this double-quoted onclick attribute
   // early (silently truncating the handler) for any horse name once the browser parses it.
@@ -2504,6 +2514,15 @@ function selectLineHorse(idx, id, name) {
   line.horseName = name;
   document.getElementById(`line-horse-input-${idx}`).value = name;
   document.getElementById(`line-horse-suggestions-${idx}`).style.display = 'none';
+
+  // The note box is only for "Multiple horses" lines; picking anything else puts the
+  // quantity back to a single horse.
+  const isMultiple = name === FarriPricing.MULTIPLE_HORSES;
+  if (!isMultiple) { line.qty = 1; line.note = ''; }
+  document.getElementById(`line-qty-${idx}`).value = line.qty;
+  document.getElementById(`line-note-${idx}`).value = line.note;
+  document.getElementById(`line-note-wrap-${idx}`).style.display = isMultiple ? 'block' : 'none';
+  updateLineTotalHint(idx);
 
   // Default to this horse's last service (from its most recent invoice) so the farrier
   // just confirms/adjusts instead of picking from scratch every time — a real time
@@ -2522,7 +2541,7 @@ function selectLineHorse(idx, id, name) {
     serviceSelect.value = svcIdx;
     document.getElementById(`line-price-${idx}`).value = line.price ? line.price.toFixed(2) : '';
     document.getElementById(`line-price-wrap-${idx}`).classList.add('show');
-  } else if (!id) {
+  } else if (!id && !isMultiple) {
     // Switched to "General / Other" — no history to suggest from.
     line.serviceId = ''; line.serviceName = ''; line.price = 0;
     serviceSelect.value = '';
@@ -2563,12 +2582,36 @@ function onLineServiceChange(idx) {
     priceInput.value = line.price ? line.price.toFixed(2) : '';
     priceWrap.classList.add('show');
   }
+  updateLineTotalHint(idx);
   updateServiceTotal();
 }
 
 function onLinePriceInput(idx) {
   state.invoiceLines[idx].price = parseFloat(document.getElementById(`line-price-${idx}`).value) || 0;
+  updateLineTotalHint(idx);
   updateServiceTotal();
+}
+
+// Quantity is a whole number of horses, never below 1 (a blank box counts as 1 until typed over).
+function onLineQtyInput(idx) {
+  const n = Math.floor(parseFloat(document.getElementById(`line-qty-${idx}`).value));
+  state.invoiceLines[idx].qty = n >= 1 ? n : 1;
+  updateLineTotalHint(idx);
+  updateServiceTotal();
+}
+
+function onLineNoteInput(idx) {
+  state.invoiceLines[idx].note = document.getElementById(`line-note-${idx}`).value;
+}
+
+// "$150.00 each × 10 = $1,500.00" under a line whose quantity is more than 1.
+function updateLineTotalHint(idx) {
+  const line = state.invoiceLines[idx];
+  const el = document.getElementById(`line-total-hint-${idx}`);
+  if (!line || !el) return;
+  el.textContent = line.serviceName && line.qty > 1
+    ? `${FarriPricing.money(Math.round(line.price * 100))} each × ${line.qty} = ${FarriPricing.money(Math.round(FarriPricing.lineAmount(line.price, line.qty) * 100))}`
+    : '';
 }
 
 function addInvoiceLine() {
@@ -2638,7 +2681,7 @@ function addHorseFromAppointment() {
 }
 
 function updateServiceTotal() {
-  const lineTotal = (state.invoiceLines || []).filter(l => l.serviceName).reduce((s, l) => s + (l.price || 0), 0);
+  const lineTotal = (state.invoiceLines || []).filter(l => l.serviceName).reduce((s, l) => s + FarriPricing.lineAmount(l.price, l.qty), 0);
   const customTotal = state.customItems.reduce((s,ci) => s + ci.price, 0);
   const total = lineTotal + customTotal;
   document.getElementById('svc-total').textContent = '$' + total.toFixed(2);
@@ -2684,9 +2727,12 @@ function buildInvoiceItems() {
     .filter(l => l.serviceName)
     .map(l => ({
       description: l.serviceName,
-      amount: l.price || 0,
+      amount: FarriPricing.lineAmount(l.price, l.qty), // line total (price per horse × qty)
+      qty: FarriPricing.itemQty(l),
+      unitPrice: l.price || 0,
       horseId: l.horseId || '',
       horseName: l.horseName || '',
+      ...(l.horseName === FarriPricing.MULTIPLE_HORSES && String(l.note || '').trim() ? { note: String(l.note).trim() } : {}),
       serviceId: l.serviceId || '',
     }));
   const customLineItems = state.customItems.map(ci => ({
@@ -2707,7 +2753,7 @@ function continueToInvoiceReview() {
   document.getElementById('review-customer-farm').textContent = state.customer.farmName || '';
   document.getElementById('review-services-list').innerHTML = allItems.map(i => `
     <div class="info-row">
-      <div class="info-row-label">${escapeHtml(i.description)}${i.horseName ? ` <span style="color:var(--text-muted); font-weight:500;">(${escapeHtml(i.horseName)})</span>` : ''}</div>
+      <div class="info-row-label">${escapeHtml(i.description)}${FarriPricing.itemHorseLabel(i) ? ` <span style="color:var(--text-muted); font-weight:500;">(${escapeHtml(FarriPricing.itemHorseLabel(i))})</span>` : ''}</div>
       <div class="info-row-value">$${i.amount.toFixed(2)}</div>
     </div>
   `).join('');
@@ -3150,7 +3196,7 @@ async function updateExistingInvoice(inv, allItems, total) {
     performWrite(() => db.collection('horses').doc(i.horseId).update({
       lastServiceId: i.serviceId || '',
       lastServiceName: i.description,
-      lastServicePrice: i.amount,
+      lastServicePrice: FarriPricing.itemUnitPrice(i),
       lastServiceDate: firebase.firestore.FieldValue.serverTimestamp(),
     }));
   });
@@ -3209,13 +3255,13 @@ async function createInvoice() {
     performWrite(() => db.collection('horses').doc(i.horseId).update({
       lastServiceId: i.serviceId || '',
       lastServiceName: i.description,
-      lastServicePrice: i.amount,
+      lastServicePrice: FarriPricing.itemUnitPrice(i),
       lastServiceDate: firebase.firestore.FieldValue.serverTimestamp(),
     }));
     // Keep the in-memory copy in sync too, so picking the same horse again on this
     // same invoice (another line, or after "+ Add Line") already reflects it.
     const h = state.customerHorses.find(x => x.id === i.horseId);
-    if (h) { h.lastServiceId = i.serviceId || ''; h.lastServiceName = i.description; h.lastServicePrice = i.amount; }
+    if (h) { h.lastServiceId = i.serviceId || ''; h.lastServiceName = i.description; h.lastServicePrice = FarriPricing.itemUnitPrice(i); }
   });
 
   // ── Write mileage log entry if miles were entered ──
@@ -4202,7 +4248,7 @@ function buildInvoiceEmail(inv, bizName, firstName, payUrl) {
   const total = (inv.total || 0).toFixed(2);
   const prices = FarriPricing.dualPrices(inv);
   const items = (inv.items || []).map(i =>
-    `<tr><td style="padding:6px 8px;font-size:14px;color:#374151;">${i.description||i.name||''}${i.horseName ? ` (${i.horseName})` : ''}</td><td style="padding:6px 8px;font-size:14px;color:#374151;text-align:right;">$${(i.amount||i.price||0).toFixed(2)}</td></tr>`
+    `<tr><td style="padding:6px 8px;font-size:14px;color:#374151;">${i.description||i.name||''}${FarriPricing.itemHorseLabel(i) ? ` (${FarriPricing.itemHorseLabel(i)})` : ''}</td><td style="padding:6px 8px;font-size:14px;color:#374151;text-align:right;">$${(i.amount||i.price||0).toFixed(2)}</td></tr>`
   ).join('');
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">
